@@ -1,0 +1,19 @@
+# THE SYSTEM — Supabase project config (link with: supabase link --project-ref <ref>)
+project_id = "qpxxthjndnqtgjlrwteq"
+
+[functions.purge-verification-media]
+verify_jwt = false    # invoked by cron with a bearer; add a shared-secret check if public
+
+[functions.settle-prediction-pool]
+verify_jwt = false    # admin app invokes with the user's JWT; SQL is is_admin() guarded
+                      # for scheduled auto-settlement call with the service_role key
+
+[functions.apply-daily-penalties]
+verify_jwt = false
+
+[functions.cpa-postback]
+verify_jwt = false    # offerwall server-to-server postback; protected by ?secret=
+
+[auth]
+# Enable Google provider in the dashboard: Auth → Providers → Google
+# Android OAuth client (SHAA-1) + Web client (used as GOOGLE_SERVER_CLIENT_ID on-device)

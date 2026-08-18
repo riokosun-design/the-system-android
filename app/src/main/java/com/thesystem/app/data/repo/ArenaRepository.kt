@@ -1,0 +1,153 @@
+package com.thesystem.app.data.repo
+
+import com.thesystem.app.data.model.*
+import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.broadcastFlow
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.postgresChangeFlow
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/** Arena: tournaments (VC entry fees), realtime push-up battles, prediction pools, leaderboards. */
+@Singleton
+class ArenaRepository @Inject constructor(private val supabase: SupabaseClient) {
+
+    private val uid: String? get() = supabase.auth.currentSessionOrNull()?.user?.id
+
+    // ── Tournaments ──────────────────────────────────────────────────────────
+    suspend fun tournaments(): List<TournamentDto> = runCatching {
+        supabase.from("tournaments").select {
+            filter { neq("status", "DRAFT") }; order("created_at", Order.DESCENDING)
+        }.decodeList<TournamentDto>()
+    }.getOrDefault(emptyList())
+
+    /** Pays the admin-set VC entry fee from the wallet and registers (atomic, server-side). */
+    suspend fun joinTournament(tournamentId: String, clanId: String? = null): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("join_tournament", buildJsonObject {
+            put("p_tournament_id", tournamentId); clanId?.let { put("p_clan_id", it) }
+        }); Unit
+    }
+
+    suspend fun myParticipations(): List<Pair<String, Long>> {
+        val me = uid ?: return emptyList()
+        return runCatching {
+            supabase.from("tournament_participants").select { filter { eq("user_id", me) } }
+                .decodeList<Map<String, kotlinx.serialization.json.JsonElement>>()
+                .map { it["tournament_id"].toString().trim('"') to (it["entry_fee_paid"]?.toString()?.toLongOrNull() ?: 0L) }
+        }.getOrDefault(emptyList())
+    }
+
+    // ── Battles (realtime push-up wars) ──────────────────────────────────────
+    suspend fun openBattles(): List<BattleDto> = runCatching {
+        supabase.from("battles_with_names").select {
+            filter { neq("status", "CANCELLED") }; order("created_at", Order.DESCENDING); limit(50)
+        }.decodeList<BattleDto>()
+    }.getOrDefault(emptyList())
+
+    suspend fun battle(id: String): BattleDto? = runCatching {
+        supabase.from("battles_with_names").select { filter { eq("id", id) } }.decodeList<BattleDto>().firstOrNull()
+    }.getOrNull()
+
+    suspend fun challenge(opponentId: String): Result<String> = runCatching {
+        val res = supabase.postgrest.rpc("create_battle", buildJsonObject { put("p_opponent", opponentId) })
+        res.data?.trim('"') ?: error("create_battle returned no id")
+    }
+
+    /** Falls out of the lobby into LIVE for both players simultaneously (via Realtime). */
+    suspend fun goLive(battleId: String): Result<Unit> = runCatching {
+        supabase.from("battles").update({
+            set("status", "LIVE"); set("started_at", java.time.Instant.now().toString())
+        }) { filter { eq("id", battleId); eq("status", "LOBBY") } }
+        Unit
+    }
+
+    /** Called by player A when the 60s timer ends. Server awards +150 / +20 XP and locks scores. */
+    suspend fun finishBattle(battleId: String, scoreA: Int, scoreB: Int): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("finish_battle", buildJsonObject {
+            put("p_battle_id", battleId); put("p_score_a", scoreA); put("p_score_b", scoreB)
+        }); Unit
+    }
+
+    /** Live battle row (score updates + status transitions) as a flow. */
+    fun battleFlow(battleId: String): Flow<BattleDto?> = callbackFlow {
+        val channel = supabase.channel("battle-row-$battleId")
+        val job = launch {
+            channel.postgresChangeFlow<PostgresAction>(schema = "public") {
+                table = "battles"
+            }.collect { trySend(battle(battleId)) }
+        }
+        channel.subscribe()
+        trySend(battle(battleId))
+        awaitClose { job.cancel(); launch { supabase.realtime.runCatching { channel.unsubscribe() } } }
+    }
+
+    /**
+     * Tug-of-war channel: Broadcast scores at ~2Hz (no DB write per rep — keeps 60fps
+     * even on low-end devices; scores are only persisted at finish).
+     */
+    fun battleChannel(battleId: String) = supabase.channel("battle-live-$battleId")
+
+    suspend fun sendScore(channel: io.github.jan.supabase.realtime.RealtimeChannel, userId: String, count: Int) {
+        channel.broadcast(event = "score", buildJsonObject { put("u", userId); put("c", count) })
+    }
+
+    fun opponentScoreFlow(channel: io.github.jan.supabase.realtime.RealtimeChannel, myId: String): Flow<Int> = callbackFlow {
+        val job = launch {
+            channel.broadcastFlow<JsonObject>(event = "score").collect { payload ->
+                val u = payload["u"]?.jsonPrimitive?.content
+                if (u != null && u != myId) trySend(payload["c"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0)
+            }
+        }
+        channel.subscribe()
+        awaitClose { job.cancel(); launch { supabase.realtime.runCatching { channel.unsubscribe() } } }
+    }
+
+    // ── Prediction Engine ────────────────────────────────────────────────────
+    suspend fun openPools(): List<Pair<PoolDto, BattleDto?>> {
+        val pools = runCatching {
+            supabase.from("prediction_pools").select {
+                filter { eq("status", "OPEN") }; order("created_at", Order.DESCENDING)
+            }.decodeList<PoolDto>()
+        }.getOrDefault(emptyList())
+        return pools.map { it to battle(it.battleId) }
+    }
+
+    suspend fun poolFor(battleId: String): PoolDto? = runCatching {
+        supabase.from("prediction_pools").select { filter { eq("battle_id", battleId) } }
+            .decodeList<PoolDto>().firstOrNull()
+    }.getOrNull()
+
+    /** Server verifies balance, debits VC, inserts the bet and updates pool totals atomically. */
+    suspend fun placeBet(poolId: String, side: String, amountVc: Long): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("place_bet", buildJsonObject {
+            put("p_pool_id", poolId); put("p_side", side); put("p_amount", amountVc)
+        }); Unit
+    }
+
+    suspend fun myBets(): List<BetDto> {
+        val me = uid ?: return emptyList()
+        return runCatching {
+            supabase.from("prediction_bets").select {
+                filter { eq("user_id", me) }; order("created_at", Order.DESCENDING); limit(50)
+            }.decodeList<BetDto>()
+        }.getOrDefault(emptyList())
+    }
+
+    // ── Leaderboards ─────────────────────────────────────────────────────────
+    suspend fun xpLeaderboard(): List<UserDto> = runCatching {
+        supabase.from("users").select { order("xp", Order.DESCENDING); limit(50) }.decodeList<UserDto>()
+    }.getOrDefault(emptyList())
+}

@@ -1,0 +1,274 @@
+package com.thesystem.app.data.model
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+// Every DTO maps 1:1 to a table/view in supabase/migrations. snake_case ↔ camelCase via @SerialName.
+
+@Serializable
+data class UserDto(
+    val id: String,
+    val username: String,
+    @SerialName("display_name") val displayName: String? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    val role: String = "USER",
+    val level: Int = 1,
+    val xp: Long = 0,
+    @SerialName("vc_balance") val vcBalance: Long = 0,
+    @SerialName("penalty_state") val penaltyState: String = "CLEAR",
+    @SerialName("missed_days") val missedDays: Int = 0,
+    @SerialName("streak_days") val streakDays: Int = 0,
+    @SerialName("last_activity_date") val lastActivityDate: String? = null,
+    val goal: String? = null,
+    val age: Int? = null,
+    @SerialName("height_cm") val heightCm: Double? = null,
+    @SerialName("weight_kg") val weightKg: Double? = null,
+    @SerialName("referral_code") val referralCode: String = "",
+    @SerialName("referred_by") val referredBy: String? = null,
+    @SerialName("onboarding_completed") val onboardingCompleted: Boolean = false,
+    @SerialName("black_room_until") val blackRoomUntil: String? = null,
+) {
+    val isAdmin: Boolean get() = role == "SUPER_ADMIN" || role == "ADMIN"
+    val isSuperAdmin: Boolean get() = role == "SUPER_ADMIN"
+    /** Rank is level-driven but degradation states override. */
+    val rank: SystemMathRank get() = SystemMathRank(level, missedDays)
+}
+
+/** Tiny bridge so the DTO layer doesn't import Compose. */
+class SystemMathRank(level: Int, missedDays: Int) {
+    val value = com.thesystem.app.core.SystemMath.rankFor(level, missedDays)
+    val title get() = value.title
+}
+
+@Serializable
+data class AssetDto(
+    val id: String,
+    val key: String,
+    val type: String, // CHARACTER_WALLPAPER | AMBIENT_BACKGROUND | UI_OVERLAY | SPLASH_ART
+    val title: String? = null,
+    @SerialName("storage_path") val storagePath: String,
+    @SerialName("fade_opacity") val fadeOpacity: Double = 0.25,
+    val enabled: Boolean = true,
+    @SerialName("sort_order") val sortOrder: Int = 0,
+)
+
+@Serializable
+data class LegalDocDto(
+    val id: String,
+    @SerialName("doc_type") val docType: String, // PRIVACY_POLICY | TERMS_OF_SERVICE
+    val title: String,
+    @SerialName("content_markdown") val contentMarkdown: String,
+    val version: Int = 1,
+    @SerialName("updated_at") val updatedAt: String? = null,
+)
+
+@Serializable
+data class ProductDto(
+    val id: String,
+    val name: String,
+    val description: String? = null,
+    @SerialName("image_url") val imageUrl: String? = null,
+    @SerialName("price_inr") val priceInr: Double = 0.0,
+    val category: String = "MERCH", // MERCH | SUPPLEMENT | DIGITAL
+    @SerialName("outbound_url") val outboundUrl: String,
+    @SerialName("affiliate_commission_pct") val affiliateCommissionPct: Double = 0.0,
+    @SerialName("min_rank_required") val minRankRequired: String = "AVERAGE",
+    val active: Boolean = true,
+)
+
+@Serializable
+data class QuestDto(
+    val id: Long,
+    @SerialName("user_id") val userId: String,
+    @SerialName("quest_date") val questDate: String,
+    val title: String,
+    @SerialName("target_value") val targetValue: Int,
+    val progress: Int = 0,
+    @SerialName("xp_reward") val xpReward: Int = 50,
+    val completed: Boolean = false,
+    val source: String = "LEGUNA_S1_AI",
+)
+
+@Serializable
+data class ArcDto(
+    val id: String,
+    val hero: String,
+    val title: String,
+    @SerialName("duration_months") val durationMonths: Int = 4,
+    @SerialName("unlock_req_arc") val unlockReqArc: String? = null,
+    @SerialName("min_level") val minLevel: Int = 1,
+    val description: String? = null,
+    val disclaimer: String = "",
+    val sort: Int = 0,
+)
+
+@Serializable
+data class ArcProgressDto(
+    @SerialName("user_id") val userId: String,
+    @SerialName("arc_id") val arcId: String,
+    @SerialName("days_completed") val daysCompleted: Int = 0,
+    @SerialName("penalty_extra_days") val penaltyExtraDays: Int = 0,
+    val completed: Boolean = false,
+)
+
+@Serializable
+data class FormDto(
+    @SerialName("user_id") val userId: String,
+    @SerialName("form_index") val formIndex: Int,
+    val name: String,
+    @SerialName("combat_style") val combatStyle: String = "BALANCED",
+    @SerialName("base_power") val basePower: Double = 0.0,
+    @SerialName("hard_work_multiplier") val hardWorkMultiplier: Double = 1.0,
+    @SerialName("computed_power") val computedPower: Double = 0.0,
+    @SerialName("unlocked_at") val unlockedAt: String? = null,
+)
+
+@Serializable
+data class ClanDto(
+    val id: String,
+    val name: String,
+    val tag: String,
+    val description: String? = null,
+    @SerialName("crest_path") val crestPath: String? = null,
+    @SerialName("guild_master") val guildMaster: String,
+    val level: Int = 1,
+    @SerialName("treasury_vc") val treasuryVc: Long = 0,
+    @SerialName("member_count") val memberCount: Int? = null, // joined view column
+)
+
+@Serializable
+data class ClanMemberDto(
+    @SerialName("clan_id") val clanId: String,
+    @SerialName("user_id") val userId: String,
+    val role: String = "MEMBER", // GUILD_MASTER | VICE_CAPTAIN | ELITE_HUNTER | MEMBER
+    val username: String? = null, // joined
+)
+
+@Serializable
+data class ZoneLeaderboardDto(
+    val zone: String,
+    @SerialName("user_id") val userId: String,
+    val username: String,
+    val captures: Long,
+    @SerialName("clan_id") val clanId: String? = null,
+    @SerialName("clan_tag") val clanTag: String? = null,
+)
+
+@Serializable
+data class ClanTerritoryDto(
+    val zone: String,
+    @SerialName("clan_id") val clanId: String,
+    @SerialName("shield_active") val shieldActive: Boolean = true,
+    @SerialName("tax_bps") val taxBps: Int = 500,
+    @SerialName("clan_tag") val clanTag: String? = null, // joined
+)
+
+@Serializable
+data class TournamentDto(
+    val id: String,
+    val title: String,
+    val type: String = "SOLO", // SOLO | CLAN
+    val status: String = "DRAFT", // DRAFT | OPEN | LOCKED | IN_PROGRESS | COMPLETED | CANCELLED
+    @SerialName("entry_fee_vc") val entryFeeVc: Long = 0,
+    @SerialName("prize_pool_vc") val prizePoolVc: Long = 0,
+    @SerialName("max_participants") val maxParticipants: Int = 64,
+    @SerialName("starts_at") val startsAt: String? = null,
+    @SerialName("ends_at") val endsAt: String? = null,
+)
+
+@Serializable
+data class BattleDto(
+    val id: String,
+    @SerialName("tournament_id") val tournamentId: String? = null,
+    @SerialName("player_a") val playerA: String,
+    @SerialName("player_b") val playerB: String,
+    @SerialName("player_a_name") val playerAName: String? = null,
+    @SerialName("player_b_name") val playerBName: String? = null,
+    @SerialName("score_a") val scoreA: Int = 0,
+    @SerialName("score_b") val scoreB: Int = 0,
+    val status: String = "LOBBY", // LOBBY | LIVE | FINISHED | CANCELLED
+    val winner: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+@Serializable
+data class PoolDto(
+    val id: String,
+    @SerialName("battle_id") val battleId: String,
+    val status: String = "OPEN",
+    @SerialName("platform_cut_bps") val platformCutBps: Int = 1500,
+    @SerialName("total_pool_vc") val totalPoolVc: Long = 0,
+    @SerialName("total_a_vc") val totalAVc: Long = 0,
+    @SerialName("total_b_vc") val totalBVc: Long = 0,
+    @SerialName("winning_side") val winningSide: String? = null,
+)
+
+@Serializable
+data class BetDto(
+    val id: Long,
+    @SerialName("pool_id") val poolId: String,
+    @SerialName("user_id") val userId: String,
+    val side: String, // A | B
+    @SerialName("amount_vc") val amountVc: Long,
+    @SerialName("payout_vc") val payoutVc: Long? = null,
+    val status: String = "OPEN", // OPEN | WON | LOST | REFUNDED
+)
+
+@Serializable
+data class MessageDto(
+    val id: Long = 0,
+    @SerialName("sender_id") val senderId: String,
+    @SerialName("sender_username") val senderUsername: String? = null, // joined in dm_inbox view / selected
+    @SerialName("clan_id") val clanId: String? = null,
+    @SerialName("recipient_id") val recipientId: String? = null,
+    val kind: String, // CLAN | DM
+    val body: String,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+@Serializable
+data class PaymentDto(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("item_type") val itemType: String, // BLACK_ROOM_PASS | MERCH | VC_TOPUP
+    @SerialName("item_ref") val itemRef: String? = null,
+    @SerialName("amount_inr") val amountInr: Double,
+    @SerialName("upi_utr") val upiUtr: String,
+    @SerialName("screenshot_path") val screenshotPath: String? = null,
+    val status: String = "PENDING", // PENDING | APPROVED | REJECTED
+    @SerialName("review_note") val reviewNote: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    val username: String? = null, // joined for admin list
+)
+
+@Serializable
+data class VcTxnDto(
+    val id: Long,
+    @SerialName("user_id") val userId: String,
+    val amount: Long,
+    val reason: String,
+    val reference: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+@Serializable
+data class ReferralHallDto(
+    val username: String,
+    @SerialName("referral_count") val referralCount: Long,
+)
+
+@Serializable
+data class SystemConfigDto(
+    val key: String,
+    val value: String,
+)
+
+@Serializable
+data class WorkoutDto(
+    @SerialName("user_id") val userId: String,
+    val kind: String,
+    val reps: Int = 0,
+    @SerialName("duration_sec") val durationSec: Int = 0,
+    @SerialName("xp_earned") val xpEarned: Int = 0,
+    val zone: String? = null,
+)
