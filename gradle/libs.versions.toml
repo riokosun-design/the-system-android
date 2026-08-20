@@ -17,7 +17,7 @@ coil = "3.0.4"
 datastore = "1.1.1"
 location = "21.3.0"
 osmdroid = "6.1.20"
-mlkitPose = "18.0.0"
+mlkitPose = "17.0.0"
 profileinstaller = "1.4.1"
 camerax = "1.3.4"
 credentials = "1.3.0"
@@ -52,7 +52,7 @@ supabase-storage = { module = "io.github.jan-tennert.supabase:storage-kt" }
 supabase-functions = { module = "io.github.jan-tennert.supabase:functions-kt" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
-coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp3", version.ref = "coil" }
+coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 androidx-datastore = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "location" }
 osmdroid = { module = "org.osmdroid:osmdroid-android", version.ref = "osmdroid" }
