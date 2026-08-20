@@ -30,13 +30,41 @@ android {
         buildConfigField("String", "MAPTILER_API_KEY", "\"${backendProp("MAPTILER_API_KEY", "YOUR_MAPTILER_KEY")}\"")
     }
 
+    // ── Signing: committed debug keystore keeps SHA-1 identical on ANY machine
+    // (no-PC cloud builds included) so Google OAuth works everywhere.
+    // Release/upload keystore lives OUTSIDE git (gitignored) — creds via
+    // gradle.properties or CI secrets.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+        create("release") {
+            val relStore = rootProject.file("keystore/thesystem-release.keystore")
+            if (relStore.exists()) {
+                storeFile = relStore
+                storePassword = backendProp("RELEASE_STORE_PASSWORD", "")
+                keyAlias = backendProp("RELEASE_KEY_ALIAS", "thesystem")
+                keyPassword = backendProp("RELEASE_KEY_PASSWORD", "")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Fall back to debug signing if release keystore is absent (CI safety)
+            signingConfig = if (rootProject.file("keystore/thesystem-release.keystore").exists())
+                signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
-        debug { isMinifyEnabled = false }
+        debug {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
 
     compileOptions {

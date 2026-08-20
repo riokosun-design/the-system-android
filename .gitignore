@@ -11,3 +11,9 @@ supabase/.temp
 # secrets — never commit
 gradle.properties
 DEPLOYED_LIVE.md
+
+# keystores — RELEASE never committed; DEBUG committed on purpose so every
+# cloud build signs identically (OAuth SHA-1 match). Debug certs cannot upload to Play.
+*.keystore
+!debug.keystore
+keystore/*.base64.txt
