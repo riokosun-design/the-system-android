@@ -93,8 +93,8 @@ object SystemMapEngine {
                 setMultiTouchControls(true)
                 minZoomLevel = MIN_ZOOM
                 maxZoomLevel = MAX_ZOOM
-                isHorizontalMapStripEnabled = false
-                isVerticalMapStripEnabled = false
+                isHorizontalMapRepetitionEnabled = false
+                isVerticalMapRepetitionEnabled = false
                 setUseDataConnection(isOnline(context)) // offline at birth → cache-only mode
                 setBuiltInZoomControls(false)
                 configure()

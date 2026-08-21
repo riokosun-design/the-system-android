@@ -11,6 +11,7 @@ import androidx.camera.view.PreviewView
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -111,7 +112,7 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
             ProcessCameraProvider.getInstance(context).get()
         }
         provider.unbindAll()
-        val preview = Preview.Builder().build().also { it.surfaceProvider = view.surfaceProvider }
+        val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
         if (s.counting) {
             val analysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)

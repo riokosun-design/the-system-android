@@ -70,7 +70,7 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
         AnimatedContent(
             targetState = tab,
             transitionSpec = {
-                (fadeIn(SystemMotion.snap) + slideInVertically(SystemMotion.medium) { it / 24 })
+                (fadeIn(SystemMotion.snap) + slideInVertically(androidx.compose.animation.core.tween(450)) { it / 24 })
                     .togetherWith(fadeOut(SystemMotion.snap))
             },
             label = "tabSwitch",

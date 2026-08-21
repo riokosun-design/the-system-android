@@ -1,7 +1,7 @@
 package com.thesystem.app.ui.onboarding
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateColorAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -68,8 +68,8 @@ fun OnboardingScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewModel
             AnimatedContent(
                 targetState = ui.page,
                 transitionSpec = {
-                    (slideInHorizontally(SystemMotion.medium) { it / 3 } + fadeIn(SystemMotion.snap))
-                        .togetherWith(slideOutHorizontally(SystemMotion.medium) { -it / 3 } + fadeOut(SystemMotion.snap))
+                    (slideInHorizontally(androidx.compose.animation.core.tween(450)) { it / 3 } + fadeIn(SystemMotion.snap))
+                        .togetherWith(slideOutHorizontally(androidx.compose.animation.core.tween(450)) { -it / 3 } + fadeOut(SystemMotion.snap))
                 },
                 label = "wizard",
             ) { page ->
