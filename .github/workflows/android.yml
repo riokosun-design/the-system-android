@@ -49,7 +49,9 @@ jobs:
           [ -n "$MAPTILER_API_KEY" ] && echo "MAPTILER_API_KEY=$MAPTILER_API_KEY" >> gradle.properties || true
 
       - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --stacktrace
 
       - name: Verify signing cert (SHA-1 must match Google OAuth Android client)
         run: |
@@ -99,7 +101,9 @@ jobs:
           [ -n "$MAPTILER_API_KEY" ] && echo "MAPTILER_API_KEY=$MAPTILER_API_KEY" >> gradle.properties || true
 
       - name: Build release AAB + APK
-        run: ./gradlew :app:bundleRelease :app:assembleRelease --stacktrace -x lintVitalRelease
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:bundleRelease :app:assembleRelease --stacktrace -x lintVitalRelease
 
       - name: Verify signing cert (SHA-1 must match Google OAuth Android client)
         run: |
