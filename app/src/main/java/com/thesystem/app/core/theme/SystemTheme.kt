@@ -10,19 +10,22 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// ── GLOBAL DESIGN TOKENS (Section 1 of the spec) ────────────────────────────
-val VoidBlack = Color(0xFF0B0E14)          // premium dark-mode base
-val SurfaceDark = Color(0xFF11151F)
-val SurfaceHigh = Color(0xFF181E2C)
-val ElectricBlue = Color(0xFF00F0FF)       // primary accent
-val NeonPurple = Color(0xFF9D00FF)         // secondary accent
-val CrimsonRed = Color(0xFFFF0055)         // danger / rival / penalty accent
-val HunterGold = Color(0xFFFFD700)         // S+ rewards, MASTERPIECE
-val VenomGreen = Color(0xFF00FF9D)         // success / buffs
-val WarningAmber = Color(0xFFFFB020)
-val TextPrimary = Color(0xFFEAF6FF)
-val TextMuted = Color(0xFF7A8499)
-val GridLine = Color(0x2200F0FF)
+// ── DESIGN TOKENS 2.0 — "QUIET POWER" ────────────────────────────────────────
+// Philosophy: ONE accent, rest neutral. Color means something or it isn't used.
+// No neon rainbow, no glow chrome, generous whitespace, rows over cards.
+
+val VoidBlack = Color(0xFF0A0B0E)          // true neutral near-black (no blue tint)
+val SurfaceDark = Color(0xFF101318)        // raised surface, flat
+val SurfaceHigh = Color(0xFF151920)        // overlay / inputs
+val ElectricBlue = Color(0xFF38BDF8)       // THE accent — smooth sky (Solo Leveling window blue, refined)
+val NeonPurple = Color(0xFF818CF8)         // soft indigo — rare: boss arcs, gradient partner only
+val CrimsonRed = Color(0xFFFB7185)         // soft rose — danger/rival only (never decoration)
+val HunterGold = Color(0xFFF5C26B)         // champagne — VC currency + premium rewards only
+val VenomGreen = Color(0xFF34D399)         // mint — success states only
+val WarningAmber = Color(0xFFFBBF24)       // standard amber — timers/warnings only
+val TextPrimary = Color(0xFFF1F5F9)        // slate-100
+val TextMuted = Color(0xFF94A3B8)          // slate-400
+val GridLine = Color(0x14FFFFFF)           // 8% white hairline — the ONLY border tone
 
 private val SystemColors = darkColorScheme(
     background = VoidBlack,
@@ -32,25 +35,25 @@ private val SystemColors = darkColorScheme(
     surfaceVariant = SurfaceHigh,
     onSurfaceVariant = TextMuted,
     primary = ElectricBlue,
-    onPrimary = Color(0xFF02141A),
+    onPrimary = Color(0xFF06202E),
     secondary = NeonPurple,
-    onSecondary = Color(0xFFFFFFFF),
+    onSecondary = Color(0xFF0A0B0E),
     tertiary = CrimsonRed,
-    onTertiary = Color(0xFFFFFFFF),
+    onTertiary = Color(0xFF0A0B0E),
     error = CrimsonRed,
-    onError = Color(0xFFFFFFFF),
+    onError = Color(0xFF0A0B0E),
     outline = GridLine,
 )
 
 private val SystemTypography = Typography(
-    displayMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Black, fontSize = 34.sp, letterSpacing = 4.sp, color = TextPrimary),
-    headlineMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp, letterSpacing = 2.sp, color = TextPrimary),
-    titleLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 19.sp, letterSpacing = 1.2.sp, color = TextPrimary),
-    titleMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, letterSpacing = 0.8.sp, color = TextPrimary),
+    displayMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 32.sp, letterSpacing = 0.sp, color = TextPrimary),
+    headlineMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, letterSpacing = 0.2.sp, color = TextPrimary),
+    titleLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, letterSpacing = 0.1.sp, color = TextPrimary),
+    titleMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium, fontSize = 15.sp, letterSpacing = 0.1.sp, color = TextPrimary),
     bodyLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 15.sp, color = TextPrimary),
     bodyMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 13.sp, color = TextMuted),
-    labelLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 2.sp),
-    labelSmall = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 1.5.sp, color = TextMuted),
+    labelLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, letterSpacing = 0.6.sp),
+    labelSmall = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.6.sp, color = TextMuted),
 )
 
 @Composable
