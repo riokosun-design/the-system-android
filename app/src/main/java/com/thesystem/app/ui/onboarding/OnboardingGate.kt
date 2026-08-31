@@ -52,8 +52,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -531,21 +535,20 @@ fun FlashRipple(trigger: Int, color: Color = ElectricBlue) {
 
 @Composable
 fun LegalFooter(onTerms: () -> Unit, onPrivacy: () -> Unit) {
-    val linkAccent = ElectricBlue
-    val annotated = androidx.compose.ui.text.buildAnnotatedString {
+    val annotated = buildAnnotatedString {
         append("By entering, you accept The System's Protocols\n")
         pushStringAnnotation(tag = "legal", annotation = "terms")
-        withStyle(androidx.compose.ui.text.style.SpanStyle(color = linkAccent)) { append("Terms of Service") }
+        withStyle(SpanStyle(color = ElectricBlue)) { append("Terms of Service") }
         pop()
         append("  ·  ")
         pushStringAnnotation(tag = "legal", annotation = "privacy")
-        withStyle(androidx.compose.ui.text.style.SpanStyle(color = linkAccent)) { append("Privacy Policy") }
+        withStyle(SpanStyle(color = ElectricBlue)) { append("Privacy Policy") }
         pop()
     }
     Text(
         text = annotated,
         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, lineHeight = 17.sp),
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        textAlign = TextAlign.Center,
         onClick = { off ->
             annotated.getStringAnnotations("legal", off, off).firstOrNull()?.let {
                 if (it.item == "terms") onTerms() else onPrivacy()
