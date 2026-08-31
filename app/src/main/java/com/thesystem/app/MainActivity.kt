@@ -25,9 +25,8 @@ import com.thesystem.app.ui.admin.AdminScreen
 import com.thesystem.app.ui.arena.BattleRoomScreen
 import com.thesystem.app.ui.chat.ChatHomeScreen
 import com.thesystem.app.ui.chat.ConversationScreen
-import com.thesystem.app.ui.onboarding.OnboardingScreen
-import com.thesystem.app.ui.gate.SystemBootGate
 import com.thesystem.app.ui.splash.DynamicSplash
+import com.thesystem.app.ui.splash.LaunchFlowScreen
 import com.thesystem.app.ui.splash.SplashVariant
 import com.thesystem.app.ui.tabs.MainTabs
 import com.thesystem.app.core.theme.SystemTheme
@@ -103,18 +102,13 @@ class MainActivity : ComponentActivity() {
             SystemTheme {
                 val vm: RootViewModel = hiltViewModel()
                 val state by vm.state.collectAsStateWithLifecycle()
-                // ROUND 3: every app open showcases a different shuffled variant order — the splash never repeats.
+                // ROUND 7: cinematic launch flow — unregistered vessels walk the full
+                // intake → awakening → contract → evaluation → auth gate ritual.
+                // Signed-in hunters get the shuffled brand splash and go straight in.
                 val splashVariants = remember { SplashVariant.entries.shuffled() }
-                // THE ACCESS GATE: cinematic lock-in ritual on every cold open.
-                // resolve() re-enters Booting briefly — the flag keeps the gate single-shot per process.
-                var gatePassed by rememberSaveable { mutableStateOf(false) }
                 when (val s = state) {
-                    RootState.Booting -> if (!gatePassed) {
-                        SystemBootGate(onFinished = { gatePassed = true; vm.resolve() })
-                    } else {
-                        DynamicSplash(variants = splashVariants)
-                    }
-                    RootState.NeedsOnboarding -> OnboardingScreen(onDone = { vm.resolve() })
+                    RootState.Booting -> DynamicSplash(variants = splashVariants)
+                    RootState.NeedsOnboarding -> LaunchFlowScreen(onDone = { vm.resolve() })
                     is RootState.Ready -> AppNavHost(profile = s, onSignOut = { vm.signOut() })
                     is RootState.Error -> DynamicSplash(variants = splashVariants) // offline tolerance: keep brand screen; retry taps re-resolve
                 }
