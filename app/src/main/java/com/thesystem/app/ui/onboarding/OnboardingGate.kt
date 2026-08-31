@@ -545,10 +545,9 @@ fun LegalFooter(onTerms: () -> Unit, onPrivacy: () -> Unit) {
         withStyle(SpanStyle(color = ElectricBlue)) { append("Privacy Policy") }
         pop()
     }
-    Text(
+    androidx.compose.foundation.text.ClickableText(
         text = annotated,
-        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, lineHeight = 17.sp),
-        textAlign = TextAlign.Center,
+        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, lineHeight = 17.sp, textAlign = TextAlign.Center),
         onClick = { off ->
             annotated.getStringAnnotations("legal", off, off).firstOrNull()?.let {
                 if (it.item == "terms") onTerms() else onPrivacy()
