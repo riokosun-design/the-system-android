@@ -83,7 +83,11 @@ private fun BattlesTab(s: ArenaState, vm: ArenaViewModel, nav: NavHostController
         if (s.openBattles.isEmpty()) item { EmptyState("No wars raging. Summon a rival above.") }
         items(s.openBattles, key = { it.id }) { b ->
             val meIn = b.playerA == s.profile?.id || b.playerB == s.profile?.id
-            GlowCard(glow = if (meIn) ElectricBlue else SurfaceHigh) {
+            // DESIGN 2.5 MONARCH EDGE — live battles are System windows: chamfer + hologram frame
+            HudFrameCard(
+                accent = if (b.status == "LIVE") CrimsonRed else if (meIn) ElectricBlue else TextMuted,
+                glow = b.status == "LIVE",
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("@${b.playerAName ?: "?"} vs @${b.playerBName ?: "?"}", style = MaterialTheme.typography.titleMedium, color = TextPrimary)

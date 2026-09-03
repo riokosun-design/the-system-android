@@ -261,6 +261,12 @@ fun FingerprintHold(
 ) {
     val progress = remember { Animatable(0f) }
     var holding by remember { mutableStateOf(false) }
+    var sealed by remember { mutableStateOf(false) }
+    val ripple = remember { Animatable(0f) }
+    // DESIGN 2.5 kinetic feedback: hitting 100% detonates concentric shockwave rings
+    LaunchedEffect(progress.value >= 1f) {
+        if (progress.value >= 1f && !sealed) { sealed = true; ripple.animateTo(1f, tween(700, easing = LinearEasing)) }
+    }
     val inf = rememberInfiniteTransition(label = "printPulse")
     val idlePulse by inf.animateFloat(0.45f, 1f, infiniteRepeatable(tween(1500), RepeatMode.Reverse), label = "printA")
 
@@ -290,6 +296,14 @@ fun FingerprintHold(
                     alpha = a, style = Stroke(4.2f, cap = StrokeCap.Round))
             }
             drawCircle(ringColor, radius = 5.5f, center = c, alpha = a)
+            // seal shockwave — white-hot core cooling to electric as it expands
+            if (sealed && ripple.value < 1f) {
+                val rv = ripple.value
+                drawCircle(lerp(Color.White, ringColor, rv), radius = r * (1f + 1.15f * rv), center = c,
+                    alpha = (1f - rv) * 0.85f, style = Stroke(6f * (1f - rv) + 1.5f))
+                drawCircle(ringColor, radius = r * (1f + 0.62f * rv), center = c,
+                    alpha = (1f - rv) * 0.5f, style = Stroke(3f))
+            }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp)) {
             Text(

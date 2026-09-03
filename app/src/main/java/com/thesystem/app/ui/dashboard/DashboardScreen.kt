@@ -101,7 +101,10 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
                     item { Box(Modifier.enterAnim(4)) { SectionTitle("Daily Anime Quests — Leguna S.1 AI") } }
                     if (s.quests.isEmpty()) item { EmptyState("Leguna is compiling your daily protocol… pull to refresh.") }
                     items(s.quests, key = { it.id }) { q ->
-                        QuestCard(q) {
+                        // PENALTY RISK tags arm in the evening or once decay has begun
+                        val lateDay = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) >= 21
+                        val risk = (s.profile?.missedDays ?: 0) > 0 || lateDay
+                        QuestCard(q, penaltyRisk = risk) {
                             haptics.success()
                             fireBurst()
                             vm.completeQuest(q)
@@ -193,7 +196,7 @@ private fun BuffsCard(s: DashboardState) {
 // ── QUEST CARD — animated fill, press-squish, CLEARED flips green ═══════════
 
 @Composable
-private fun QuestCard(q: QuestDto, onComplete: () -> Unit) {
+private fun QuestCard(q: QuestDto, onComplete: () -> Unit, penaltyRisk: Boolean = false) {
     val done = q.completed
     val progress by animateFloatAsState(
         targetValue = if (q.targetValue > 0) (q.progress.toFloat() / q.targetValue).coerceIn(0f, 1f) else 0f,
@@ -201,24 +204,40 @@ private fun QuestCard(q: QuestDto, onComplete: () -> Unit) {
         label = "questFill",
     )
     val doneAlpha by animateFloatAsState(if (done) 1f else 0f, label = "questDone")
-    GlowCard(glow = if (done) VenomGreen else ElectricBlue, pulse = !done, modifier = Modifier.pressScale(0.98f)) {
+    // DESIGN 2.5 MONARCH EDGE — authentic Solo Leveling quest window:
+    // chamfered hologram slab + bracket status tags, nothing else screams.
+    val accent = if (done) VenomGreen else ElectricBlue
+    HudFrameCard(accent = accent, glow = !done, modifier = Modifier.pressScale(0.98f)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("[ DAILY QUEST ]", color = TextMuted, fontSize = 9.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, letterSpacing = 2.sp)
+            Spacer(Modifier.weight(1f))
+            when {
+                done -> HudTag("COMPLETE", VenomGreen)
+                penaltyRisk -> HudTag("PENALTY RISK", CrimsonRed)
+                else -> HudTag("IN PROGRESS", ElectricBlue)
+            }
+        }
+        Spacer(Modifier.height(9.dp))
+        Text(q.title, style = MaterialTheme.typography.titleMedium, color = if (done) TextMuted else TextPrimary)
+        Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(q.title, style = MaterialTheme.typography.titleMedium, color = if (done) TextMuted else TextPrimary)
-                Spacer(Modifier.height(6.dp))
-                // live progress sliver under every quest — movement = life
                 Box(Modifier.fillMaxWidth().height(3.dp).background(SurfaceHigh, androidx.compose.foundation.shape.RoundedCornerShape(2.dp))) {
                     Box(
                         Modifier.fillMaxHeight().fillMaxWidth(progress)
                             .background(if (done) VenomGreen else ElectricBlue, androidx.compose.foundation.shape.RoundedCornerShape(2.dp))
                     )
                 }
-                Spacer(Modifier.height(5.dp))
-                Text("Target ${q.targetValue} · Progress ${q.progress}", style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(2.dp))
-                Text("+${q.xpReward} XP · ${q.source}", style = MaterialTheme.typography.labelSmall, color = HunterGold)
+                Spacer(Modifier.height(6.dp))
+                Row {
+                    Text("+${q.xpReward} XP", style = MaterialTheme.typography.labelSmall, color = HunterGold)
+                    Spacer(Modifier.width(10.dp))
+                    Text("${q.progress}/${q.targetValue}", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.width(10.dp))
+                    Text(q.source, style = MaterialTheme.typography.labelSmall)
+                }
             }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
             Box(contentAlignment = Alignment.Center) {
                 // LOG fades out / CLEARED stamps in — crossfade on one slot
                 if (doneAlpha < 1f) {

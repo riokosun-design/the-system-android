@@ -17,6 +17,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -94,7 +96,9 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
     val timerPulse = remember { Animatable(1f) }
     LaunchedEffect(s.secondsLeft) { if (s.counting) { timerPulse.snapTo(1.22f); timerPulse.animateTo(1f, tween(280)) } }
 
-    val counter = remember { PosePushUpCounter(onRep = vm::onRep) }
+    // DESIGN 2.5 — hologram mesh: ML Kit landmarks flow into the overlay canvas
+    var meshPoints by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
+    val counter = remember { PosePushUpCounter(onRep = vm::onRep, onLandmarks = { meshPoints = it }) }
     DisposableEffect(Unit) { onDispose { counter.close() } }
 
     val cameraPermission = rememberLauncherForActivityResult(
@@ -139,6 +143,7 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
             } else {
                 Box(Modifier.fillMaxWidth().height(300.dp)) {
                     AndroidView(factory = { ctx -> PreviewView(ctx).also { previewView = it } }, modifier = Modifier.fillMaxSize())
+                    if (s.counting) PoseMeshOverlay(points = meshPoints, repFlash = repPop.value, modifier = Modifier.matchParentSize())
                     if (!s.counting && s.battle?.status != "FINISHED") {
                         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("PHONE ON THE FLOOR — FRONT CAMERA FACING YOU", color = ElectricBlue, style = MaterialTheme.typography.labelSmall)
@@ -153,6 +158,20 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                                 .align(Alignment.TopCenter).padding(8.dp)
                                 .graphicsLayer { scaleX = timerPulse.value; scaleY = timerPulse.value },
                         )
+                        // high-contrast in-frame rep readout — readable mid-plank
+                        Column(
+                            Modifier.align(Alignment.BottomCenter)
+                                .background(Color.Black.copy(alpha = 0.45f), androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                "${s.myCount}",
+                                color = ElectricBlue, fontSize = 36.sp, fontWeight = FontWeight.Black,
+                                modifier = Modifier.graphicsLayer { scaleX = repPop.value; scaleY = repPop.value },
+                            )
+                            Text("REPS", color = TextMuted, fontSize = 8.sp, letterSpacing = 3.sp)
+                        }
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -254,5 +273,69 @@ fun TugOfWarBar(tug: Float, modifier: Modifier = Modifier) {
         drawCircle(markerColor.copy(alpha = 0.30f), radius = 22f * halo, center = Offset(x, h / 2))
         drawCircle(Color.White, radius = 16f, center = Offset(x, h / 2))
         drawCircle(markerColor, radius = 9f, center = Offset(x, h / 2))
+    }
+}
+
+// ══ DESIGN 2.5 MONARCH EDGE — HOLOGRAPHIC POSE MESH ═════════════════════════
+// ML Kit skeleton drawn as an active scanning hologram: kinetic joint rings,
+// a traveling scanline, and a rep-flash burst at the chest. Pure canvas,
+// two infinite clocks, zero per-frame allocations.
+private val SKELETON_LINKS = listOf(
+    11 to 12, 11 to 13, 13 to 15, 12 to 14, 14 to 16,      // arms
+    15 to 19, 16 to 20,                                    // wrists→index
+    11 to 23, 12 to 24, 23 to 24,                          // torso
+    23 to 25, 25 to 27, 24 to 26, 26 to 28,                // legs
+    27 to 29, 28 to 30, 29 to 31, 30 to 32,                // feet
+)
+private val TRACKED_JOINTS = listOf(11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28)
+
+@Composable
+fun PoseMeshOverlay(points: List<Pair<Float, Float>>, repFlash: Float, modifier: Modifier = Modifier) {
+    val inf = rememberInfiniteTransition(label = "poseMesh")
+    val clock by inf.animateFloat(0f, 1f, infiniteRepeatable(tween(4000, easing = LinearEasing)), label = "meshT")
+    val scan by inf.animateFloat(0f, 1f, infiniteRepeatable(tween(2800, easing = LinearEasing)), label = "meshScan")
+    Canvas(modifier) {
+        val w = size.width; val h = size.height
+        fun mapX(x: Float) = (1f - x) * w  // front camera mirrors the world
+        fun mapY(y: Float) = y * h
+
+        if (points.size <= 32) {
+            // SEARCHING TARGET — corner reticle brackets, nothing else
+            val l = 26f; val c = ElectricBlue.copy(alpha = 0.5f + 0.3f * scan)
+            drawLine(c, Offset(12f, 12f), Offset(12f + l, 12f), 3f); drawLine(c, Offset(12f, 12f), Offset(12f, 12f + l), 3f)
+            drawLine(c, Offset(w - 12f, 12f), Offset(w - 12f - l, 12f), 3f); drawLine(c, Offset(w - 12f, 12f), Offset(w - 12f, 12f + l), 3f)
+            drawLine(c, Offset(12f, h - 12f), Offset(12f + l, h - 12f), 3f); drawLine(c, Offset(12f, h - 12f), Offset(12f, h - 12f - l), 3f)
+            drawLine(c, Offset(w - 12f, h - 12f), Offset(w - 12f - l, h - 12f), 3f); drawLine(c, Offset(w - 12f, h - 12f), Offset(w - 12f, h - 12f - l), 3f)
+            drawCircle(ElectricBlue, radius = 4f, center = Offset(w / 2f, h / 2f), alpha = 0.4f + 0.3f * scan, style = Stroke(2f))
+            return@Canvas
+        }
+
+        // traveling scanline — the mesh is alive, not a static drawing
+        val sy = h * scan
+        drawRect(
+            Brush.verticalGradient(listOf(Color.Transparent, ElectricBlue.copy(alpha = 0.10f), Color.Transparent)),
+            topLeft = Offset(0f, (sy - 24f).coerceAtLeast(0f)), size = androidx.compose.ui.geometry.Size(w, 48f),
+        )
+        drawLine(ElectricBlue.copy(alpha = 0.35f), Offset(0f, sy), Offset(w, sy), 1.5f)
+
+        // bone links
+        for ((a, b) in SKELETON_LINKS) {
+            val pa = points[a]; val pb = points[b]
+            drawLine(ElectricBlue, Offset(mapX(pa.first), mapY(pa.second)), Offset(mapX(pb.first), mapY(pb.second)), strokeWidth = 2.4f, alpha = 0.55f)
+        }
+        // kinetic joint rings — each joint breathes on its own phase
+        for ((i, j) in TRACKED_JOINTS.withIndex()) {
+            val p = points[j]
+            val c = Offset(mapX(p.first), mapY(p.second))
+            val phase = 0.5f + 0.5f * kotlin.math.sin(clock * 2f * Math.PI.toFloat() + i * 0.9f)
+            drawCircle(ElectricBlue, radius = 9f + 4f * phase, center = c, alpha = 0.22f + 0.20f * phase, style = Stroke(1.6f))
+            drawCircle(Color.White, radius = 2.4f, center = c, alpha = 0.9f)
+        }
+        // rep flash — burst from the chest centroid on every counted rep
+        if (repFlash > 1.01f) {
+            val chest = Offset((mapX(points[11].first) + mapX(points[12].first)) / 2f, (mapY(points[11].second) + mapY(points[12].second)) / 2f)
+            val f = repFlash - 1f
+            drawCircle(ElectricBlue, radius = 40f + 220f * f, center = chest, alpha = (1f - f / 0.35f).coerceIn(0f, 1f) * 0.55f, style = Stroke(4f))
+        }
     }
 }

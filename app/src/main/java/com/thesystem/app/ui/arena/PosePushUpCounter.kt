@@ -17,7 +17,11 @@ import kotlin.math.atan2
  * Logic: track shoulder→elbow→wrist angle. DOWN when < 105°, rep counted on return
  * to UP (> 155°). Requires the phone in front-of-body position (front camera, floor tilt).
  */
-class PosePushUpCounter(private val onRep: (Int) -> Unit) {
+class PosePushUpCounter(
+    private val onRep: (Int) -> Unit,
+    // DESIGN 2.5: normalized landmarks (0f..1f in image space) for the hologram mesh overlay
+    private val onLandmarks: (List<Pair<Float, Float>>) -> Unit = {},
+) {
 
     private val detector = PoseDetection.getClient(
         PoseDetectorOptions.Builder()
@@ -29,10 +33,14 @@ class PosePushUpCounter(private val onRep: (Int) -> Unit) {
         private set
     private var wasDown = false
     private var lastRepAt = 0L
+    private var imgW = 1f
+    private var imgH = 1f
 
     @androidx.camera.core.ExperimentalGetImage
     fun process(imageProxy: ImageProxy) {
         val media = imageProxy.image ?: run { imageProxy.close(); return }
+        imgW = imageProxy.width.toFloat().coerceAtLeast(1f)
+        imgH = imageProxy.height.toFloat().coerceAtLeast(1f)
         val image = InputImage.fromMediaImage(media, imageProxy.imageInfo.rotationDegrees)
         detector.process(image)
             .addOnSuccessListener { pose -> evaluate(pose) }
@@ -40,6 +48,9 @@ class PosePushUpCounter(private val onRep: (Int) -> Unit) {
     }
 
     private fun evaluate(pose: Pose) {
+        // hologram mesh feed — normalized so the overlay is image-size-agnostic
+        val pts = pose.allPoseLandmarks.map { (it.position.x / imgW) to (it.position.y / imgH) }
+        onLandmarks(pts)
         val elbowAngle = elbowAngleDeg(pose, PoseLandmark.LEFT_SHOULDER, PoseLandmark.LEFT_ELBOW, PoseLandmark.LEFT_WRIST)
             ?: elbowAngleDeg(pose, PoseLandmark.RIGHT_SHOULDER, PoseLandmark.RIGHT_ELBOW, PoseLandmark.RIGHT_WRIST)
             ?: return
