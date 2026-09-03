@@ -4,17 +4,21 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontFamily
@@ -30,18 +34,12 @@ import com.thesystem.app.core.theme.SurfaceDark
 // whisper of localized corner glow. Everything cached via drawWithCache.
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** All-four-corners chamfer — the System-window silhouette. */
-fun chamferShape(cut: Dp): GenericShape = GenericShape { size, _ ->
-    val c = cut.toPx().coerceAtMost(size.minDimension / 3f)
-    moveTo(c, 0f)
-    lineTo(size.width - c, 0f)
-    lineTo(size.width, c)
-    lineTo(size.width, size.height - c)
-    lineTo(size.width - c, size.height)
-    lineTo(c, size.height)
-    lineTo(0f, size.height - c)
-    lineTo(0f, c)
-    close()
+/** All-four-corners chamfer — the System-window silhouette. Density-aware Shape. */
+fun chamferShape(cut: Dp): Shape = object : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val c = with(density) { cut.toPx() }.coerceAtMost(size.minDimension / 3f)
+        return Outline.Generic(chamferOutlinePath(size.width, size.height, c))
+    }
 }
 
 private fun chamferOutlinePath(w: Float, h: Float, c: Float): Path = Path().apply {

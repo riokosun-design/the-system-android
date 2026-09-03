@@ -196,7 +196,7 @@ private fun BuffsCard(s: DashboardState) {
 // ── QUEST CARD — animated fill, press-squish, CLEARED flips green ═══════════
 
 @Composable
-private fun QuestCard(q: QuestDto, onComplete: () -> Unit, penaltyRisk: Boolean = false) {
+private fun QuestCard(q: QuestDto, penaltyRisk: Boolean = false, onComplete: () -> Unit) {
     val done = q.completed
     val progress by animateFloatAsState(
         targetValue = if (q.targetValue > 0) (q.progress.toFloat() / q.targetValue).coerceIn(0f, 1f) else 0f,
