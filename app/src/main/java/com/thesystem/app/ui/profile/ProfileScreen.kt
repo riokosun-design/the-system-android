@@ -57,6 +57,11 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
             items(s.merch, key = { it.id }) { p -> ProductCard(p, me, gated = true) }
             item { SectionTitle("Supplement Arsenal — affiliate", VenomGreen) }
             items(s.supplements, key = { it.id }) { p -> ProductCard(p, me, gated = false) }
+            item {
+                Box(Modifier.enterAnim(6)) {
+                    DangerZoneCard(deleting = s.deleting, onDelete = { vm.deleteAccount { onSignOut() } })
+                }
+            }
             item { Spacer(Modifier.height(90.dp)) }
         }
         Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.BottomCenter) { SnackbarHost(snack) }
@@ -244,5 +249,49 @@ private fun ProductCard(p: ProductDto, me: UserDto, gated: Boolean) {
             else NeonButton("BUY", { uriHandler.openUri(p.outboundUrl) }, color = if (p.category == "SUPPLEMENT") VenomGreen else ElectricBlue)
         }
         if (locked) Text("Requires ${required.title} rank. Earn it.", color = CrimsonRed, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+// ── DANGER ZONE — Play policy: self-service account deletion ════════════════
+@Composable
+private fun DangerZoneCard(deleting: Boolean, onDelete: () -> Unit) {
+    var confirm by remember { mutableStateOf(false) }
+
+    GlowCard(glow = CrimsonRed, pulse = false) {
+        Text("DANGER ZONE", style = MaterialTheme.typography.labelLarge, color = CrimsonRed)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Deletion erases your hunter record from THE SYSTEM — level, forms, VC, territory, referrals. No resurrection.",
+            style = MaterialTheme.typography.labelSmall, color = TextMuted,
+        )
+        Spacer(Modifier.height(10.dp))
+        NeonButton(
+            if (deleting) "ERASING…" else "DELETE MY ACCOUNT",
+            onClick = { if (!deleting) confirm = true },
+            modifier = Modifier.fillMaxWidth(),
+            color = CrimsonRed,
+        )
+    }
+
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            containerColor = SurfaceHigh,
+            title = { Text("Erase this hunter?", color = CrimsonRed, style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Text(
+                    "Your account and every trace — quests, forms, battles, wallet — will be permanently destroyed. This cannot be undone.",
+                    color = TextPrimary, style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirm = false; onDelete() }) {
+                    Text("ERASE FOREVER", color = CrimsonRed, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirm = false }) { Text("STAY", color = TextMuted) }
+            },
+        )
     }
 }

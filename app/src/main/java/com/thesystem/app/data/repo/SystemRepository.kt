@@ -143,6 +143,11 @@ class SystemRepository @Inject constructor(
     }
 
     /** Body stats editor — touches only whitelisted columns (role/xp/vc are trigger-guarded). */
+    /** Play policy: self-service account deletion. Server cascades every row. */
+    suspend fun deleteAccount() {
+        supabase.postgrest.rpc("delete_account"); Unit
+    }
+
     suspend fun updateBodyStats(userId: String, age: Int, heightCm: Double, weightKg: Double) {
         supabase.from("users").update({
             set("age", age); set("height_cm", heightCm); set("weight_kg", weightKg)

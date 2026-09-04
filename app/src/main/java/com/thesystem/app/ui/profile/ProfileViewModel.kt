@@ -24,6 +24,7 @@ data class ProfileState(
     val offerwallUrl: String? = null,
     val notice: String? = null,
     val error: String? = null,
+    val deleting: Boolean = false,
 ) {
     val merch get() = products.filter { it.category == "MERCH" }
     val supplements get() = products.filter { it.category == "SUPPLEMENT" }
@@ -72,6 +73,15 @@ class ProfileViewModel @Inject constructor(
         runCatching { system.updateBodyStats(me.id, age, heightCm, weightKg) }
             .onSuccess { _state.value = _state.value.copy(notice = "Biometrics updated."); refresh() }
             .onFailure { _state.value = _state.value.copy(error = it.message) }
+    }
+
+    /** Play policy: in-app account deletion. onDeleted should re-route to onboarding. */
+    fun deleteAccount(onDeleted: () -> Unit) = viewModelScope.launch {
+        if (_state.value.deleting) return@launch
+        _state.value = _state.value.copy(deleting = true)
+        runCatching { system.deleteAccount() }
+            .onSuccess { onDeleted() }
+            .onFailure { _state.value = _state.value.copy(deleting = false, error = "Deletion failed: ${it.message}") }
     }
 
     fun consumeNotice() { _state.value = _state.value.copy(notice = null, error = null) }
