@@ -39,7 +39,7 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
 
     SystemBackground(wallpaperAlpha = 0.18f) {
         LazyColumn(
-            Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp),
+            Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(vertical = 14.dp),
         ) {
