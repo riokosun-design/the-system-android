@@ -140,7 +140,6 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
                     },
                 )
             }
-            }
 
             // celebration overlays — they read state, they never block composition
             XpBurst(burstSignal, color = HunterGold)
