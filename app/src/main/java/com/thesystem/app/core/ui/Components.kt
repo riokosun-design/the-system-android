@@ -48,9 +48,9 @@ fun rankColor(rank: SystemMath.HunterRank): Color = when (rank) {
 fun FloatingIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String?,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
     tint: Color = TextPrimary,
+    onClick: () -> Unit,   // trailing-lambda convention: callbacks ride LAST
 ) {
     Box(
         modifier
