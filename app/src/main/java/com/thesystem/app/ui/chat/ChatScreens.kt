@@ -49,7 +49,7 @@ fun ChatHomeScreen(nav: NavHostController, vm: ChatViewModel = hiltViewModel()) 
                     Composer(onSend = vm::sendClan, accent = NeonPurple)
                 }
             } else {
-                Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                Column(Modifier.fillMaxSize().padding(horizontal = Grid.Margin)) {
                     OutlinedTextField(
                         value = s.searchQuery, onValueChange = vm::onSearch,
                         label = { Text("Message any hunter by @username") }, singleLine = true,

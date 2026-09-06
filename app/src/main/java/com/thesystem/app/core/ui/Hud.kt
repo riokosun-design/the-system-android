@@ -97,7 +97,7 @@ fun HudFrameCard(
             .clip(chamferShape(cut))
             .background(SurfaceDark.copy(alpha = 0.94f))
             .hudFrame(accent = accent, cut = cut, glow = glow)
-            .padding(horizontal = 15.dp, vertical = 13.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         content = content,
     )
 }

@@ -3,13 +3,20 @@ package com.thesystem.app.ui.territory
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -48,10 +55,12 @@ fun TerritoryScreen(vm: TerritoryViewModel = hiltViewModel()) {
 
     SystemBackground(wallpaperAlpha = 0.10f) {
         Box(Modifier.fillMaxSize().statusBarsPadding()) {
-            Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+            Column(Modifier.fillMaxSize().padding(horizontal = Grid.Margin)) {
+                Spacer(Modifier.height(Grid.S8))
                 Text("TERRITORY PROTOCOL", style = MaterialTheme.typography.headlineMedium, color = ElectricBlue)
+                Spacer(Modifier.height(Grid.S4))
                 Text("1KM geofenced zones. Train inside one to capture it. Top capturer leads; guilds raise shields.", style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Grid.S16))
 
                 when {
                     !s.hasPermission -> GlowCard(glow = CrimsonRed) {
@@ -69,9 +78,9 @@ fun TerritoryScreen(vm: TerritoryViewModel = hiltViewModel()) {
                             LevelUpShockwave(s.captureSignal, color = ElectricBlue)
                             LevelUpShockwave(s.claimSignal, color = NeonPurple)
                         }
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(Grid.S12))
                         Box(Modifier.enterAnim(1)) { ZoneStatusCard(s, vm) }
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(Grid.S12))
                         Box(Modifier.enterAnim(2)) { LeaderboardCard(s) }
                     }
                 }
@@ -81,51 +90,76 @@ fun TerritoryScreen(vm: TerritoryViewModel = hiltViewModel()) {
     }
 }
 
-/** Osmdroid + MapTiler DARK tiles (quota-optimized engine). Draws 1KM capture circles per geohash cell. */
+/** Osmdroid + MapTiler DARK tiles (quota-optimized engine). Draws 1KM capture circles per geohash cell.
+ *  Zoom/recenter controls float in contrast-safe shells — never bare ink over tiles. */
 @Composable
 private fun DarkZoneMap(s: TerritoryState, modifier: Modifier = Modifier) {
     val meLat = s.lat; val meLon = s.lon
     // ROUND 2 FIX: re-centering on every state change used to hijack the user's pan/zoom.
-    // Now we center once on first GPS fix; after that the map belongs to the user's fingers.
     var didCenter by remember { mutableStateOf(false) }
-    SystemMapView(
-        modifier = modifier,
-        configure = { controller.setZoom(15.0) }, // inside the 13–18 clamp window
-        update = { map ->
-            if (meLat != null && meLon != null) {
-                val me = GeoPoint(meLat, meLon)
-                if (!didCenter) { map.controller.animateTo(me); didCenter = true }
-                val overlays = map.overlays
-                overlays.removeAll { it is Polygon || it is MyLocationNewOverlay }
+    val haptics = rememberSystemHaptics()
+    Box(modifier.clip(RoundedCornerShape(16.dp)).border(1.dp, GridLine, RoundedCornerShape(16.dp))) {
+        val map = SystemMapView(
+            modifier = Modifier.matchParentSize(),
+            configure = { controller.setZoom(15.0) }, // inside the 13–18 clamp window
+            update = { m ->
+                if (meLat != null && meLon != null) {
+                    val me = GeoPoint(meLat, meLon)
+                    if (!didCenter) { m.controller.animateTo(me); didCenter = true }
+                    val overlays = m.overlays
+                    overlays.removeAll { it is Polygon || it is MyLocationNewOverlay }
 
-                s.zones.forEach { zone ->
-                    val (zLat, zLon) = Geohash.center(zone)
-                    val clan = s.clanZones.firstOrNull { it.zone == zone }
-                    val isMine = zone == s.myZone
-                    val poly = Polygon(map).apply {
-                        points = Polygon.pointsAsCircle(GeoPoint(zLat, zLon), TerritoryViewModel.ZONE_RADIUS.toDouble())
-                        fillPaint.color = when {
-                            clan != null && clan.shieldActive -> 0x339D00FF // shielded = purple dome
-                            isMine -> 0x2200F0FF
-                            else -> 0x1100F0FF
+                    s.zones.forEach { zone ->
+                        val (zLat, zLon) = Geohash.center(zone)
+                        val clan = s.clanZones.firstOrNull { it.zone == zone }
+                        val isMine = zone == s.myZone
+                        val poly = Polygon(m).apply {
+                            points = Polygon.pointsAsCircle(GeoPoint(zLat, zLon), TerritoryViewModel.ZONE_RADIUS.toDouble())
+                            fillPaint.color = when {
+                                clan != null && clan.shieldActive -> 0x339D00FF // shielded = purple dome
+                                isMine -> 0x2200F0FF
+                                else -> 0x1100F0FF
+                            }
+                            outlinePaint.color = when {
+                                clan != null && clan.shieldActive -> 0xCC9D00FF.toInt()
+                                isMine -> 0xAA00F0FF.toInt()
+                                else -> 0x3300F0FF
+                            }
+                            outlinePaint.strokeWidth = if (isMine) 5f else 2f
+                            title = clan?.let { "⛨ ${it.clanTag ?: "GUILD"}" } ?: zone
                         }
-                        outlinePaint.color = when {
-                            clan != null && clan.shieldActive -> 0xCC9D00FF.toInt()
-                            isMine -> 0xAA00F0FF.toInt()
-                            else -> 0x3300F0FF
-                        }
-                        outlinePaint.strokeWidth = if (isMine) 5f else 2f
-                        title = clan?.let { "⛨ ${it.clanTag ?: "GUILD"}" } ?: zone
+                        overlays.add(poly)
                     }
-                    overlays.add(poly)
-                }
 
-                // Hardware-rendered my-location dot (osmdroid manages invalidation)
-                map.overlayManager.add(MyLocationNewOverlay(map).apply { enableMyLocation(); enableFollowLocation() })
-                map.invalidate()
+                    // Hardware-rendered my-location dot (osmdroid manages invalidation)
+                    m.overlayManager.add(MyLocationNewOverlay(m).apply { enableMyLocation(); enableFollowLocation() })
+                    m.invalidate()
+                }
+            },
+        )
+        // contrast-isolated control rail (spec §2: 0xCC0E121B shell + 0x1AFFFFFF hairline)
+        Column(
+            Modifier.align(Alignment.CenterEnd).padding(Grid.S12),
+            verticalArrangement = Arrangement.spacedBy(Grid.S8),
+        ) {
+            FloatingIconButton(Icons.Default.Add, "Zoom in") {
+                haptics.tick()
+                map.controller.setZoom((map.zoomLevelDouble + 1).coerceAtMost(SystemMapEngine.MAX_ZOOM))
             }
-        },
-    )
+            FloatingIconButton(Icons.Default.Remove, "Zoom out") {
+                haptics.tick()
+                map.controller.setZoom((map.zoomLevelDouble - 1).coerceAtLeast(SystemMapEngine.MIN_ZOOM))
+            }
+            FloatingIconButton(Icons.Default.MyLocation, "Center on my position", tint = ElectricBlue) {
+                haptics.tick()
+                if (meLat != null && meLon != null) {
+                    didCenter = true
+                    map.controller.animateTo(GeoPoint(meLat, meLon))
+                    map.controller.setZoom(16.0)
+                }
+            }
+        }
+    }
 }
 
 @Composable

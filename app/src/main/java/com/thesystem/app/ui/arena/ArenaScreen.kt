@@ -33,7 +33,7 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
     val tabs = listOf("BATTLES", "TOURNAMENTS", "PREDICT", "RANKS")
 
     SystemBackground(wallpaperAlpha = 0.12f) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp)) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("THE ARENA", style = MaterialTheme.typography.headlineMedium, color = CrimsonRed, modifier = Modifier.weight(1f))
                 VcChip(s.profile?.vcBalance ?: 0)

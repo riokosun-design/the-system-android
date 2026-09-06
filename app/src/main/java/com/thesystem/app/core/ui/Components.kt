@@ -10,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -39,9 +40,90 @@ fun rankColor(rank: SystemMath.HunterRank): Color = when (rank) {
     SystemMath.HunterRank.MASTERPIECE -> HunterGold
 }
 
-/** Screen scaffold: dark base + optional dynamic anime wallpaper + scrim + living ambient motes. */
+// ── CONTRAST-SAFE FLOATING CONTAINERS (spec §2) ═════════════════════════════
+// Rule: never float a bare vector icon over art or map tiles — always this shell.
+
+/** 44dp touch target, 80% navy + 10% hairline: visible over ANY background. */
 @Composable
-fun SystemBackground(wallpaperUrl: String? = null, wallpaperAlpha: Float = 0.22f, content: @Composable BoxScope.() -> Unit) {
+fun FloatingIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = TextPrimary,
+) {
+    Box(
+        modifier
+            .size(44.dp)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(FloatingSurface)
+            .border(1.dp, Hairline, androidx.compose.foundation.shape.CircleShape)
+            .pressScale(0.9f)
+            .clickableNoIndication(onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(20.dp))
+    }
+}
+
+private fun Modifier.clickableNoIndication(onClick: () -> Unit): Modifier =
+    this.clickable(
+        interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource(),
+        indication = null, // press-scale is the feedback here; spec asks ripple on BUTTONS (NeonButton has it natively)
+        onClick = onClick,
+    )
+
+/** Scannable tag chip — replaces noisy sentence-badges ("+30 XP Complete Bonus" → "+30 XP"). */
+@Composable
+fun SystemChip(text: String, color: Color, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(color.copy(alpha = 0.12f))
+            .border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        Text(text.uppercase(), color = color, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+    }
+}
+
+/** Sticky bottom execution area — anchors the primary action above the Tab Bar.
+ *  Place inside a Box; renders in the floating contrast-safe shell. */
+@Composable
+fun BoxScope.StickyActionBar(
+    status: String,
+    statusColor: Color,
+    actionText: String,
+    actionColor: Color = ElectricBlue,
+    enabled: Boolean = true,
+    onAction: () -> Unit,
+) {
+    Row(
+        Modifier
+            .align(Alignment.BottomCenter)
+            .fillMaxWidth()
+            .padding(start = Grid.Margin, end = Grid.Margin, bottom = Grid.S12)
+            .clip(RoundedCornerShape(16.dp))
+            .background(FloatingSurface)
+            .border(1.dp, Hairline, RoundedCornerShape(16.dp))
+            .padding(horizontal = Grid.S16, vertical = Grid.S8),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            status,
+            style = MaterialTheme.typography.labelLarge,
+            color = statusColor,
+            modifier = Modifier.weight(1f),
+        )
+        NeonButton(actionText, onAction, color = actionColor, enabled = enabled)
+    }
+}
+
+/** Screen scaffold: dark base + optional dynamic anime wallpaper + scrim + vignette + living ambient motes.
+ *  Aura is HARD-CLAMPED to 0.12–0.16 plus a black vignette — foreground text readability is non-negotiable. */
+@Composable
+fun SystemBackground(wallpaperUrl: String? = null, wallpaperAlpha: Float = 0.14f, content: @Composable BoxScope.() -> Unit) {
+    val aura = wallpaperAlpha.coerceIn(0.12f, 0.16f)
     Box(Modifier.fillMaxSize().background(VoidBlack)) {
         if (wallpaperUrl != null) {
             AsyncImage(
@@ -49,7 +131,7 @@ fun SystemBackground(wallpaperUrl: String? = null, wallpaperAlpha: Float = 0.22f
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                alpha = wallpaperAlpha,
+                alpha = aura,
             )
         }
         Box(
@@ -57,6 +139,12 @@ fun SystemBackground(wallpaperUrl: String? = null, wallpaperAlpha: Float = 0.22f
                 Brush.verticalGradient(
                     listOf(Color(0xCC0B0E14), Color(0x880B0E14), Color(0xF20B0E14))
                 )
+            )
+        )
+        // Director's vignette: edges swallow the art so eyes land on content
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.radialGradient(listOf(Color.Transparent, Color(0x99000000), Color(0xF2030508)))
             )
         )
         AmbientMotes(seed = wallpaperUrl?.hashCode() ?: 7)
@@ -87,7 +175,7 @@ fun GlowCard(
             .clip(shape)
             .background(Brush.verticalGradient(listOf(SurfaceDark.copy(alpha = 0.92f), SurfaceHigh.copy(alpha = 0.85f))))
             .border(1.dp, Brush.linearGradient(listOf(glow.copy(alpha = borderGlow), glow.copy(alpha = 0.08f))), shape)
-            .padding(14.dp),
+            .padding(Grid.CardPadding),
         content = content,
     )
 }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -22,6 +23,7 @@ import com.thesystem.app.core.SystemMath
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
 import com.thesystem.app.data.model.QuestDto
+import kotlinx.coroutines.launch
 
 /** Tab 1 — Dashboard: the dopamine hub. Staggered entrance, rolling stats,
  *  XP bursts on every quest clear, level-up payday banner, armed-penalty pulse,
@@ -32,6 +34,8 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
     val s by vm.state.collectAsStateWithLifecycle()
     val snack = remember { SnackbarHostState() }
     val haptics = rememberSystemHaptics()
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     // ── effect signals: bump → one-shot animation fires ══════════════════════
     val (burstSignal, fireBurst) = rememberEffectSignal()
@@ -64,8 +68,8 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
             when {
                 s.loading && s.profile == null -> {
                     Column(
-                        Modifier.fillMaxSize().statusBarsPadding().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin, vertical = Grid.S16),
+                        verticalArrangement = Arrangement.spacedBy(Grid.CardSpace),
                     ) { SkeletonCards(4) }
                 }
                 else -> PullToRefreshBox(
@@ -74,9 +78,10 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
                     modifier = Modifier.fillMaxSize().statusBarsPadding(),
                 ) {
                 LazyColumn(
-                    Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    contentPadding = PaddingValues(vertical = 16.dp),
+                    Modifier.fillMaxSize().padding(horizontal = Grid.Margin),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(Grid.CardSpace),
+                    contentPadding = PaddingValues(vertical = Grid.S16),
                 ) {
                     item { Box(Modifier.enterAnim(0)) { Header(s, burstSignal, floaterSignal, floaterText) } }
                     s.profile?.let { p ->
@@ -85,7 +90,7 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
                         }
                         item {
                             Box(Modifier.enterAnim(2)) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(Grid.S12)) {
                                     StreakTile(p.streakDays, Modifier.weight(1f))
                                     AnimatedStatTile(
                                         "Next level",
@@ -111,9 +116,30 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
                         }
                     }
                     item { Box(Modifier.enterAnim(5)) { FormsStrip(s) } }
-                    item { Spacer(Modifier.height(70.dp)) }
+                    item { Spacer(Modifier.height(96.dp)) } // clears sticky bar + tab bar
                 }
                 }
+            }
+
+            // ── STICKY EXECUTION AREA — today's protocol status + jump to next open quest
+            if (!s.loading && s.profile != null && s.quests.isNotEmpty()) {
+                val total = s.quests.size
+                val cleared = s.quests.count { it.completed }
+                val allDone = cleared == total
+                val base = 4 + if ((s.profile?.missedDays ?: 0) > 0) 1 else 0
+                val firstOpen = base + s.quests.indexOfFirst { !it.completed }
+                StickyActionBar(
+                    status = "$cleared/$total QUESTS CLEARED",
+                    statusColor = if (allDone) VenomGreen else ElectricBlue,
+                    actionText = if (allDone) "ALL CLEARED ✓" else "NEXT QUEST",
+                    actionColor = if (allDone) VenomGreen else ElectricBlue,
+                    enabled = !allDone,
+                    onAction = {
+                        haptics.tick()
+                        scope.launch { listState.animateScrollToItem(firstOpen) }
+                    },
+                )
+            }
             }
 
             // celebration overlays — they read state, they never block composition
@@ -140,11 +166,11 @@ private fun Header(s: DashboardState, burstSignal: Int, floaterSignal: Int, floa
                 Column {
                     Text("HUNTER @${p?.username ?: "…"}", style = MaterialTheme.typography.labelSmall)
                     Text(p?.displayName ?: "Unknown Hunter", style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(Grid.S4))
                     RankBadge(s.rank)
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(Grid.S8))
                     XpProgressBar(p?.xp ?: 0, color = rankColor(s.rank))
-                    Spacer(Modifier.height(2.dp))
+                    Spacer(Modifier.height(Grid.S4))
                     AnimatedCounter(
                         target = p?.xp ?: 0,
                         color = TextMuted,
@@ -217,9 +243,9 @@ private fun QuestCard(q: QuestDto, penaltyRisk: Boolean = false, onComplete: () 
                 else -> HudTag("IN PROGRESS", ElectricBlue)
             }
         }
-        Spacer(Modifier.height(9.dp))
+        Spacer(Modifier.height(Grid.S8))
         Text(q.title, style = MaterialTheme.typography.titleMedium, color = if (done) TextMuted else TextPrimary)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Grid.S8))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Box(Modifier.fillMaxWidth().height(3.dp).background(SurfaceHigh, androidx.compose.foundation.shape.RoundedCornerShape(2.dp))) {
@@ -228,13 +254,11 @@ private fun QuestCard(q: QuestDto, penaltyRisk: Boolean = false, onComplete: () 
                             .background(if (done) VenomGreen else ElectricBlue, androidx.compose.foundation.shape.RoundedCornerShape(2.dp))
                     )
                 }
-                Spacer(Modifier.height(6.dp))
-                Row {
-                    Text("+${q.xpReward} XP", style = MaterialTheme.typography.labelSmall, color = HunterGold)
-                    Spacer(Modifier.width(10.dp))
-                    Text("${q.progress}/${q.targetValue}", style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.width(10.dp))
-                    Text(q.source, style = MaterialTheme.typography.labelSmall)
+                Spacer(Modifier.height(Grid.S8))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SystemChip("+${q.xpReward} XP", HunterGold)
+                    Spacer(Modifier.width(Grid.S8))
+                    Text("${q.progress}/${q.targetValue}", style = MaterialTheme.typography.bodySmall)
                 }
             }
             Spacer(Modifier.width(12.dp))

@@ -40,7 +40,7 @@ fun ProtocolScreen(nav: NavHostController, vm: ProtocolViewModel = hiltViewModel
     val tabs = listOf("ROOMS", "ARCS", "GUILDS")
 
     SystemBackground(wallpaperAlpha = 0.12f) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp)) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin)) {
             Text("PROTOCOL", style = MaterialTheme.typography.headlineMedium, color = NeonPurple)
             TabRow(selectedTabIndex = subTab, containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = NeonPurple) {
                 tabs.forEachIndexed { i, label ->

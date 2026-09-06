@@ -134,13 +134,15 @@ object SystemMapEngine {
     }
 }
 
-/** Drop-in AndroidView bound to the quota-optimized engine. */
+/** Drop-in AndroidView bound to the quota-optimized engine.
+ *  Returns the live MapView so callers can drive floating controls (zoom/recenter). */
 @Composable
 fun SystemMapView(
     modifier: Modifier = Modifier,
     configure: MapView.() -> Unit = {},
     update: (MapView) -> Unit = {},
-) {
+): MapView {
     val map = SystemMapEngine.rememberSystemMap(configure)
     AndroidView(factory = { map }, modifier = modifier, update = update)
+    return map
 }
