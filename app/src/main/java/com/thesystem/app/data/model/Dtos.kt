@@ -272,3 +272,46 @@ data class WorkoutDto(
     @SerialName("xp_earned") val xpEarned: Int = 0,
     val zone: String? = null,
 )
+
+// ── HUNTER FEED — X-style social layer (migration 008) ───────────────────────
+
+/** Row of the `hunter_posts_feed` view: post + author plate + counts + quote preview. */
+@Serializable
+data class HunterPostDto(
+    val id: String,
+    @SerialName("author_id") val authorId: String,
+    val username: String? = null,
+    @SerialName("display_name") val displayName: String? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    val level: Int = 1,
+    @SerialName("missed_days") val missedDays: Int = 0,
+    @SerialName("author_clan_id") val authorClanId: String? = null,
+    val content: String,
+    @SerialName("media_url") val mediaUrl: String? = null,
+    @SerialName("quest_verification_id") val questVerificationId: Long? = null,
+    @SerialName("parent_id") val parentId: String? = null,
+    @SerialName("quoted_post_id") val quotedPostId: String? = null,
+    @SerialName("quoted_username") val quotedUsername: String? = null,
+    @SerialName("quoted_excerpt") val quotedExcerpt: String? = null,
+    @SerialName("mana_count") val manaCount: Long = 0,
+    @SerialName("transmit_count") val transmitCount: Long = 0,
+    @SerialName("reply_count") val replyCount: Long = 0,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+/** Insert payload for a new dispatch / reply / quote. Server defaults fill the rest. */
+@Serializable
+data class NewHunterPost(
+    @SerialName("author_id") val authorId: String,
+    val content: String,
+    @SerialName("media_url") val mediaUrl: String? = null,
+    @SerialName("parent_id") val parentId: String? = null,
+    @SerialName("quoted_post_id") val quotedPostId: String? = null,
+)
+
+@Serializable
+data class HunterInteractionRow(
+    @SerialName("post_id") val postId: String,
+    @SerialName("user_id") val userId: String,
+    val type: String, // mana_boost | transmit | challenge
+)

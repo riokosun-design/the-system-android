@@ -25,6 +25,7 @@ import com.thesystem.app.ui.admin.AdminScreen
 import com.thesystem.app.ui.arena.BattleRoomScreen
 import com.thesystem.app.ui.chat.ChatHomeScreen
 import com.thesystem.app.ui.chat.ConversationScreen
+import com.thesystem.app.ui.protocol.ProtocolScreen
 import com.thesystem.app.ui.splash.DynamicSplash
 import com.thesystem.app.ui.splash.LaunchFlowScreen
 import com.thesystem.app.ui.splash.SplashVariant
@@ -133,5 +134,6 @@ fun AppNavHost(profile: RootState.Ready, onSignOut: () -> Unit) {
             BattleRoomScreen(battleId = battleId, onExit = { nav.popBackStack() })
         }
         composable(Routes.ADMIN) { AdminScreen(onBack = { nav.popBackStack() }) }
+        composable(Routes.PROTOCOL) { ProtocolScreen(nav = nav) }
     }
 }

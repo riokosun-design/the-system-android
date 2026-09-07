@@ -36,15 +36,17 @@ import com.thesystem.app.data.model.UserDto
 import com.thesystem.app.ui.arena.ArenaScreen
 import com.thesystem.app.ui.dashboard.DashboardScreen
 import com.thesystem.app.ui.profile.ProfileScreen
-import com.thesystem.app.ui.protocol.ProtocolScreen
+import com.thesystem.app.ui.social.HunterFeedScreen
 import com.thesystem.app.ui.territory.TerritoryScreen
 
-/** Strict 5-tab navbar (Section 1). No more, no less. */
+/** Strict 5-tab navbar (Section 1). No more, no less.
+ *  Evolution 2.7: Protocol left the rail for the Hunter Feed — the rooms live
+ *  one tap deeper (Status → lock glyph → Routes.PROTOCOL). */
 enum class SystemTab(val label: String, val icon: ImageVector) {
     DASHBOARD("Status", Icons.Default.Dashboard),
-    TERRITORY("Map", Icons.Default.Map),
+    FEED("Feed", Icons.Default.Send),
     ARENA("Arena", Icons.Default.Whatshot),
-    PROTOCOL("Protocol", Icons.Default.Lock),
+    TERRITORY("Map", Icons.Default.Map),
     PROFILE("Vault", Icons.Default.Person),
 }
 
@@ -78,9 +80,9 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
         ) { t ->
             when (t) {
                 SystemTab.DASHBOARD -> DashboardScreen(nav = nav)
-                SystemTab.TERRITORY -> TerritoryScreen()
+                SystemTab.FEED -> HunterFeedScreen(nav = nav)
                 SystemTab.ARENA -> ArenaScreen(nav = nav)
-                SystemTab.PROTOCOL -> ProtocolScreen(nav = nav)
+                SystemTab.TERRITORY -> TerritoryScreen()
                 SystemTab.PROFILE -> ProfileScreen(profile = profile, nav = nav, onSignOut = onSignOut)
             }
         }

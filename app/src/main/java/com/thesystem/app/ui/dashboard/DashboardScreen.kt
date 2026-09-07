@@ -83,7 +83,7 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
                     verticalArrangement = Arrangement.spacedBy(Grid.CardSpace),
                     contentPadding = PaddingValues(vertical = Grid.S16),
                 ) {
-                    item { Box(Modifier.enterAnim(0)) { Header(s, burstSignal, floaterSignal, floaterText) } }
+                    item { Box(Modifier.enterAnim(0)) { Header(s, burstSignal, floaterSignal, floaterText, onProtocol = { haptics.select(); nav.navigate(com.thesystem.app.Routes.PROTOCOL) }) } }
                     s.profile?.let { p ->
                         if (p.missedDays > 0) {
                             item { Box(Modifier.enterAnim(1)) { PenaltyCard(s) } }
@@ -155,11 +155,19 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
 // ── HEADER — the hunter's identity plate ═════════════════════════════════════
 
 @Composable
-private fun Header(s: DashboardState, burstSignal: Int, floaterSignal: Int, floaterText: String) {
+private fun Header(s: DashboardState, burstSignal: Int, floaterSignal: Int, floaterText: String, onProtocol: () -> Unit) {
     val p = s.profile
     GlowCard(glow = rankColor(s.rank), pulse = true) {
         Box {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // the Protocol rooms left the tab rail (2.7) — this lock is their door
+            FloatingIconButton(
+                icon = Icons.Default.Lock,
+                contentDescription = "Protocol rooms",
+                modifier = Modifier.align(Alignment.TopEnd),
+                tint = NeonPurple,
+                onClick = onProtocol,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 48.dp)) {
                 XpRing(xp = p?.xp ?: 0, level = p?.level ?: 1, modifier = Modifier.size(110.dp), color = rankColor(s.rank))
                 Spacer(Modifier.width(16.dp))
                 Column {

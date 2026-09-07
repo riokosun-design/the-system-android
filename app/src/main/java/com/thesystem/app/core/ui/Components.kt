@@ -50,11 +50,12 @@ fun FloatingIconButton(
     contentDescription: String?,
     modifier: Modifier = Modifier,
     tint: Color = TextPrimary,
+    size: Dp = 44.dp,
     onClick: () -> Unit,   // trailing-lambda convention: callbacks ride LAST
 ) {
     Box(
         modifier
-            .size(44.dp)
+            .size(size)
             .clip(androidx.compose.foundation.shape.CircleShape)
             .background(FloatingSurface)
             .border(1.dp, Hairline, androidx.compose.foundation.shape.CircleShape)
@@ -62,7 +63,7 @@ fun FloatingIconButton(
             .clickableNoIndication(onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(size * 0.45f))
     }
 }
 

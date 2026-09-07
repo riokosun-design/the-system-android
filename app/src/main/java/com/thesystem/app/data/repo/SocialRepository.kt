@@ -192,6 +192,94 @@ class SocialRepository @Inject constructor(private val supabase: SupabaseClient)
         supabase.from("referral_hall").select { limit(10) }.decodeList<ReferralHallDto>()
     }.getOrDefault(emptyList())
 
+    // ── HUNTER FEED — dispatches, threads, mana, re-dispatch ═════════════════
+
+    /** Timeline window: latest top-level dispatches + their threads. Scoped client-side. */
+    suspend fun hunterFeed(): List<HunterPostDto> = runCatching {
+        supabase.from("hunter_posts_feed").select {
+            order("created_at", Order.DESCENDING); limit(150)
+        }.decodeList<HunterPostDto>()
+    }.getOrDefault(emptyList())
+
+    /** My interaction state (for filled Arise/Transmit indicators). */
+    suspend fun myFeedInteractions(): Map<String, Set<String>> {
+        val id = uid ?: return emptyMap()
+        return runCatching {
+            supabase.from("hunter_interactions").select { filter { eq("user_id", id) } }
+                .decodeList<HunterInteractionRow>()
+                .groupBy({ it.postId }, { it.type }).mapValues { it.value.toSet() }
+        }.getOrDefault(emptyMap())
+    }
+
+    /** Zero-latency timeline pushes. Emits Unit on any posts/interactions change. */
+    fun hunterFeedFlow(): Flow<Unit> = callbackFlow {
+        val posts = supabase.channel("hunter-feed-posts")
+        val inter = supabase.channel("hunter-feed-inter")
+        val j1 = launch {
+            posts.postgresChangeFlow<PostgresAction>(schema = "public") { table = "hunter_posts" }
+                .collect { trySend(Unit) }
+        }
+        val j2 = launch {
+            inter.postgresChangeFlow<PostgresAction>(schema = "public") { table = "hunter_interactions" }
+                .collect { trySend(Unit) }
+        }
+        posts.subscribe(); inter.subscribe()
+        trySend(Unit) // initial paint
+        awaitClose {
+            j1.cancel(); j2.cancel()
+            launch { supabase.realtime.runCatching { posts.unsubscribe(); inter.unsubscribe() } }
+        }
+    }
+
+    suspend fun createPost(content: String, mediaUrl: String? = null, parentId: String? = null, quotedPostId: String? = null): Result<Unit> = runCatching {
+        val id = uid ?: error("Not signed in")
+        supabase.from("hunter_posts").insert(
+            NewHunterPost(
+                authorId = id,
+                content = content.trim(),
+                mediaUrl = mediaUrl?.trim()?.takeIf { it.isNotBlank() },
+                parentId = parentId,
+                quotedPostId = quotedPostId,
+            )
+        ); Unit
+    }
+
+    /** Arise: toggle a mana flare on a dispatch. */
+    suspend fun toggleMana(postId: String, boost: Boolean): Result<Unit> = runCatching {
+        val id = uid ?: error("Not signed in")
+        if (boost) {
+            supabase.from("hunter_interactions").upsert(HunterInteractionRow(postId, id, "mana_boost"))
+        } else {
+            supabase.from("hunter_interactions").delete {
+                filter { eq("post_id", postId); eq("user_id", id); eq("type", "mana_boost") }
+            }
+        }; Unit
+    }
+
+    /** Transmit: quote / re-dispatch to own timeline + interaction marker. */
+    suspend fun retransmit(post: HunterPostDto, comment: String?): Result<Unit> = runCatching {
+        val id = uid ?: error("Not signed in")
+        supabase.from("hunter_interactions").upsert(HunterInteractionRow(post.id, id, "transmit"))
+        supabase.from("hunter_posts").insert(
+            NewHunterPost(
+                authorId = id,
+                content = comment?.trim()?.takeIf { it.isNotBlank() } ?: post.content.take(500),
+                quotedPostId = post.quotedPostId ?: post.id, // re-quote of a quote points at the origin
+            )
+        ); Unit
+    }
+
+    /** Battle Invite marker (the duel itself is created via ArenaRepository.challenge). */
+    suspend fun markChallenge(postId: String): Result<Unit> = runCatching {
+        val id = uid ?: error("Not signed in")
+        supabase.from("hunter_interactions").upsert(HunterInteractionRow(postId, id, "challenge")); Unit
+    }
+
+    /** Own dispatches are erasable (RLS: author only). Threads cascade. */
+    suspend fun deletePost(postId: String): Result<Unit> = runCatching {
+        supabase.from("hunter_posts").delete { filter { eq("id", postId) } }; Unit
+    }
+
     suspend fun myReferralCount(): Long {
         val me = uid ?: return 0
         return runCatching {
