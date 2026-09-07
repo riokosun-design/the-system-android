@@ -90,6 +90,7 @@ object Routes {
     const val DM = "dm/{otherId}/{otherName}"
     const val BATTLE = "battle/{battleId}"
     const val ADMIN = "admin"
+    const val PROTOCOL = "protocol" // Black/White rooms + arcs — off the tab rail since 2.7
     fun dm(otherId: String, otherName: String) = "dm/$otherId/$otherName"
     fun battle(id: String) = "battle/$id"
 }
