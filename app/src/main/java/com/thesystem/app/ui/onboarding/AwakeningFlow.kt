@@ -1,5 +1,6 @@
 package com.thesystem.app.ui.onboarding
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.Animatable
@@ -205,6 +206,9 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
         computeVesselStats(ui.age, ui.heightCm, ui.weightKg, archetype, activity)
     }
     val advance: () -> Unit = { haptics.tick(); page = (page + 1).coerceAtMost(27) }
+
+    // system back rewinds the ritual one page instead of ejecting the hunter
+    BackHandler(enabled = page > 1) { haptics.tick(); page = (page - 1).coerceAtLeast(1) }
 
     // Google seal → finalize the contract through the existing VM pipeline
     LaunchedEffect(ui.signedInProfile != null) {
@@ -1017,8 +1021,12 @@ private fun P17_Power(stats: VesselStats, clock: Float, advance: () -> Unit) {
         ) {
             RadialPowerChart(stats, seg(clock, 0.52f, 0.45f))
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // zero-start target — AnimatedCounter remembers its first target,
+                // so the roll only fires when the value CHANGES after entry
+                var powerTarget by remember { mutableStateOf(0L) }
+                LaunchedEffect(Unit) { delay(620); powerTarget = (stats.power * 10).toLong() }
                 AnimatedCounter(
-                    target = (stats.power * 10).toLong(), color = HunterGold, fontSize = 44.sp, fontWeight = FontWeight.Black,
+                    target = powerTarget, color = HunterGold, fontSize = 44.sp, fontWeight = FontWeight.Black,
                     format = { "%.1f".format(it / 10f) },
                 )
                 Text("POWER", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextMuted, letterSpacing = 3.sp)

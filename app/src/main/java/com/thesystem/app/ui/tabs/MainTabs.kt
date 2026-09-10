@@ -15,6 +15,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,7 +45,7 @@ import com.thesystem.app.ui.territory.TerritoryScreen
  *  one tap deeper (Status → lock glyph → Routes.PROTOCOL). */
 enum class SystemTab(val label: String, val icon: ImageVector) {
     DASHBOARD("Status", Icons.Default.Dashboard),
-    FEED("Feed", Icons.Default.Send),
+    FEED("Feed", Icons.AutoMirrored.Filled.Send),
     ARENA("Arena", Icons.Default.Whatshot),
     TERRITORY("Map", Icons.Default.Map),
     PROFILE("Vault", Icons.Default.Person),

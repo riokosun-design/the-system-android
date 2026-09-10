@@ -17,9 +17,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -432,7 +432,7 @@ private fun ThreadDialog(
                         modifier = Modifier.weight(1f),
                     )
                     Spacer(Modifier.width(Grid.S8))
-                    FloatingIconButton(Icons.Default.Send, "Send reply", tint = ElectricBlue) { if (!busy) onSend(text).also { text = "" } }
+                    FloatingIconButton(Icons.AutoMirrored.Filled.Send, "Send reply", tint = ElectricBlue) { if (!busy) onSend(text).also { text = "" } }
                 }
             }
         },

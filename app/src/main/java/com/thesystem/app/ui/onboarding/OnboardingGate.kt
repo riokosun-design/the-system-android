@@ -52,11 +52,14 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -551,22 +554,17 @@ fun FlashRipple(trigger: Int, color: Color = ElectricBlue) {
 fun LegalFooter(onTerms: () -> Unit, onPrivacy: () -> Unit) {
     val annotated = buildAnnotatedString {
         append("By entering, you accept The System's Protocols\n")
-        pushStringAnnotation(tag = "legal", annotation = "terms")
-        withStyle(SpanStyle(color = ElectricBlue)) { append("Terms of Service") }
-        pop()
+        withLink(LinkAnnotation.Clickable(tag = "terms", linkInteractionListener = LinkInteractionListener { onTerms() })) {
+            withStyle(SpanStyle(color = ElectricBlue)) { append("Terms of Service") }
+        }
         append("  ·  ")
-        pushStringAnnotation(tag = "legal", annotation = "privacy")
-        withStyle(SpanStyle(color = ElectricBlue)) { append("Privacy Policy") }
-        pop()
+        withLink(LinkAnnotation.Clickable(tag = "privacy", linkInteractionListener = LinkInteractionListener { onPrivacy() })) {
+            withStyle(SpanStyle(color = ElectricBlue)) { append("Privacy Policy") }
+        }
     }
-    androidx.compose.foundation.text.ClickableText(
+    Text(
         text = annotated,
         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, lineHeight = 17.sp, textAlign = TextAlign.Center),
-        onClick = { off ->
-            annotated.getStringAnnotations("legal", off, off).firstOrNull()?.let {
-                if (it.item == "terms") onTerms() else onPrivacy()
-            }
-        },
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
     )
 }
