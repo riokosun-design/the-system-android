@@ -75,6 +75,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.util.lerp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -336,7 +337,7 @@ private fun CinematicArt(res: Int, clock: Float, alpha: Float = 0.5f) {
         // occasional diagonal light sweep — embedded, not wallpaper
         Canvas(Modifier.fillMaxSize()) {
             val bandW = size.width * 0.35f
-            val cx = kotlin.math.lerp(-bandW, size.width + bandW, sweepT)
+            val cx = lerp(-bandW, size.width + bandW, sweepT)
             drawRect(
                 Brush.horizontalGradient(0f to Color.Transparent, 0.5f to Color.White.copy(alpha = 0.045f), 1f to Color.Transparent),
                 topLeft = Offset(cx - bandW / 2f, 0f), size = Size(bandW, size.height),
