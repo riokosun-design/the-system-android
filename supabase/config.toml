@@ -1,5 +1,5 @@
 # THE SYSTEM — Supabase project config (link with: supabase link --project-ref <ref>)
-project_id = "qpxxthjndnqtgjlrwteq"
+project_id = "bacwuvdomvvfavbwgvid"
 
 [functions.purge-verification-media]
 verify_jwt = false    # invoked by cron with a bearer; add a shared-secret check if public

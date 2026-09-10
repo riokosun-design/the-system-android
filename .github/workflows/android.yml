@@ -18,8 +18,8 @@ on:
 
 env:
   # anon key is public-by-design (RLS is the boundary; it ships inside the APK anyway)
-  SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://qpxxthjndnqtgjlrwteq.supabase.co' }}
-  SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFweHh0aGpuZG5xdGdqbHJ3dGVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyMjM1OTMsImV4cCI6MjEwMTc5OTU5M30.5PY4McgA7tKBWkVvEeBRTSzjeLuHBX4E_kVmhc2YEzc' }}
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://bacwuvdomvvfavbwgvid.supabase.co' }}
+  SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhY3d1dmRvbXZ2ZmF2YndndmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTE2MTQsImV4cCI6MjEwNDYyNzYxNH0.zQR_M7cFVIFsD9ssbSJ72ubKpoZIn0mj26J8MSY5U4U' }}
   GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
   OFFERWALL_URL: ${{ secrets.OFFERWALL_URL }}
   MAPTILER_API_KEY: ${{ secrets.MAPTILER_API_KEY }}
