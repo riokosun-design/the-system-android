@@ -25,9 +25,9 @@ import com.thesystem.app.ui.admin.AdminScreen
 import com.thesystem.app.ui.arena.BattleRoomScreen
 import com.thesystem.app.ui.chat.ChatHomeScreen
 import com.thesystem.app.ui.chat.ConversationScreen
+import com.thesystem.app.ui.onboarding.AwakeningFlowScreen
 import com.thesystem.app.ui.protocol.ProtocolScreen
 import com.thesystem.app.ui.splash.DynamicSplash
-import com.thesystem.app.ui.splash.LaunchFlowScreen
 import com.thesystem.app.ui.splash.SplashVariant
 import com.thesystem.app.ui.tabs.MainTabs
 import com.thesystem.app.core.theme.SystemTheme
@@ -110,7 +110,7 @@ class MainActivity : ComponentActivity() {
                 val splashVariants = remember { SplashVariant.entries.shuffled() }
                 when (val s = state) {
                     RootState.Booting -> DynamicSplash(variants = splashVariants)
-                    RootState.NeedsOnboarding -> LaunchFlowScreen(onDone = { vm.resolve() })
+                    RootState.NeedsOnboarding -> AwakeningFlowScreen(onDone = { vm.resolve() })
                     is RootState.Ready -> AppNavHost(profile = s, onSignOut = { vm.signOut() })
                     is RootState.Error -> DynamicSplash(variants = splashVariants) // offline tolerance: keep brand screen; retry taps re-resolve
                 }
