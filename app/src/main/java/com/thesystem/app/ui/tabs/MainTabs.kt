@@ -37,7 +37,7 @@ import com.thesystem.app.data.model.UserDto
 import com.thesystem.app.ui.arena.ArenaScreen
 import com.thesystem.app.ui.dashboard.DashboardScreen
 import com.thesystem.app.ui.profile.ProfileScreen
-import com.thesystem.app.ui.social.HunterFeedScreen
+import com.thesystem.app.ui.social.HunterFeedGateScreen
 import com.thesystem.app.ui.territory.TerritoryScreen
 
 /** Strict 5-tab navbar (Section 1). No more, no less.
@@ -81,7 +81,7 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
         ) { t ->
             when (t) {
                 SystemTab.DASHBOARD -> DashboardScreen(nav = nav)
-                SystemTab.FEED -> HunterFeedScreen(nav = nav)
+                SystemTab.FEED -> HunterFeedGateScreen() // Coming Soon gate; reopen -> HunterFeedScreen(nav = nav)
                 SystemTab.ARENA -> ArenaScreen(nav = nav)
                 SystemTab.TERRITORY -> TerritoryScreen()
                 SystemTab.PROFILE -> ProfileScreen(profile = profile, nav = nav, onSignOut = onSignOut)
