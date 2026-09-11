@@ -226,7 +226,9 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
         ) { p ->
             androidx.compose.runtime.key(p) {
                 val clock = rememberPageClock()
-                when (p) {
+                Box(Modifier.fillMaxSize()) {
+                    pageArtFor(p)?.let { art -> CinematicArt(art.res, clock, alpha = art.alpha, mirror = art.mirror) }
+                    when (p) {
                     1 -> P01_SystemInit(clock, advance)
                     2 -> P02_NoMercy(clock, advance)
                     3 -> P03_LifeRpg(clock, advance)
@@ -257,6 +259,7 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
                     26 -> P26_Contract(haptics) { page = 27 }
                     27 -> P27_FinalGate(ui, vm, haptics, context)
                     else -> Box(Modifier.fillMaxSize())
+                    }
                 }
             }
         }
@@ -267,12 +270,12 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
         ) {
             Text(
                 "PHASE ${phaseOf(page)}/5",
-                fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = ElectricBlue.copy(alpha = 0.65f), letterSpacing = 2.sp,
+                fontFamily = FontFamily.Default, fontSize = 9.sp, color = ElectricBlue.copy(alpha = 0.65f), letterSpacing = 2.sp,
             )
             Spacer(Modifier.weight(1f))
             Text(
                 "PAGE %02d/27".format(page),
-                fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = TextMuted.copy(alpha = 0.6f), letterSpacing = 2.sp,
+                fontFamily = FontFamily.Default, fontSize = 9.sp, color = TextMuted.copy(alpha = 0.6f), letterSpacing = 2.sp,
             )
         }
     }
@@ -295,7 +298,7 @@ private fun TapNextLayer(onTap: () -> Unit) {
         val a by inf.animateFloat(0.25f, 0.85f, infiniteRepeatable(tween(1300), RepeatMode.Reverse), label = "tapHintA")
         Text(
             "TAP TO CONTINUE ▸",
-            color = TextMuted, fontSize = 10.sp, fontFamily = FontFamily.Monospace, letterSpacing = 3.sp,
+            color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Default, letterSpacing = 3.sp,
             modifier = Modifier.graphicsLayer { alpha = a },
         )
     }
@@ -304,7 +307,7 @@ private fun TapNextLayer(onTap: () -> Unit) {
 /** Cinematic artwork treatment: desaturated art + darkness + vignette + slow zoom + light sweep.
  *  Visual prominence stays ~10–16% — text always wins. */
 @Composable
-private fun CinematicArt(res: Int, clock: Float, alpha: Float = 0.5f) {
+private fun CinematicArt(res: Int, clock: Float, alpha: Float = 0.5f, mirror: Boolean = false) {
     val inf = rememberInfiniteTransition(label = "artLife$res")
     val sweepT by inf.animateFloat(0f, 1f, infiniteRepeatable(tween(6400, easing = LinearEasing)), label = "artSweep$res")
     val artAlpha = seg(clock, 0f, 0.55f) // image reveals from darkness
@@ -318,7 +321,7 @@ private fun CinematicArt(res: Int, clock: Float, alpha: Float = 0.5f) {
                 .graphicsLayer {
                     this.alpha = alpha * artAlpha
                     val s = 1f + 0.07f * clock // slow cinematic push-in
-                    scaleX = s; scaleY = s
+                    scaleX = if (mirror) -s else s; scaleY = s
                 },
         )
         // darkness plates: heavier where text lives (top + bottom)
@@ -353,6 +356,34 @@ private fun CinematicArt(res: Int, clock: Float, alpha: Float = 0.5f) {
 // ═══════════════════════════════════════════════════════════════════════════
 // PHASE 1 — SYSTEM INTRODUCTION (pages 01–06)
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ── PAGE ART DIRECTOR — every page carries a faded badass hunter plate ───────
+// Low-alpha + vignette keeps the Quiet Power law; mirrors distance reuses ≥10 pages apart.
+private data class PageArt(val res: Int, val alpha: Float, val mirror: Boolean = false)
+
+private fun pageArtFor(p: Int): PageArt? = when (p) {
+    1 -> PageArt(R.drawable.onb_sentinel, 0.34f)
+    3 -> PageArt(R.drawable.onb_grind, 0.34f)
+    6 -> PageArt(R.drawable.onb_transform, 0.34f)
+    7 -> PageArt(R.drawable.onb_scan, 0.22f)
+    8 -> PageArt(R.drawable.onb_recruit, 0.22f)
+    9 -> PageArt(R.drawable.onb_stand, 0.20f)
+    10 -> PageArt(R.drawable.onb_mass, 0.20f)
+    11 -> PageArt(R.drawable.onb_paths, 0.22f)
+    12 -> PageArt(R.drawable.onb_sentinel, 0.18f, mirror = true)
+    13 -> PageArt(R.drawable.onb_str, 0.18f)
+    14 -> PageArt(R.drawable.onb_vit, 0.18f)
+    15 -> PageArt(R.drawable.onb_agi, 0.18f)
+    16 -> PageArt(R.drawable.onb_proof, 0.16f, mirror = true)
+    17 -> PageArt(R.drawable.onb_str, 0.14f, mirror = true)
+    18 -> PageArt(R.drawable.onb_paths, 0.18f, mirror = true)
+    19 -> PageArt(R.drawable.onb_recruit, 0.26f, mirror = true)
+    20 -> PageArt(R.drawable.onb_grind, 0.26f, mirror = true)
+    22 -> PageArt(R.drawable.onb_territory, 0.26f, mirror = true)
+    25 -> PageArt(R.drawable.onb_mass, 0.22f, mirror = true)
+    26 -> PageArt(R.drawable.onb_scan, 0.20f)
+    else -> null // 2/4/5/21/23/24/27 carry their own internal CinematicArt
+}
 
 // ── PAGE 01 · SYSTEM INITIALIZATION ──────────────────────────────────────────
 @Composable
@@ -408,7 +439,7 @@ private fun P02_NoMercy(clock: Float, advance: () -> Unit) {
             Spacer(Modifier.height(64.dp))
             Text(
                 "SYSTEM MESSAGE",
-                fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
+                fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
                 modifier = Modifier.appear(seg(clock, 0.15f)),
             )
             Spacer(Modifier.height(14.dp))
@@ -450,7 +481,7 @@ private fun P03_LifeRpg(clock: Float, advance: () -> Unit) {
             Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp),
         ) {
             Spacer(Modifier.height(64.dp))
-            Text("HOW IT WORKS", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
+            Text("HOW IT WORKS", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
                 modifier = Modifier.appear(seg(clock, 0.12f)))
             Spacer(Modifier.height(10.dp))
             Text("Real life is the dungeon.", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
@@ -464,7 +495,7 @@ private fun P03_LifeRpg(clock: Float, advance: () -> Unit) {
                             Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(color),
                         )
                         Spacer(Modifier.width(14.dp))
-                        Text(label, fontFamily = FontFamily.Monospace, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = color, letterSpacing = 2.sp)
+                        Text(label, fontFamily = FontFamily.Default, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = color, letterSpacing = 2.sp)
                     }
                     if (i < stages.lastIndex) {
                         Text("↓", color = TextMuted.copy(alpha = 0.4f), fontSize = 16.sp, modifier = Modifier.padding(start = 1.dp))
@@ -485,7 +516,7 @@ private fun P04_ProofOfGrind(clock: Float, advance: () -> Unit) {
         CinematicArt(R.drawable.onb_proof, clock)
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
             Spacer(Modifier.height(64.dp))
-            Text("PROOF OF GRIND", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
+            Text("PROOF OF GRIND", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
                 modifier = Modifier.appear(seg(clock, 0.12f)))
             Spacer(Modifier.height(10.dp))
             Text("No rep counts\nunless THE SYSTEM sees it.", style = MaterialTheme.typography.headlineMedium, color = TextPrimary, lineHeight = 30.sp,
@@ -501,9 +532,9 @@ private fun P04_ProofOfGrind(clock: Float, advance: () -> Unit) {
                         listOf("REP 01", "REP 02", "REP 03").forEachIndexed { i, rep ->
                             val rc = seg(clock, 0.42f + i * 0.13f, 0.12f)
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.graphicsLayer { alpha = rc }) {
-                                Text(rep, fontFamily = FontFamily.Monospace, fontSize = 15.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
+                                Text(rep, fontFamily = FontFamily.Default, fontSize = 15.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.weight(1f))
-                                Text(if (rc >= 1f) "✓" else "·", color = VenomGreen, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
+                                Text(if (rc >= 1f) "✓" else "·", color = VenomGreen, fontSize = 15.sp, fontFamily = FontFamily.Default)
                             }
                         }
                     }
@@ -516,7 +547,7 @@ private fun P04_ProofOfGrind(clock: Float, advance: () -> Unit) {
                 Spacer(Modifier.height(10.dp))
                 Text(
                     "VERIFIED",
-                    fontFamily = FontFamily.Monospace, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = VenomGreen, letterSpacing = 4.sp,
+                    fontFamily = FontFamily.Default, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = VenomGreen, letterSpacing = 4.sp,
                     modifier = Modifier.graphicsLayer { alpha = seg(clock, 0.82f, 0.15f) },
                 )
             }
@@ -535,7 +566,7 @@ private fun P05_Territory(clock: Float, advance: () -> Unit) {
         CinematicArt(R.drawable.onb_territory, clock, alpha = 0.62f)
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
             Spacer(Modifier.height(64.dp))
-            Text("TERRITORY PROTOCOL", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
+            Text("TERRITORY PROTOCOL", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
                 modifier = Modifier.appear(seg(clock, 0.12f)))
             Spacer(Modifier.height(10.dp))
             Text("The real world is the map.", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
@@ -583,7 +614,7 @@ private fun P06_TheSystem(clock: Float, onBegin: () -> Unit) {
     )
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(60.dp))
-        Text("SYSTEM OVERVIEW", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
+        Text("SYSTEM OVERVIEW", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)))
         Spacer(Modifier.height(8.dp))
         Text("What you are entering.", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
@@ -597,7 +628,7 @@ private fun P06_TheSystem(clock: Float, onBegin: () -> Unit) {
             ) {
                 Text("▸", color = ElectricBlue, fontSize = 15.sp)
                 Spacer(Modifier.width(12.dp))
-                Text(name, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary, letterSpacing = 2.sp)
+                Text(name, fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary, letterSpacing = 2.sp)
                 Spacer(Modifier.width(12.dp))
                 Text(sub, style = MaterialTheme.typography.bodyMedium, color = TextMuted)
             }
@@ -629,7 +660,7 @@ private fun P07_Name(ui: OnboardingUiState, vm: OnboardingViewModel, advance: ()
         Modifier.fillMaxSize().statusBarsPadding().imePadding().navigationBarsPadding().padding(horizontal = 24.dp),
     ) {
         Spacer(Modifier.height(72.dp))
-        Text("VESSEL IDENTIFICATION", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
+        Text("VESSEL IDENTIFICATION", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)))
         Spacer(Modifier.height(12.dp))
         GlitchWithAppear(seg(clock, 0.2f), "IDENTIFY YOUR VESSEL")
@@ -644,12 +675,12 @@ private fun P07_Name(ui: OnboardingUiState, vm: OnboardingViewModel, advance: ()
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(capitalization = KeyboardCapitalization.None),
                     textStyle = TextStyle(
                         color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace, letterSpacing = 2.sp,
+                        fontFamily = FontFamily.Default, letterSpacing = 2.sp,
                     ),
                     modifier = Modifier.fillMaxWidth(),
                     decorationBox = { inner ->
                         if (ui.username.isEmpty()) {
-                            Text("vessel_tag", color = TextMuted.copy(alpha = 0.35f), fontSize = 30.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                            Text("vessel_tag", color = TextMuted.copy(alpha = 0.35f), fontSize = 30.sp, fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold)
                         }
                         inner()
                     },
@@ -678,7 +709,7 @@ private fun P07_Name(ui: OnboardingUiState, vm: OnboardingViewModel, advance: ()
             ui.usernameError != null -> CrimsonRed
             else -> TextMuted
         }
-        Text(status, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = statusColor, letterSpacing = 1.5.sp,
+        Text(status, fontFamily = FontFamily.Default, fontSize = 11.sp, color = statusColor, letterSpacing = 1.5.sp,
             modifier = Modifier.appear(seg(clock, 0.45f)))
         Spacer(Modifier.weight(1f))
         GateKeyButton(
@@ -703,7 +734,7 @@ private fun GlitchWithAppear(c: Float, text: String, color: Color = TextPrimary,
 private fun P08_Age(ui: OnboardingUiState, vm: OnboardingViewModel, clock: Float, advance: () -> Unit) {
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(80.dp))
-        Text("AGE DETECTION", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
+        Text("AGE DETECTION", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)))
         Spacer(Modifier.height(12.dp))
         Text("How old is the vessel?", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
@@ -715,7 +746,7 @@ private fun P08_Age(ui: OnboardingUiState, vm: OnboardingViewModel, clock: Float
                 format = { "$it" },
             )
             Spacer(Modifier.width(10.dp))
-            Text("YRS", color = TextMuted, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+            Text("YRS", color = TextMuted, fontFamily = FontFamily.Default, fontSize = 14.sp)
         }
         Spacer(Modifier.height(26.dp))
         Box(Modifier.appear(seg(clock, 0.42f))) {
@@ -751,19 +782,54 @@ private fun P09_Height(ui: OnboardingUiState, vm: OnboardingViewModel, clock: Fl
         Spacer(Modifier.width(20.dp))
         Column(Modifier.weight(1f)) {
             Spacer(Modifier.height(80.dp))
-            Text("HEIGHT SCAN", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
-                modifier = Modifier.appear(seg(clock, 0.1f)))
+            var heightUnit by rememberSaveable { mutableStateOf("CM") } // CM | FT
+            Row(
+                Modifier.fillMaxWidth().appear(seg(clock, 0.1f)),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("HEIGHT SCAN", fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OnboardingChip(label = "CM", selected = heightUnit == "CM", onClick = { heightUnit = "CM" })
+                    OnboardingChip(label = "FT·IN", selected = heightUnit == "FT", onClick = { heightUnit = "FT" })
+                }
+            }
             Spacer(Modifier.height(12.dp))
             Text("Measure the frame.", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
                 modifier = Modifier.appear(seg(clock, 0.2f)))
             Spacer(Modifier.height(30.dp))
-            Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.appear(seg(clock, 0.3f))) {
-                AnimatedCounter(target = ui.heightCm.toLong(), color = ElectricBlue, fontSize = 64.sp, fontWeight = FontWeight.ExtraBold, format = { "$it" })
-                Spacer(Modifier.width(10.dp)); Text("CM", color = TextMuted, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+            val totalInches = (ui.heightCm / 2.54f).roundToInt()
+            val feet = totalInches / 12
+            val inches = totalInches % 12
+            fun writeFtIn(f: Int, i: Int) = vm.setHeight(((f * 12 + i) * 2.54f * 10f).roundToInt() / 10f)
+            if (heightUnit == "CM") {
+                Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.appear(seg(clock, 0.3f))) {
+                    AnimatedCounter(target = ui.heightCm.toLong(), color = ElectricBlue, fontSize = 64.sp, fontWeight = FontWeight.ExtraBold, format = { "$it" })
+                    Spacer(Modifier.width(10.dp)); Text("CM", color = TextMuted, fontFamily = FontFamily.Default, fontSize = 14.sp)
+                }
+            } else {
+                Column(modifier = Modifier.appear(seg(clock, 0.3f))) {
+                    Text(
+                        "$feet′${inches}″", color = ElectricBlue, fontSize = 56.sp,
+                        fontWeight = FontWeight.ExtraBold, fontFamily = FontFamily.Default, letterSpacing = 2.sp,
+                    )
+                    Text("= ${ui.heightCm.roundToInt()} CM", color = TextMuted, fontFamily = FontFamily.Default, fontSize = 12.sp, letterSpacing = 1.5.sp)
+                }
             }
             Spacer(Modifier.height(26.dp))
-            Box(Modifier.appear(seg(clock, 0.42f))) {
-                WheelRow(label = "HEIGHT", unit = "CM", range = 140..210, value = ui.heightCm.roundToInt(), onValue = { vm.setHeight(it.toFloat()) })
+            if (heightUnit == "CM") {
+                Box(Modifier.appear(seg(clock, 0.42f))) {
+                    WheelRow(label = "HEIGHT", unit = "CM", range = 140..210, value = ui.heightCm.roundToInt(), onValue = { vm.setHeight(it.toFloat()) })
+                }
+            } else {
+                Row(Modifier.appear(seg(clock, 0.42f)), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Box(Modifier.weight(1f)) {
+                        WheelRow(label = "FEET", unit = "FT", range = 4..7, value = feet, onValue = { writeFtIn(it, inches) })
+                    }
+                    Box(Modifier.weight(1f)) {
+                        WheelRow(label = "INCHES", unit = "IN", range = 0..11, value = inches, onValue = { writeFtIn(feet, it) })
+                    }
+                }
             }
             Spacer(Modifier.weight(1f))
             ContinueBar(seg(clock, 0.6f), advance)
@@ -782,7 +848,7 @@ private fun P10_Weight(ui: OnboardingUiState, vm: OnboardingViewModel, clock: Fl
     )
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(80.dp))
-        Text("MASS DETECTION", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = HunterGold, letterSpacing = 3.sp,
+        Text("MASS DETECTION", fontFamily = FontFamily.Default, fontSize = 10.sp, color = HunterGold, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)))
         Spacer(Modifier.height(12.dp))
         Text("Weigh the armor.", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
@@ -817,7 +883,7 @@ private fun P10_Weight(ui: OnboardingUiState, vm: OnboardingViewModel, clock: Fl
         }
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.align(Alignment.CenterHorizontally).appear(seg(clock, 0.36f))) {
             AnimatedCounter(target = ui.weightKg.toLong(), color = HunterGold, fontSize = 56.sp, fontWeight = FontWeight.ExtraBold, format = { "$it" })
-            Spacer(Modifier.width(8.dp)); Text("KG", color = TextMuted, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+            Spacer(Modifier.width(8.dp)); Text("KG", color = TextMuted, fontFamily = FontFamily.Default, fontSize = 14.sp)
         }
         Spacer(Modifier.height(10.dp))
         Box(Modifier.appear(seg(clock, 0.44f))) {
@@ -831,8 +897,8 @@ private fun P10_Weight(ui: OnboardingUiState, vm: OnboardingViewModel, clock: Fl
 @Composable
 private fun ContinueBar(c: Float, advance: () -> Unit, label: String = "CONTINUE ▸") {
     GateKeyButton(
-        text = label, subtext = "SCAN LOGGED", accent = ElectricBlue, enabled = c >= 1f, onClick = advance,
-        modifier = Modifier.fillMaxWidth().appear(c),
+        text = label, subtext = "SCAN LOGGED", accent = ElectricBlue, enabled = c >= 0.3f, onClick = advance,
+        modifier = Modifier.fillMaxWidth().appear(c, dy = 10.dp), // shallow travel — hit target stops moving fast
     )
     Spacer(Modifier.height(26.dp))
 }
@@ -849,7 +915,7 @@ private fun P11_Archetype(
         Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp).verticalScroll(rememberScrollState()),
     ) {
         Spacer(Modifier.height(56.dp))
-        Text("CLASS ASSIGNMENT", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = NeonPurple, letterSpacing = 3.sp,
+        Text("CLASS ASSIGNMENT", fontFamily = FontFamily.Default, fontSize = 10.sp, color = NeonPurple, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)))
         Spacer(Modifier.height(12.dp))
         Text("Choose your discipline.", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
@@ -864,7 +930,7 @@ private fun P11_Archetype(
             }
         }
         Spacer(Modifier.height(18.dp))
-        Text("BASELINE ACTIVITY", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
+        Text("BASELINE ACTIVITY", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.55f)))
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.appear(seg(clock, 0.62f))) {
@@ -901,7 +967,7 @@ private fun P12_Biometric(ui: OnboardingUiState, arch: Archetype, act: Activity,
     )
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(70.dp))
-        Text("BIOMETRIC ANALYSIS", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
+        Text("BIOMETRIC ANALYSIS", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.08f)))
         Spacer(Modifier.height(24.dp))
         rows.forEachIndexed { i, (k, v) ->
@@ -909,9 +975,9 @@ private fun P12_Biometric(ui: OnboardingUiState, arch: Archetype, act: Activity,
                 Modifier.fillMaxWidth().padding(vertical = 7.dp).appear(seg(clock, 0.14f + i * 0.07f)),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(k, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = TextMuted, letterSpacing = 2.sp)
+                Text(k, fontFamily = FontFamily.Default, fontSize = 11.sp, color = TextMuted, letterSpacing = 2.sp)
                 Spacer(Modifier.weight(1f))
-                Text(v, fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text(v, fontFamily = FontFamily.Default, fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
             }
         }
         Spacer(Modifier.height(30.dp))
@@ -949,7 +1015,7 @@ private fun StatChargePage(
     val max = 34f
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(90.dp))
-        Text("VESSEL STAT REVEAL", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = color, letterSpacing = 3.sp,
+        Text("VESSEL STAT REVEAL", fontFamily = FontFamily.Default, fontSize = 10.sp, color = color, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)))
         Spacer(Modifier.height(12.dp))
         Text(label, style = MaterialTheme.typography.displayLarge.copy(fontSize = 72.sp), color = color,
@@ -969,7 +1035,7 @@ private fun StatChargePage(
         Spacer(Modifier.height(16.dp))
         Text(
             "${charge.value.roundToInt()}",
-            fontFamily = FontFamily.Monospace, fontSize = 44.sp, fontWeight = FontWeight.Black, color = color,
+            fontFamily = FontFamily.Default, fontSize = 44.sp, fontWeight = FontWeight.Black, color = color,
         )
     }
 }
@@ -991,7 +1057,7 @@ private fun StatChargePage(
 private fun P17_Power(stats: VesselStats, clock: Float, advance: () -> Unit) {
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(62.dp))
-        Text("POWER CALIBRATION", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = HunterGold, letterSpacing = 3.sp,
+        Text("POWER CALIBRATION", fontFamily = FontFamily.Default, fontSize = 10.sp, color = HunterGold, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.08f)))
         Spacer(Modifier.height(22.dp))
         // equation blocks assemble
@@ -1008,7 +1074,7 @@ private fun P17_Power(stats: VesselStats, clock: Float, advance: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.clip(RoundedCornerShape(8.dp)).background(c.copy(alpha = 0.12f)).border(1.dp, c.copy(alpha = 0.5f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp)) {
-                    Text(t, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = c, fontWeight = FontWeight.Bold)
+                    Text(t, fontFamily = FontFamily.Default, fontSize = 12.sp, color = c, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -1029,7 +1095,7 @@ private fun P17_Power(stats: VesselStats, clock: Float, advance: () -> Unit) {
                     target = powerTarget, color = HunterGold, fontSize = 44.sp, fontWeight = FontWeight.Black,
                     format = { "%.1f".format(it / 10f) },
                 )
-                Text("POWER", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextMuted, letterSpacing = 3.sp)
+                Text("POWER", fontFamily = FontFamily.Default, fontSize = 10.sp, color = TextMuted, letterSpacing = 3.sp)
             }
         }
         // legend
@@ -1041,7 +1107,7 @@ private fun P17_Power(stats: VesselStats, clock: Float, advance: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(8.dp).background(c, RoundedCornerShape(4.dp)))
                     Spacer(Modifier.width(6.dp))
-                    Text(l, fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = TextMuted)
+                    Text(l, fontFamily = FontFamily.Default, fontSize = 9.sp, color = TextMuted)
                 }
             }
         }
@@ -1094,11 +1160,11 @@ private fun P18_Rank(stats: VesselStats, clock: Float, advance: () -> Unit) {
         Spacer(Modifier.height(70.dp))
         Text(
             "CALIBRATING RANK…",
-            fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = TextMuted, letterSpacing = 3.sp,
+            fontFamily = FontFamily.Default, fontSize = 10.sp, color = TextMuted, letterSpacing = 3.sp,
             modifier = Modifier.graphicsLayer { alpha = (1f - seg(clock, 0.22f, 0.12f)) * darkPause },
         )
         if (reveal > 0f) {
-            Text("INITIAL RANK", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = ElectricBlue, letterSpacing = 4.sp,
+            Text("INITIAL RANK", fontFamily = FontFamily.Default, fontSize = 11.sp, color = ElectricBlue, letterSpacing = 4.sp,
                 modifier = Modifier.graphicsLayer { alpha = reveal })
             Spacer(Modifier.height(10.dp))
             Box(
@@ -1135,7 +1201,7 @@ private fun P18_Rank(stats: VesselStats, clock: Float, advance: () -> Unit) {
 @Composable
 private fun StatBlockRow(label: String, value: Int, color: Color, barSeg: Float) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = color, modifier = Modifier.width(34.dp))
+        Text(label, fontFamily = FontFamily.Default, fontSize = 11.sp, color = color, modifier = Modifier.width(34.dp))
         Spacer(Modifier.width(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
             val blocks = 12
@@ -1149,7 +1215,7 @@ private fun StatBlockRow(label: String, value: Int, color: Color, barSeg: Float)
             }
         }
         Spacer(Modifier.width(10.dp))
-        Text("$value", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = color, fontWeight = FontWeight.Bold)
+        Text("$value", fontFamily = FontFamily.Default, fontSize = 12.sp, color = color, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -1164,7 +1230,7 @@ private fun P19_Day1to30(clock: Float, advance: () -> Unit) {
     LaunchedEffect(Unit) { delay(350); mark.animateTo(30f, tween(1900, easing = FastOutSlowInEasing)) }
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(70.dp))
-        Text("PHASE ONE · FOUNDATION", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
+        Text("PHASE ONE · FOUNDATION", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)))
         Spacer(Modifier.height(12.dp))
         Text("Day 01 → Day 30", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
@@ -1178,9 +1244,9 @@ private fun P19_Day1to30(clock: Float, advance: () -> Unit) {
                 }
                 Spacer(Modifier.height(10.dp))
                 Row {
-                    Text("DAY %02d".format(mark.value.roundToInt().coerceAtLeast(1)), fontFamily = FontFamily.Monospace, color = ElectricBlue, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("DAY %02d".format(mark.value.roundToInt().coerceAtLeast(1)), fontFamily = FontFamily.Default, color = ElectricBlue, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.weight(1f))
-                    Text("DAY 30", fontFamily = FontFamily.Monospace, color = TextMuted, fontSize = 11.sp)
+                    Text("DAY 30", fontFamily = FontFamily.Default, color = TextMuted, fontSize = 11.sp)
                 }
             }
         }
@@ -1205,7 +1271,7 @@ private fun TapOverlayFreeSpace(advance: () -> Unit) = TapNextLayer(advance)
 private fun P20_Day31to60(clock: Float, advance: () -> Unit) {
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(70.dp))
-        Text("PHASE TWO · DISCIPLINE ENGINE", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = NeonPurple, letterSpacing = 3.sp,
+        Text("PHASE TWO · DISCIPLINE ENGINE", fontFamily = FontFamily.Default, fontSize = 10.sp, color = NeonPurple, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)))
         Spacer(Modifier.height(12.dp))
         Text("Day 31 → Day 60", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
@@ -1248,7 +1314,7 @@ private fun P21_Day61to90(stats: VesselStats, clock: Float, advance: () -> Unit)
         CinematicArt(R.drawable.onb_transform, clock)
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
             Spacer(Modifier.height(64.dp))
-            Text("PHASE THREE · TRANSFORMATION", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = HunterGold, letterSpacing = 3.sp,
+            Text("PHASE THREE · TRANSFORMATION", fontFamily = FontFamily.Default, fontSize = 10.sp, color = HunterGold, letterSpacing = 3.sp,
                 modifier = Modifier.appear(seg(clock, 0.14f)))
             Spacer(Modifier.height(12.dp))
             GlitchWithAppear(seg(clock, 0.24f), "DAY 90 MIRRORS\nARE RUTHLESS", size = 26)
@@ -1262,16 +1328,16 @@ private fun P21_Day61to90(stats: VesselStats, clock: Float, advance: () -> Unit)
                     Modifier.appear(seg(clock, 0.45f + i * 0.08f)).padding(vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(label, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TextMuted, modifier = Modifier.width(40.dp))
-                    Text("$v", fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = TextMuted)
-                    Text("  →  ", fontFamily = FontFamily.Monospace, color = HunterGold)
+                    Text(label, fontFamily = FontFamily.Default, fontSize = 12.sp, color = TextMuted, modifier = Modifier.width(40.dp))
+                    Text("$v", fontFamily = FontFamily.Default, fontSize = 14.sp, color = TextMuted)
+                    Text("  →  ", fontFamily = FontFamily.Default, color = HunterGold)
                     AnimatedCounter(target = ceiling.toLong(), color = HunterGold, fontSize = 18.sp, fontWeight = FontWeight.Black, format = { "$it" })
                 }
             }
             Spacer(Modifier.height(14.dp))
             Text(
                 "POTENTIAL CEILING — earned only by showing up, daily.",
-                fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = TextMuted, letterSpacing = 1.6.sp,
+                fontFamily = FontFamily.Default, fontSize = 9.sp, color = TextMuted, letterSpacing = 1.6.sp,
                 modifier = Modifier.appear(seg(clock, 0.85f)),
             )
         }
@@ -1292,7 +1358,7 @@ private fun P22_LifeGame(clock: Float, advance: () -> Unit) {
     )
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(70.dp))
-        Text("THE LOOP", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
+        Text("THE LOOP", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)))
         Spacer(Modifier.height(12.dp))
         Text("Your life becomes the game.", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
@@ -1302,7 +1368,7 @@ private fun P22_LifeGame(clock: Float, advance: () -> Unit) {
             val c = seg(clock, 0.28f + i * 0.1f)
             Column(Modifier.appear(c, dy = 22.dp)) {
                 Text(
-                    label, fontFamily = FontFamily.Monospace, fontSize = 21.sp,
+                    label, fontFamily = FontFamily.Default, fontSize = 21.sp,
                     fontWeight = if (i == 0) FontWeight.Bold else FontWeight.Medium, color = color, letterSpacing = 2.sp,
                 )
                 if (i < flow.lastIndex) Text("↓", color = TextMuted.copy(alpha = 0.35f), fontSize = 14.sp)
@@ -1319,7 +1385,7 @@ private fun P23_Conquer(clock: Float, advance: () -> Unit) {
         CinematicArt(R.drawable.onb_conquer, clock)
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
             Spacer(Modifier.height(64.dp))
-            Text("THE HUNGER GAMES", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = CrimsonRed, letterSpacing = 3.sp,
+            Text("THE HUNGER GAMES", fontFamily = FontFamily.Default, fontSize = 10.sp, color = CrimsonRed, letterSpacing = 3.sp,
                 modifier = Modifier.appear(seg(clock, 0.12f)))
             Spacer(Modifier.height(12.dp))
             Text("Compete.\nConquer.\nBe remembered.", style = MaterialTheme.typography.headlineMedium, color = TextPrimary, lineHeight = 30.sp,
@@ -1338,7 +1404,7 @@ private fun P23_Conquer(clock: Float, advance: () -> Unit) {
                 ) {
                     Text("◆", color = ElectricBlue, fontSize = 11.sp)
                     Spacer(Modifier.width(12.dp))
-                    Text(k, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary, letterSpacing = 1.5.sp)
+                    Text(k, fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary, letterSpacing = 1.5.sp)
                     Spacer(Modifier.width(10.dp))
                     Text(v, style = MaterialTheme.typography.bodyMedium, color = TextMuted)
                 }
@@ -1368,7 +1434,7 @@ private fun P24_Rewards(clock: Float, advance: () -> Unit) {
         }
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
             Spacer(Modifier.height(64.dp))
-            Text("THE VAULT", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = HunterGold, letterSpacing = 3.sp,
+            Text("THE VAULT", fontFamily = FontFamily.Default, fontSize = 10.sp, color = HunterGold, letterSpacing = 3.sp,
                 modifier = Modifier.appear(seg(clock, 0.12f)))
             Spacer(Modifier.height(12.dp))
             Text("EARN THROUGH\nYOUR GRIND.", style = MaterialTheme.typography.displayMedium.copy(fontSize = 40.sp, lineHeight = 44.sp), color = HunterGold,
@@ -1407,7 +1473,7 @@ private fun P25_Consequences(clock: Float, advance: () -> Unit) {
     val flicker by inf.animateFloat(0.25f, 1f, infiniteRepeatable(tween(640), RepeatMode.Reverse), label = "pf")
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(70.dp))
-        Text("SYSTEM WARNING", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = CrimsonRed, letterSpacing = 3.sp,
+        Text("SYSTEM WARNING", fontFamily = FontFamily.Default, fontSize = 10.sp, color = CrimsonRed, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.08f)))
         Spacer(Modifier.height(12.dp))
         Text("The System shows mercy\nto no one.", style = MaterialTheme.typography.headlineMedium, color = TextPrimary, lineHeight = 28.sp,
@@ -1426,7 +1492,7 @@ private fun P25_Consequences(clock: Float, advance: () -> Unit) {
                 Text("▍", color = CrimsonRed, fontSize = 13.sp)
                 Spacer(Modifier.width(10.dp))
                 Column {
-                    Text(k, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = CrimsonRed, fontSize = 13.sp, letterSpacing = 1.5.sp)
+                    Text(k, fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, color = CrimsonRed, fontSize = 13.sp, letterSpacing = 1.5.sp)
                     Text(v, style = MaterialTheme.typography.bodySmall, color = TextMuted)
                 }
             }
@@ -1435,9 +1501,9 @@ private fun P25_Consequences(clock: Float, advance: () -> Unit) {
         // decay bar draining
         Column(Modifier.appear(seg(clock, 0.7f))) {
             Row {
-                Text("XP INTEGRITY", fontFamily = FontFamily.Monospace, fontSize = 9.sp, color = TextMuted, letterSpacing = 2.sp)
+                Text("XP INTEGRITY", fontFamily = FontFamily.Default, fontSize = 9.sp, color = TextMuted, letterSpacing = 2.sp)
                 Spacer(Modifier.weight(1f))
-                Text("${decay.value.roundToInt()}%", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = CrimsonRed, fontWeight = FontWeight.Bold,
+                Text("${decay.value.roundToInt()}%", fontFamily = FontFamily.Default, fontSize = 11.sp, color = CrimsonRed, fontWeight = FontWeight.Bold,
                     modifier = Modifier.graphicsLayer { alpha = flicker })
             }
             Spacer(Modifier.height(6.dp))
@@ -1460,7 +1526,7 @@ private fun P26_Contract(haptics: SystemHaptics, onSealed: () -> Unit) {
     }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("THE CONTRACT", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 4.sp,
+            Text("THE CONTRACT", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 4.sp,
                 modifier = Modifier.appear(seg(clock, 0.1f)))
             Spacer(Modifier.height(12.dp))
             Text("PRESS & HOLD TO AWAKEN", style = MaterialTheme.typography.titleLarge, color = TextPrimary, letterSpacing = 2.sp,
@@ -1496,7 +1562,7 @@ private fun P27_FinalGate(ui: OnboardingUiState, vm: OnboardingViewModel, haptic
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(Modifier.height(80.dp))
-            Text("FINAL GATE", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = VenomGreen, letterSpacing = 4.sp,
+            Text("FINAL GATE", fontFamily = FontFamily.Default, fontSize = 10.sp, color = VenomGreen, letterSpacing = 4.sp,
                 modifier = Modifier.appear(seg(clock, 0.1f)))
             Spacer(Modifier.height(12.dp))
             GlitchWithAppear(seg(clock, 0.2f), "VESSEL VERIFIED", VenomGreen, 30)

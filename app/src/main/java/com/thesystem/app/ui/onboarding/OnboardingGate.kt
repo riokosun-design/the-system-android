@@ -504,7 +504,8 @@ fun GateKeyButton(
     val inf = rememberInfiniteTransition(label = "gateKey")
     val pulse by inf.animateFloat(0.35f, 1f, infiniteRepeatable(tween(1700), RepeatMode.Reverse), label = "gkPulse")
     val sweep by inf.animateFloat(-0.2f, 1.2f, infiniteRepeatable(tween(2100, easing = LinearEasing)), label = "gkSweep")
-    val metal = remember { Brush.verticalGradient(listOf(Color(0xFF1B212C), Color(0xFF10141B), Color(0xFF171D27))) }
+    // darker plate for crushing text contrast (2.9 readability pass)
+    val metal = remember { Brush.verticalGradient(listOf(Color(0xFF141922), Color(0xFF0A0D13), Color(0xFF10141C))) }
     val frameAlpha = if (enabled) pulse else 0.15f
     Box(
         modifier
@@ -524,8 +525,15 @@ fun GateKeyButton(
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text, color = if (enabled) TextPrimary else TextMuted, fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.5.sp)
-            if (subtext != null) Text(subtext, color = accent.copy(alpha = frameAlpha), fontSize = 9.sp, fontFamily = FontFamily.Monospace, letterSpacing = 2.sp)
+            Text(
+                text, color = if (enabled) TextPrimary else TextMuted, fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold, letterSpacing = 1.8.sp,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.8.sp,
+                    shadow = androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.8f), blurRadius = 6f),
+                ),
+            )
+            if (subtext != null) Text(subtext, color = accent.copy(alpha = if (enabled) 0.9f else 0.35f), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp)
         }
     }
 }
