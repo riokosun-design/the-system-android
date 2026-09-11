@@ -639,7 +639,7 @@ private fun P06_TheSystem(clock: Float, onBegin: () -> Unit) {
                 text = "BEGIN AWAKENING",
                 subtext = "VESSEL INTAKE BEGINS",
                 accent = ElectricBlue,
-                enabled = seg(clock, 0.82f) >= 1f,
+                enabled = seg(clock, 0.82f) >= 0.3f, // 0.82/0.22 caps seg at 0.818 — a 1f gate here would be dead forever
                 onClick = onBegin,
                 modifier = Modifier.fillMaxWidth(),
             )
