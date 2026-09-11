@@ -6,9 +6,15 @@ import android.location.Location
 import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.os.Looper
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import kotlinx.coroutines.delay
 import com.thesystem.app.core.Geohash
 import com.thesystem.app.core.SystemMath
 import com.thesystem.app.data.model.ClanMemberDto
@@ -64,28 +70,75 @@ class TerritoryViewModel @Inject constructor(
     @SuppressLint("MissingPermission") // gated by hasPermission
     fun locate() = viewModelScope.launch {
         if (!_state.value.hasPermission) return@launch
-        _state.value = _state.value.copy(locating = true)
+        _state.value = _state.value.copy(locating = true, error = null)
         val fused = LocationServices.getFusedLocationProviderClient(app)
-        val loc = runCatching {
-            fused.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, CancellationTokenSource().token).await()
-        }.getOrNull()
+        // Hunt for a real fix: HIGH accuracy with up to 3 attempts. The first
+        // getCurrentLocation after GPS wake (or new SIM/no network history) is
+        // frequently NULL on BALANCED priority → the old one-shot looked dead.
+        var loc: Location? = null
+        repeat(3) { attempt ->
+            if (loc == null) {
+                loc = runCatching {
+                    fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token).await()
+                }.getOrNull()
+                if (loc == null && attempt < 2) delay(1400L)
+            }
+        }
         if (loc != null) {
             // ROUND 6 anti-spoof: mock providers can't hold territory. Fair play is law.
             if (isMockLocation(loc)) {
                 _state.value = _state.value.copy(locating = false, error = "MOCK LOCATION DETECTED — THE SYSTEM only respects real movement.")
                 return@launch
             }
-            val zone = Geohash.encode(loc.latitude, loc.longitude)
-            val grid = Geohash.gridAround(zone)
-            val leaders = social.leaderboardsFor(grid)
-            val clanZones = social.clanTerritories(grid)
-            _state.value = _state.value.copy(
-                locating = false, lat = loc.latitude, lon = loc.longitude,
-                myZone = zone, zones = grid, leaders = leaders, clanZones = clanZones,
-            )
+            applyFix(loc!!)
+            startTracking(fused)
         } else {
-            _state.value = _state.value.copy(locating = false, error = "GPS fix failed. Move outdoors and retry.")
+            _state.value = _state.value.copy(locating = false, error = "GPS fix failed. Step outdoors, toggle Location off/on, then re-open this tab.")
         }
+    }
+
+    private suspend fun applyFix(loc: Location) {
+        val zone = Geohash.encode(loc.latitude, loc.longitude)
+        val grid = Geohash.gridAround(zone)
+        val leaders = social.leaderboardsFor(grid)
+        val clanZones = social.clanTerritories(grid)
+        _state.value = _state.value.copy(
+            locating = false, lat = loc.latitude, lon = loc.longitude,
+            myZone = zone, zones = grid, leaders = leaders, clanZones = clanZones,
+        )
+    }
+
+    // ── Live tracking while the tab lives: refresh position every ~7s/8m; the
+    // map dot + zone math follow you on foot, boards re-pull only on cell change.
+    private var tracking = false
+    private val trackCallback = object : LocationCallback() {
+        override fun onLocationResult(result: LocationResult) {
+            val l = result.lastLocation ?: return
+            if (isMockLocation(l)) return
+            if (l.latitude == _state.value.lat && l.longitude == _state.value.lon) return
+            val zone = Geohash.encode(l.latitude, l.longitude)
+            if (zone == _state.value.myZone) {
+                _state.value = _state.value.copy(lat = l.latitude, lon = l.longitude)
+            } else {
+                viewModelScope.launch { applyFix(l) }
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startTracking(fused: FusedLocationProviderClient) {
+        if (tracking) return
+        tracking = true
+        val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 7_000L)
+            .setMinUpdateIntervalMillis(4_000L)
+            .setMinUpdateDistanceMeters(8f)
+            .build()
+        fused.requestLocationUpdates(req, trackCallback, Looper.getMainLooper())
+    }
+
+    override fun onCleared() {
+        runCatching { LocationServices.getFusedLocationProviderClient(app).removeLocationUpdates(trackCallback) }
+        super.onCleared()
     }
 
     /** Capture the 1KM zone you're standing in: a workout is logged and bound to the geohash cell. */

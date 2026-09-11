@@ -1,6 +1,8 @@
 package com.thesystem.app.ui.territory
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
@@ -17,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -70,6 +73,16 @@ fun TerritoryScreen(vm: TerritoryViewModel = hiltViewModel()) {
                         NeonButton("GRANT GPS", {
                             permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                         }, color = CrimsonRed)
+                        Spacer(Modifier.height(6.dp))
+                        // denied-forever escape hatch — the system dialog can't be re-shown, only settings can free the hunter
+                        val ctx = LocalContext.current
+                        NeonButton("OPEN APP SETTINGS", {
+                            ctx.startActivity(
+                                Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.fromParts("package", ctx.packageName, null))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }, color = TextMuted)
                     }
                     else -> {
                         Box(Modifier.enterAnim(0)) {

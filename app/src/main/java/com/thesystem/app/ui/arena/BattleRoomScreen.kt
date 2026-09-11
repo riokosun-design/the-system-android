@@ -139,6 +139,15 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                     Text("CAMERA REQUIRED — ML Kit counts your reps on-device.", color = CrimsonRed, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
                     NeonButton("GRANT CAMERA", { cameraPermission.launch(Manifest.permission.CAMERA) }, color = CrimsonRed)
+                    Spacer(Modifier.height(6.dp))
+                    NeonButton("OPEN APP SETTINGS", {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                android.net.Uri.fromParts("package", context.packageName, null),
+                            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }, color = TextMuted)
                 }
             } else {
                 Box(Modifier.fillMaxWidth().height(300.dp)) {

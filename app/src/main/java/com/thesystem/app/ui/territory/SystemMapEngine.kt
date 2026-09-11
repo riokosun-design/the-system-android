@@ -42,16 +42,16 @@ object SystemMapEngine {
     const val MAX_ZOOM = 18.0
 
     // MapTiler dark raster — 256px PNGs (key sourced from BuildConfig, NOT hardcoded)
-    // NOTE: if MapTiler flags ch-swisstopo-lbm-dark on your plan, swap the middle
-    //       segment to "streets-v2-dark" — same dark theme, same quota mechanics.
+    // streets-v2-dark = GLOBAL coverage (ch-swisstopo-lbm-dark is Switzerland-only →
+    // blank tiles outside CH — the Kolkata blank-map bug).
     private fun tileUrl() =
-        "https://api.maptiler.com/maps/ch-swisstopo-lbm-dark/{z}/{x}/{y}.png?key=${BuildConfig.MAPTILER_API_KEY}"
+        "https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}.png?key=${BuildConfig.MAPTILER_API_KEY}"
 
     val DarkTileSource: OnlineTileSourceBase by lazy {
         object : OnlineTileSourceBase(
             "SystemDarkMapTiler",
             MIN_ZOOM.toInt(), MAX_ZOOM.toInt(), 256, ".png",
-            arrayOf("https://api.maptiler.com/maps/ch-swisstopo-lbm-dark/"),
+            arrayOf("https://api.maptiler.com/maps/streets-v2-dark/"),
         ) {
             override fun getTileURLString(pMapTileIndex: Long): String =
                 baseUrl +
