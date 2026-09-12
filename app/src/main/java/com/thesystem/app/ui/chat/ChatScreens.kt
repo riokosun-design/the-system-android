@@ -33,10 +33,7 @@ fun ChatHomeScreen(nav: NavHostController, vm: ChatViewModel = hiltViewModel()) 
                 IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary) }
                 Text("MESSAGES", style = MaterialTheme.typography.headlineMedium, color = ElectricBlue)
             }
-            TabRow(selectedTabIndex = tab, containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = ElectricBlue) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("GUILD", style = MaterialTheme.typography.labelLarge) })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("GLOBAL DM", style = MaterialTheme.typography.labelLarge) })
-            }
+            SystemTabBar(tabs = listOf("GUILD", "GLOBAL DM"), selected = tab, onSelect = { tab = it })
             if (tab == 0) {
                 if (s.membership == null) EmptyState("You belong to no Shadow Guild. Join one in PROTOCOL → GUILDS.")
                 else Column(Modifier.fillMaxSize()) {

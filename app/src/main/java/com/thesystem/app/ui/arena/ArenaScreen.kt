@@ -30,25 +30,28 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
     }
 
     var subTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("BATTLES", "TOURNAMENTS", "PREDICT", "RANKS")
+    val tabs = listOf("BATTLES", "EVENTS", "PREDICT", "RANKS")
 
     SystemBackground(wallpaperAlpha = 0.12f) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("THE ARENA", style = MaterialTheme.typography.headlineMedium, color = CrimsonRed, modifier = Modifier.weight(1f))
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = Grid.Margin),
+            ) {
+                Text("THE ARENA", style = MaterialTheme.typography.headlineMedium, color = PaperWhite, modifier = Modifier.weight(1f))
                 VcChip(s.profile?.vcBalance ?: 0)
             }
-            TabRow(selectedTabIndex = subTab, containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = CrimsonRed) {
-                tabs.forEachIndexed { i, label ->
-                    Tab(selected = subTab == i, onClick = { haptics.select(); subTab = i }, text = { Text(label, style = MaterialTheme.typography.labelLarge) })
+            Spacer(Modifier.height(Grid.S12))
+            // full-bleed tab rail — labels stay on one line even on 320dp devices
+            SystemTabBar(tabs = tabs, selected = subTab, onSelect = { i -> haptics.select(); subTab = i })
+            Box(Modifier.fillMaxSize().padding(horizontal = Grid.Margin)) {
+                // skeleton shimmer while the arena resolves — never a dead spinner
+                if (s.loading) SkeletonCards(4) else when (subTab) {
+                    0 -> BattlesTab(s, vm, nav)
+                    1 -> TournamentsTab(s, vm)
+                    2 -> PredictTab(s, vm)
+                    3 -> LeaderboardTab(s)
                 }
-            }
-            // ROUND 3: skeleton shimmer while the arena resolves — never a dead spinner
-            if (s.loading) SkeletonCards(4) else when (subTab) {
-                0 -> BattlesTab(s, vm, nav)
-                1 -> TournamentsTab(s, vm)
-                2 -> PredictTab(s, vm)
-                3 -> LeaderboardTab(s)
             }
         }
         Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.BottomCenter) { SnackbarHost(snack) }
@@ -96,7 +99,7 @@ private fun BattlesTab(s: ArenaState, vm: ArenaViewModel, nav: NavHostController
                     }
                     when {
                         meIn && b.status != "FINISHED" -> NeonButton("ENTER", { nav.navigate(Routes.battle(b.id)) })
-                        b.status == "LIVE" -> Text("⚔ LIVE", color = CrimsonRed, style = MaterialTheme.typography.labelLarge)
+                        b.status == "LIVE" -> Text("[ LIVE ]", color = PaperWhite, style = MonoLabel)
                         b.status == "FINISHED" -> Text(if (b.winner == s.profile?.id) "VICTORY" else "CLOSED", color = VenomGreen, style = MaterialTheme.typography.labelLarge)
                     }
                 }

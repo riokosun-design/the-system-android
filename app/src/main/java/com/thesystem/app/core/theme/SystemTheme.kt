@@ -6,31 +6,49 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.thesystem.app.R
 
-// ── DESIGN TOKENS 2.6 — "QUIET POWER" + PRINCIPAL ARCHITECT GRID ────────────
-// Philosophy: ONE accent, rest neutral. Color means something or it isn't used.
-// 4dp baseline grid, 8/16/24 modules, 20dp screen margin. One font family.
+// ═══════════════════════════════════════════════════════════════════════════
+// DESIGN TOKENS 3.0 — "MONOCHROME HUD"
+// Swiss-watch / field-terminal discipline. NO color anywhere: pure black,
+// white, and grays only. Hierarchy comes from weight, spacing and shade —
+// never from hue. Hairlines over borders, spacing over chrome.
+// ═══════════════════════════════════════════════════════════════════════════
 
-val VoidBlack = Color(0xFF0A0B0E)          // true neutral near-black (no blue tint)
-val SurfaceDark = Color(0xFF101318)        // raised surface, flat
-val SurfaceHigh = Color(0xFF151920)        // overlay / inputs
-val ElectricBlue = Color(0xFF38BDF8)       // THE accent — smooth sky (Solo Leveling window blue, refined)
-val NeonPurple = Color(0xFF818CF8)         // soft indigo — rare: boss arcs, gradient partner only
-val CrimsonRed = Color(0xFFFB7185)         // soft rose — danger/rival only (never decoration)
-val HunterGold = Color(0xFFF5C26B)         // champagne — VC currency + premium rewards only
-val VenomGreen = Color(0xFF34D399)         // mint — success states only
-val WarningAmber = Color(0xFFFBBF24)       // standard amber — timers/warnings only
-val TextPrimary = Color(0xFFF1F5F9)        // slate-100
-val TextMuted = Color(0xFF94A3B8)          // slate-400
-val GridLine = Color(0x14FFFFFF)           // 8% white hairline — panels
-val FloatingSurface = Color(0xCC0E121B)    // 80% navy — contrast-safe floaters over art/maps
-val Hairline = Color(0x1AFFFFFF)           // 10% white — floating container border
+// ── Grayscale ramp (the only palette that exists) ───────────────────────────
+val InkBlack   = Color(0xFF000000)  // pitch-black canvas
+val PanelGray  = Color(0xFF0F0F0F)  // flat section surface
+val RaisedGray = Color(0xFF1A1A1A)  // inputs, raised tracks
+val TrackGray  = Color(0xFF262626)  // progress tracks, inactive fills
+val LineStrong = Color(0x33FFFFFF)  // explicit hairline (≈ #555 on black)
+val LineSoft   = Color(0x1AFFFFFF)  // divider between groups
+val LabelGray  = Color(0xFF888888)  // secondary text / labels (spec #888)
+val FaintGray  = Color(0xFF555555)  // tertiary / disabled text
+val PaperWhite = Color(0xFFFFFFFF)  // primary text + primary actions
 
-/** THE GRID — every screen snaps here. No floating offsets, ever. */
+// ── Legacy token names — retained so the whole app inherits the re-skin.
+// Every former hue now resolves to a gray of the same semantic weight.
+val VoidBlack   = InkBlack
+val SurfaceDark = PanelGray
+val SurfaceHigh = RaisedGray
+val ElectricBlue = PaperWhite   // primary accent → pure white
+val NeonPurple   = Color(0xFFC4C4C4) // secondary accent → light gray
+val CrimsonRed   = Color(0xFFEDEDED) // danger → near-white (carried by type/shape)
+val HunterGold   = PaperWhite
+val VenomGreen   = PaperWhite
+val WarningAmber = LabelGray
+val TextPrimary  = PaperWhite
+val TextMuted    = LabelGray
+val GridLine     = LineSoft
+val FloatingSurface = Color(0xF2000000) // near-solid black shell over art/map
+val Hairline     = LineStrong
+
+/** THE GRID — every screen snaps here. Lateral padding 16dp per spec. */
 object Grid {
     val S4 = 4.dp
     val S8 = 8.dp
@@ -39,45 +57,67 @@ object Grid {
     val S20 = 20.dp
     val S24 = 24.dp
     val S32 = 32.dp
-    val Margin = S20          // spec: uniform horizontal screen margin
-    val CardSpace = S12       // vertical rhythm between cards
-    val CardPadding = S16     // inner panel padding
+    val Margin = S16         // uniform lateral screen margin (8–16 spec)
+    val CardSpace = S16      // equal breathing room between sections
+    val CardPadding = S16
 }
 
-private val SystemColors = darkColorScheme(
-    background = VoidBlack,
-    onBackground = TextPrimary,
-    surface = SurfaceDark,
-    onSurface = TextPrimary,
-    surfaceVariant = SurfaceHigh,
-    onSurfaceVariant = TextMuted,
-    primary = ElectricBlue,
-    onPrimary = Color(0xFF06202E),
-    secondary = NeonPurple,
-    onSecondary = Color(0xFF0A0B0E),
-    tertiary = CrimsonRed,
-    onTertiary = Color(0xFF0A0B0E),
-    error = CrimsonRed,
-    onError = Color(0xFF0A0B0E),
-    outline = GridLine,
+// ── TYPE FACES ───────────────────────────────────────────────────────────────
+// Chakra Petch — geometric/technical sans for every label & heading.
+// JetBrains Mono — instrument readouts only: XP, VC, levels, zones, scores.
+val SystemSans = FontFamily(
+    Font(R.font.chakra_petch_regular, FontWeight.Normal),
+    Font(R.font.chakra_petch_medium, FontWeight.Medium),
+    Font(R.font.chakra_petch_semibold, FontWeight.SemiBold),
+    Font(R.font.chakra_petch_bold, FontWeight.Bold),
 )
 
-// ── TYPOGRAPHY — ONE family (system sans), weights carry the hierarchy ───────
-// Headings: ExBold/Bold with -0.02em tracking (high-impact numbers & ranks).
-// Body: Regular 14sp / lineHeight 20 (spec) in muted slate. Labels: defined.
+val SystemMono = FontFamily(
+    Font(R.font.jetbrains_mono_regular, FontWeight.Normal),
+    Font(R.font.jetbrains_mono_medium, FontWeight.Medium),
+    Font(R.font.jetbrains_mono_bold, FontWeight.Bold),
+)
+
+private val SystemColors = darkColorScheme(
+    background = InkBlack,
+    onBackground = PaperWhite,
+    surface = PanelGray,
+    onSurface = PaperWhite,
+    surfaceVariant = RaisedGray,
+    onSurfaceVariant = LabelGray,
+    primary = PaperWhite,
+    onPrimary = InkBlack,
+    secondary = Color(0xFFC4C4C4),
+    onSecondary = InkBlack,
+    tertiary = PaperWhite,
+    onTertiary = InkBlack,
+    error = PaperWhite,
+    onError = InkBlack,
+    outline = LineSoft,
+)
+
+// ── TYPE SCALE ───────────────────────────────────────────────────────────────
+// Headings: bold, all-caps via call sites. Body: regular. Data: always mono.
 
 private val SystemTypography = Typography(
-    displayLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.ExtraBold, fontSize = 34.sp, letterSpacing = (-0.68).sp, lineHeight = 40.sp, color = TextPrimary),
-    displayMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.ExtraBold, fontSize = 30.sp, letterSpacing = (-0.6).sp, lineHeight = 36.sp, color = TextPrimary),
-    headlineMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 22.sp, letterSpacing = (-0.44).sp, lineHeight = 28.sp, color = TextPrimary),
-    titleLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = (-0.36).sp, lineHeight = 24.sp, color = TextPrimary),
-    titleMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, letterSpacing = (-0.16).sp, lineHeight = 22.sp, color = TextPrimary),
-    bodyLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 22.sp, color = TextPrimary),
-    bodyMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp, color = TextMuted),
-    bodySmall = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp, color = TextMuted),
-    labelLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, letterSpacing = 0.8.sp, lineHeight = 16.sp),
-    labelSmall = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.6.sp, lineHeight = 14.sp, color = TextMuted),
+    displayLarge = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Bold, fontSize = 32.sp, letterSpacing = 0.5.sp, lineHeight = 38.sp, color = PaperWhite),
+    displayMedium = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Bold, fontSize = 26.sp, letterSpacing = 0.8.sp, lineHeight = 32.sp, color = PaperWhite),
+    headlineMedium = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Bold, fontSize = 20.sp, letterSpacing = 1.2.sp, lineHeight = 26.sp, color = PaperWhite),
+    titleLarge = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Bold, fontSize = 17.sp, letterSpacing = 0.6.sp, lineHeight = 23.sp, color = PaperWhite),
+    titleMedium = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, letterSpacing = 0.4.sp, lineHeight = 21.sp, color = PaperWhite),
+    bodyLarge = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 22.sp, color = PaperWhite),
+    bodyMedium = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 19.sp, color = LabelGray),
+    bodySmall = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Normal, fontSize = 11.sp, lineHeight = 16.sp, color = LabelGray),
+    // section / control labels — bold, tracked, uppercase by call sites
+    labelLarge = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.6.sp, lineHeight = 15.sp),
+    labelSmall = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 1.2.sp, lineHeight = 14.sp, color = LabelGray),
 )
+
+// ── MONO INSTRUMENT STYLES (XP / VC / scores / coordinates) ─────────────────
+val MonoDisplay = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 30.sp, letterSpacing = 0.sp, color = PaperWhite)
+val MonoTitle   = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = 0.sp, color = PaperWhite)
+val MonoData    = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 0.sp, color = PaperWhite)
+val MonoLabel   = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Normal, fontSize = 10.sp, letterSpacing = 1.4.sp, color = LabelGray)
 
 @Composable
 fun SystemTheme(content: @Composable () -> Unit) {

@@ -2,7 +2,12 @@ package com.thesystem.app.ui.admin
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -45,9 +50,36 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel()) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = HunterGold) }
                 Text("ADMIN CONTROL", style = MaterialTheme.typography.headlineMedium, color = HunterGold)
             }
-            ScrollableTabRow(selectedTabIndex = tab, containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = HunterGold, edgePadding = 8.dp) {
-                sections.forEachIndexed { i, label -> Tab(selected = tab == i, onClick = { haptics.select(); tab = i }, text = { Text(label, style = MaterialTheme.typography.labelLarge) }) }
+            // monochrome scrollable rail — white hairline marks the active section
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                sections.forEachIndexed { i, label ->
+                    val active = tab == i
+                    Column(
+                        Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { haptics.select(); tab = i }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            label,
+                            color = if (active) PaperWhite else LabelGray,
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Box(
+                            Modifier.height(2.dp).width(24.dp)
+                                .background(if (active) PaperWhite else androidx.compose.ui.graphics.Color.Transparent)
+                        )
+                    }
+                }
             }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(LineSoft))
             when (tab) {
                 0 -> OverviewTab(s)
                 1 -> LegalTab(s, vm)
@@ -243,7 +275,7 @@ private fun TournamentTab(s: AdminState, vm: AdminViewModel) {
                     when (t.status) {
                         "OPEN" -> NeonButton("LOCK", { haptics.select(); vm.setTournamentStatus(t.id, "LOCKED") }, color = WarningAmber)
                         // ROUND 6: bracket engine owns the lifecycle from here
-                        "LOCKED" -> NeonButton("⚔ SEED BRACKET", { haptics.slam(); vm.generateBracket(t.id) }, color = CrimsonRed)
+                        "LOCKED" -> NeonButton("SEED BRACKET", { haptics.slam(); vm.generateBracket(t.id) })
                         "IN_PROGRESS" -> NeonButton("ADVANCE ▶", { haptics.success(); vm.advanceBracket(t.id) }, color = VenomGreen)
                         else -> Text(t.status, color = TextMuted, style = MaterialTheme.typography.labelSmall)
                     }

@@ -199,8 +199,8 @@ private fun Header(s: DashboardState, burstSignal: Int, floaterSignal: Int, floa
 @Composable
 private fun PenaltyCard(s: DashboardState) {
     val p = s.profile ?: return
-    GlowCard(glow = CrimsonRed, pulse = true) {
-        Text("⚠ PENALTY ENGINE ARMED", color = CrimsonRed, style = MaterialTheme.typography.titleMedium)
+        GlowCard(pulse = true) {
+        Text("! PENALTY ENGINE ARMED", color = PaperWhite, style = MaterialTheme.typography.titleMedium)
         Text(
             "Missed days: ${p.missedDays}. Next decay tick: −${SystemMath.formatXp(s.projectedDecay)}. " +
                 "Complete today's quests before midnight or degrade.",
@@ -213,8 +213,7 @@ private fun PenaltyCard(s: DashboardState) {
 
 @Composable
 private fun BuffsCard(s: DashboardState) {
-    val allGood = s.buffs.isNotEmpty() && s.buffs.all { it.second }
-    GlowCard(glow = if (allGood) VenomGreen else if (s.buffs.isEmpty()) TextMuted else WarningAmber) {
+    GlowCard {
         Text("ACTIVE BUFFS / PENALTIES", style = MaterialTheme.typography.labelLarge, color = TextMuted)
         Spacer(Modifier.height(6.dp))
         if (s.buffs.isEmpty()) Text("No active modifiers. Train to ignite some.", style = MaterialTheme.typography.bodyMedium)
@@ -239,35 +238,36 @@ private fun QuestCard(q: QuestDto, penaltyRisk: Boolean = false, onComplete: () 
         label = "questFill",
     )
     val doneAlpha by animateFloatAsState(if (done) 1f else 0f, label = "questDone")
-    // DESIGN 2.5 MONARCH EDGE — authentic Solo Leveling quest window:
-    // chamfered hologram slab + bracket status tags, nothing else screams.
-    val accent = if (done) VenomGreen else ElectricBlue
-    HudFrameCard(accent = accent, glow = !done, modifier = Modifier.pressScale(0.98f)) {
+    // MONOCHROME: flat panel, status carried by type/shade only, one white line
+    // for progress over a dark-gray track. No side bars, no hue anywhere.
+    HudFrameCard(modifier = Modifier.pressScale(0.98f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("[ DAILY QUEST ]", color = TextMuted, fontSize = 9.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, letterSpacing = 2.sp)
+            Text("DAILY QUEST", color = FaintGray, fontSize = 9.sp,
+                fontFamily = SystemMono, letterSpacing = 2.sp)
             Spacer(Modifier.weight(1f))
             when {
-                done -> HudTag("COMPLETE", VenomGreen)
-                penaltyRisk -> HudTag("PENALTY RISK", CrimsonRed)
-                else -> HudTag("IN PROGRESS", ElectricBlue)
+                done -> HudTag("COMPLETE", PaperWhite)
+                penaltyRisk -> HudTag("PENALTY RISK", PaperWhite)
+                else -> HudTag("IN PROGRESS", LabelGray)
             }
         }
         Spacer(Modifier.height(Grid.S8))
-        Text(q.title, style = MaterialTheme.typography.titleMedium, color = if (done) TextMuted else TextPrimary)
+        Text(q.title, style = MaterialTheme.typography.titleMedium, color = if (done) LabelGray else PaperWhite)
         Spacer(Modifier.height(Grid.S8))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Box(Modifier.fillMaxWidth().height(3.dp).background(SurfaceHigh, androidx.compose.foundation.shape.RoundedCornerShape(2.dp))) {
+                // white hair over dark gray track — the only progress language
+                Box(Modifier.fillMaxWidth().height(2.dp).background(TrackGray, androidx.compose.foundation.shape.RoundedCornerShape(1.dp))) {
                     Box(
                         Modifier.fillMaxHeight().fillMaxWidth(progress)
-                            .background(if (done) VenomGreen else ElectricBlue, androidx.compose.foundation.shape.RoundedCornerShape(2.dp))
+                            .background(if (done) LabelGray else PaperWhite, androidx.compose.foundation.shape.RoundedCornerShape(1.dp))
                     )
                 }
                 Spacer(Modifier.height(Grid.S8))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    SystemChip("+${q.xpReward} XP", HunterGold)
+                    SystemChip("+${q.xpReward} XP", PaperWhite)
                     Spacer(Modifier.width(Grid.S8))
-                    Text("${q.progress}/${q.targetValue}", style = MaterialTheme.typography.bodySmall)
+                    Text("${q.progress}/${q.targetValue}", style = MonoLabel)
                 }
             }
             Spacer(Modifier.width(12.dp))
@@ -275,13 +275,13 @@ private fun QuestCard(q: QuestDto, penaltyRisk: Boolean = false, onComplete: () 
                 // LOG fades out / CLEARED stamps in — crossfade on one slot
                 if (doneAlpha < 1f) {
                     Box(Modifier.graphicsLayer { alpha = 1f - doneAlpha }) {
-                        NeonButton("LOG", onComplete, color = ElectricBlue)
+                        NeonButton("LOG", onComplete)
                     }
                 }
                 if (doneAlpha > 0f) {
                     Text(
                         "CLEARED",
-                        color = VenomGreen,
+                        color = PaperWhite,
                         style = MaterialTheme.typography.labelLarge,
                         modifier = Modifier.graphicsLayer {
                             alpha = doneAlpha

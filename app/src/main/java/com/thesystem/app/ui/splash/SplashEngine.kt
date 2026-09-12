@@ -62,7 +62,7 @@ fun DynamicSplash(
     LaunchedEffect(Unit) { booted = true }
     val brandScale by animateFloatAsState(if (booted) 1f else 0.82f, SystemMotion.springPunch, label = "brandPop")
 
-    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF10141D), VoidBlack)))) {
+    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF0D0D0D), InkBlack)))) {
         Crossfade(targetState = variants[index % variants.size], animationSpec = tween(450), label = "splashXfade") { v ->
             Box(Modifier.fillMaxSize()) { SplashGraph(v, Modifier.fillMaxSize()) }
         }

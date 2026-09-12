@@ -58,6 +58,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.thesystem.app.core.theme.CrimsonRed
 import com.thesystem.app.core.theme.ElectricBlue
 import com.thesystem.app.core.theme.HunterGold
+import com.thesystem.app.core.theme.LabelGray
 import com.thesystem.app.core.theme.NeonPurple
 import com.thesystem.app.core.theme.SurfaceDark
 import com.thesystem.app.core.theme.TextMuted
@@ -115,7 +116,7 @@ enum class BioFlag(val label: String) {
 enum class Archetype(val title: String, val tagline: String, val stat: String, val goal: String, val accent: Color) {
     SHADOW_MONARCH("Shadow Monarch", "Strength path — raw power ceiling", "STR +40% · TECH +20%", "STRENGTH", NeonPurple),
     WIND_WALKER("Wind Walker", "Agility path — lean, fast, ruthless", "SPD +40% · FAT -20%", "SHRED", ElectricBlue),
-    TITAN("Titan", "Mass path — hypertrophy engine", "MASS +40% · STR +25%", "BULK", HunterGold),
+    TITAN("Titan", "Mass path — hypertrophy engine", "MASS +40% · STR +25%", "BULK", LabelGray),
 }
 
 data class VesselForm(

@@ -67,6 +67,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -316,6 +318,7 @@ private fun CinematicArt(res: Int, clock: Float, alpha: Float = 0.5f, mirror: Bo
             painter = painterResource(res),
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }),
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {

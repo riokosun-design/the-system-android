@@ -69,6 +69,7 @@ import com.thesystem.app.core.theme.CrimsonRed
 import com.thesystem.app.core.theme.ElectricBlue
 import com.thesystem.app.core.theme.HunterGold
 import com.thesystem.app.core.theme.NeonPurple
+import com.thesystem.app.core.theme.PaperWhite
 import com.thesystem.app.core.theme.SurfaceDark
 import com.thesystem.app.core.theme.TextMuted
 import com.thesystem.app.core.theme.TextPrimary
@@ -89,7 +90,7 @@ import kotlin.math.sin
 // glow) than the app's quiet interior — this is the lock-in ritual, not the UI.
 // ═══════════════════════════════════════════════════════════════════════════
 
-val GateBlack = Color(0xFF07090E)
+val GateBlack = Color(0xFF000000)
 
 // ── 1. NEON GLOW MODIFIER ────────────────────────────────────────────────────
 /**
@@ -206,9 +207,9 @@ fun GlitchRevealText(
     )
     Box(modifier) {
         if (phase == 1) {
-            Text(text, color = CrimsonRed.copy(alpha = 0.55f), style = style,
+            Text(text, color = TextMuted.copy(alpha = 0.5f), style = style,
                 modifier = Modifier.graphicsLayer { translationX = jitX - 3f; translationY = -jitY.toFloat() })
-            Text(text, color = ElectricBlue.copy(alpha = 0.55f), style = style,
+            Text(text, color = ElectricBlue.copy(alpha = 0.5f), style = style,
                 modifier = Modifier.graphicsLayer { translationX = jitX + 3f; translationY = jitY.toFloat() })
         }
         Text(text, color = color, style = style,
@@ -260,7 +261,7 @@ fun FingerprintHold(
     onHoldComplete: () -> Unit,
     modifier: Modifier = Modifier,
     ringColor: Color = ElectricBlue,
-    sealColor: Color = CrimsonRed,
+    sealColor: Color = NeonPurple,
 ) {
     val progress = remember { Animatable(0f) }
     var holding by remember { mutableStateOf(false) }
@@ -504,15 +505,11 @@ fun GateKeyButton(
     val inf = rememberInfiniteTransition(label = "gateKey")
     val pulse by inf.animateFloat(0.35f, 1f, infiniteRepeatable(tween(1700), RepeatMode.Reverse), label = "gkPulse")
     val sweep by inf.animateFloat(-0.2f, 1.2f, infiniteRepeatable(tween(2100, easing = LinearEasing)), label = "gkSweep")
-    // darker plate for crushing text contrast (2.9 readability pass)
-    val metal = remember { Brush.verticalGradient(listOf(Color(0xFF141922), Color(0xFF0A0D13), Color(0xFF10141C))) }
-    val frameAlpha = if (enabled) pulse else 0.15f
+    // MONOCHROME primary key: solid white plate, black type, no frame noise
     Box(
         modifier
-            .then(if (enabled) Modifier.neonGlow(accent, alpha = 0.14f) else Modifier)
-            .clip(RoundedCornerShape(15.dp))
-            .background(metal)
-            .border(1.5.dp, Brush.horizontalGradient(listOf(accent.copy(alpha = frameAlpha), accent.copy(alpha = frameAlpha * 0.3f), accent.copy(alpha = frameAlpha))), RoundedCornerShape(15.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (enabled) PaperWhite else Color(0xFF1A1A1A))
             .pointerInput(enabled, loading) { if (enabled && !loading) detectTapGestures(onTap = { onClick() }) }
             .padding(horizontal = 18.dp, vertical = 15.dp),
         contentAlignment = Alignment.Center,
@@ -520,20 +517,19 @@ fun GateKeyButton(
         if (loading) {
             Canvas(Modifier.fillMaxWidth().height(3.dp)) {
                 val x = size.width * sweep
-                drawRect(accent, topLeft = Offset((x - 46f).coerceAtLeast(0f), 0f), size = androidx.compose.ui.geometry.Size(46f, size.height), alpha = 0.6f)
-                drawRect(accent.copy(alpha = 0.2f), size = size)
+                drawRect(Color.Black, topLeft = Offset((x - 46f).coerceAtLeast(0f), 0f), size = androidx.compose.ui.geometry.Size(46f, size.height), alpha = 0.25f)
+                drawRect(Color.Black, size = size, alpha = 0.06f)
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text, color = if (enabled) TextPrimary else TextMuted, fontSize = 16.sp,
-                fontWeight = FontWeight.ExtraBold, letterSpacing = 1.8.sp,
+                text, color = if (enabled) Color.Black else TextMuted, fontSize = 16.sp,
+                fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp,
                 style = MaterialTheme.typography.labelLarge.copy(
-                    fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.8.sp,
-                    shadow = androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.8f), blurRadius = 6f),
+                    fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp,
                 ),
             )
-            if (subtext != null) Text(subtext, color = accent.copy(alpha = if (enabled) 0.9f else 0.35f), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp)
+            if (subtext != null) Text(subtext, color = if (enabled) Color.Black.copy(alpha = 0.6f) else TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.6.sp)
         }
     }
 }

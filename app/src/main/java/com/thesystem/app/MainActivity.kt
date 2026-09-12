@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -75,7 +76,6 @@ class RootViewModel @Inject constructor(
     /** Re-pull the profile and decide which gate applies. */
     fun resolve() = viewModelScope.launch {
         _state.value = RootState.Booting
-        delay(350) // let the splash engine breathe; zero jank on nav swap
         val profile = auth.myProfile()
         _state.value = when {
             profile == null -> RootState.NeedsOnboarding
@@ -101,6 +101,9 @@ object Routes {
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Paints the white system mark on black at process start — first frame
+        // is no longer a multi-second dead black screen on cold launch.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // PROFESSIONAL IMMERSIVE MODE (hunter request): system nav bar swipes away

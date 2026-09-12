@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  THE SYSTEM — monochrome cold-start mark.
+  Pure white "system window": squared frame + scan line + center node.
+  240dp canvas; art lives inside the central 160dp safe zone the
+  splash icon is masked to. No color anywhere, by contract.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="240dp"
+    android:viewportWidth="240"
+    android:viewportHeight="240">
+
+    <!-- outer system window -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="6"
+        android:fillColor="#00000000"
+        android:pathData="M66,58 H174 Q182,58 182,66 V174 Q182,182 174,182 H66 Q58,182 58,174 V66 Q58,58 66,58 Z" />
+
+    <!-- horizontal scan line -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.55"
+        android:strokeWidth="4"
+        android:fillColor="#00000000"
+        android:pathData="M78,120 H162" />
+
+    <!-- level node -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M120,104 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.45"
+        android:pathData="M120,140 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+</vector>

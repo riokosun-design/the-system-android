@@ -27,6 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -48,6 +50,9 @@ import com.thesystem.app.core.ui.*
 import com.thesystem.app.data.model.HunterPostDto
 import java.time.Duration
 import java.time.OffsetDateTime
+
+/** Monochrome contract: even posted media renders in grayscale. */
+private val feedGrayFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
 
 /** Tab 2 — THE HUNTER FEED: dark-mode X for hunters.
  *  Global broadcasts / guild-only / rivalry lenses, mana flares, re-dispatch, 1v1 summons. */
@@ -71,7 +76,11 @@ fun HunterFeedScreen(nav: NavHostController, vm: HunterFeedViewModel = hiltViewM
                 Text("Dispatches from the field. Arise what deserves mana.", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(Grid.S12))
 
-                ScopeToggle(scope = s.scope) { haptics.tick(); vm.setScope(it) }
+                SystemTabBar(
+                    tabs = listOf("GLOBAL", "GUILD", "RIVALRY"),
+                    selected = s.scope.ordinal,
+                    onSelect = { i -> haptics.tick(); vm.setScope(FeedScope.entries[i]) },
+                )
                 Spacer(Modifier.height(Grid.S12))
 
                 PullToRefreshBox(
@@ -146,34 +155,7 @@ fun HunterFeedScreen(nav: NavHostController, vm: HunterFeedViewModel = hiltViewM
     }
 }
 
-// ── SEGMENTED TOGGLE — the three lenses ══════════════════════════════════════
-
-@Composable
-private fun ScopeToggle(scope: FeedScope, onSelect: (FeedScope) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurfaceDark)
-            .border(1.dp, GridLine, RoundedCornerShape(12.dp)).padding(4.dp),
-    ) {
-        FeedScope.entries.forEach { sc ->
-            val active = sc == scope
-            Box(
-                Modifier.weight(1f).clip(RoundedCornerShape(9.dp))
-                    .background(if (active) ElectricBlue.copy(alpha = 0.12f) else Color.Transparent)
-                    .clickableNoIndicationExt { onSelect(sc) }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    sc.label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (active) ElectricBlue else TextMuted,
-                    fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
+// (the three lenses now render through SystemTabBar — single line, hairline indicator)
 
 // ── POST ROW — Twitter architecture: avatar rail + content column ════════════
 
@@ -232,8 +214,9 @@ private fun PostRow(
                     AsyncImage(
                         model = url, contentDescription = null,
                         modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp)
-                            .clip(RoundedCornerShape(12.dp)).border(1.dp, GridLine, RoundedCornerShape(12.dp)),
+                            .clip(RoundedCornerShape(12.dp)).border(1.dp, LineSoft, RoundedCornerShape(12.dp)),
                         contentScale = ContentScale.Crop,
+                        colorFilter = feedGrayFilter,
                     )
                 }
 
@@ -261,10 +244,10 @@ private fun PostRow(
                 Spacer(Modifier.height(Grid.S8))
                 // action bar — four glyphs, counts ride along
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    FeedAction("↩", post.replyCount, active = false, activeColor = ElectricBlue, onClick = onReply)
+                    FeedAction("↩", post.replyCount, active = false, activeColor = PaperWhite, onClick = onReply)
                     ManaAction(post.manaCount, manaActive, onMana)
-                    FeedAction("⇄", post.transmitCount, active = transmitted, activeColor = VenomGreen, onClick = onTransmit)
-                    FeedAction("⚔", null, active = false, activeColor = CrimsonRed, onClick = onChallenge)
+                    FeedAction("⇄", post.transmitCount, active = transmitted, activeColor = PaperWhite, onClick = onTransmit)
+                    FeedAction("DUEL", null, active = false, activeColor = PaperWhite, onClick = onChallenge)
                 }
             }
         }
@@ -287,7 +270,7 @@ private fun RankAvatar(post: HunterPostDto, ring: Color) {
             contentAlignment = Alignment.Center,
         ) {
             if (post.avatarUrl != null) {
-                AsyncImage(model = post.avatarUrl, contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+                AsyncImage(model = post.avatarUrl, contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop, colorFilter = feedGrayFilter)
             } else {
                 Text(
                     (post.displayName ?: post.username ?: "H").first().uppercase(),
@@ -328,14 +311,14 @@ private fun RowScope.ManaAction(count: Long, active: Boolean, onClick: () -> Uni
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "⚡",
-            color = if (active) ElectricBlue else TextMuted,
+            "✦",
+            color = if (active) PaperWhite else LabelGray,
             fontSize = 15.sp,
             modifier = Modifier.graphicsLayer { alpha = if (active) pulse else 1f },
         )
         if (count > 0) {
             Spacer(Modifier.width(5.dp))
-            Text(shortCount(count), style = MaterialTheme.typography.labelSmall, color = if (active) ElectricBlue else TextMuted)
+            Text(shortCount(count), style = MaterialTheme.typography.labelSmall, color = if (active) PaperWhite else LabelGray)
         }
     }
 }
@@ -446,11 +429,11 @@ private fun ThreadDialog(
 
 /** Rank halo palette — the spec's ring colors, mapped through the System rank engine. */
 private fun rankRingColor(rank: SystemMath.HunterRank): Color = when (rank) {
-    SystemMath.HunterRank.LOSER, SystemMath.HunterRank.GARBAGE -> CrimsonRed
-    SystemMath.HunterRank.AVERAGE -> TextMuted
-    SystemMath.HunterRank.ELITE -> Color(0xFF38BDF8)
-    SystemMath.HunterRank.S_RANK -> Color(0xFF00F0FF)
-    SystemMath.HunterRank.MASTERPIECE -> Color(0xFFFBBF24)
+    SystemMath.HunterRank.LOSER, SystemMath.HunterRank.GARBAGE -> PaperWhite
+    SystemMath.HunterRank.AVERAGE -> Color(0xFF8A8A8A)
+    SystemMath.HunterRank.ELITE -> Color(0xFFB0B0B0)
+    SystemMath.HunterRank.S_RANK -> Color(0xFFD2D2D2)
+    SystemMath.HunterRank.MASTERPIECE -> PaperWhite
 }
 
 /** Markdown-lite: **bold**, @handles, #hashtags — one AnnotatedString pass. */

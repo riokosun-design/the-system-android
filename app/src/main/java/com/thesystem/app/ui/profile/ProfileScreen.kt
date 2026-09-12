@@ -8,11 +8,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -24,6 +29,9 @@ import com.thesystem.app.core.ui.*
 import com.thesystem.app.data.model.ProductDto
 import com.thesystem.app.data.model.UserDto
 import java.util.Locale
+
+/** Grayscale filter — even product photography obeys the monochrome contract. */
+private val grayscaleFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
 
 /** Tab 5 — Profile & Vault: stats, forms, wallet, referrals + CPA offerwall, level-gated store, chat, admin. */
 @Composable
@@ -45,12 +53,12 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
         ) {
             item { Box(Modifier.enterAnim(0)) { ProfileHeader(me, onOpenChat = { haptics.tick(); nav.navigate(Routes.CHAT) }, onSignOut = { haptics.select(); onSignOut() }) } }
             if (me.isAdmin) {
-                item { NeonButton("⚙ ADMIN CONTROL PANEL", { nav.navigate(Routes.ADMIN) }, Modifier.fillMaxWidth(), color = HunterGold) }
+                item { GhostButton("ADMIN CONTROL PANEL", { nav.navigate(Routes.ADMIN) }, Modifier.fillMaxWidth()) }
             }
             item { Box(Modifier.enterAnim(1)) { BodyStatsCard(me, vm) } }
             item { Box(Modifier.enterAnim(2)) { FormsCard(s, me) } }
             item { Box(Modifier.enterAnim(3)) { WalletCard(s) } }
-            item { Box(Modifier.enterAnim(4)) { OfferwallCard(s.offerwallUrl) } }
+            item { Box(Modifier.enterAnim(4)) { BountyBoardCard(s.offerwallUrl) } }
             item { Box(Modifier.enterAnim(5)) { ReferralCard(me, s) } }
             item { SectionTitle("Shadow Merch — level-gated drops", HunterGold) }
             if (s.merch.isEmpty()) item { EmptyState("The merch forge is cold. Admins can add drops from the panel.") }
@@ -85,9 +93,9 @@ private fun ProfileHeader(me: UserDto, onOpenChat: () -> Unit, onSignOut: () -> 
             }
         }
         Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Grid.S12)) {
             NeonButton("MESSAGES", onOpenChat, Modifier.weight(1f))
-            NeonButton("SIGN OUT", onSignOut, Modifier.weight(1f), color = CrimsonRed)
+            GhostButton("SIGN OUT", onSignOut, Modifier.weight(1f))
         }
     }
 }
@@ -154,14 +162,15 @@ private fun WalletCard(s: ProfileState) {
     GlowCard(glow = HunterGold) {
         Text("VC WALLET", style = MaterialTheme.typography.labelLarge, color = HunterGold)
         Spacer(Modifier.height(6.dp))
-        if (s.ledger.isEmpty()) Text("No transactions yet. Grind quests, win battles, pull the CPA wall.", style = MaterialTheme.typography.bodyMedium)
+        if (s.ledger.isEmpty()) Text("No transactions yet. Grind quests, win battles, pull the bounty board.", style = MaterialTheme.typography.bodyMedium)
         s.ledger.take(15).forEach { tx ->
             Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                 Text(tx.reason, style = MaterialTheme.typography.labelSmall, color = TextMuted, modifier = Modifier.width(140.dp))
                 Text(
                     (if (tx.amount >= 0) "+" else "") + SystemMath.formatVc(tx.amount),
-                    color = if (tx.amount >= 0) VenomGreen else CrimsonRed,
-                    style = MaterialTheme.typography.labelLarge,
+                    color = if (tx.amount >= 0) PaperWhite else LabelGray,
+                    fontFamily = SystemMono,
+                    fontSize = 12.sp,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -170,14 +179,14 @@ private fun WalletCard(s: ProfileState) {
 }
 
 @Composable
-private fun OfferwallCard(url: String?) {
+private fun BountyBoardCard(url: String?) {
     val uriHandler = LocalUriHandler.current
-    GlowCard(glow = VenomGreen) {
-        Text("CPA OFFERWALL", style = MaterialTheme.typography.labelLarge, color = VenomGreen)
-        Text("Complete partner offers — VC lands in your wallet via postback. Referrers earn a 2% lifetime cut of your CPA VC.",
+    GlowCard {
+        Text("BOUNTY BOARD", style = MaterialTheme.typography.labelLarge, color = PaperWhite)
+        Text("Complete partner commissions — VC lands in your wallet via postback. Referrers earn a 2% lifetime cut of your bounty VC.",
             style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(8.dp))
-        NeonButton("OPEN OFFERWALL", { url?.let(uriHandler::openUri) }, Modifier.fillMaxWidth(), color = VenomGreen, enabled = url != null)
+        Spacer(Modifier.height(10.dp))
+        NeonButton("OPEN BOARD", { url?.let(uriHandler::openUri) }, Modifier.fillMaxWidth(), enabled = url != null)
     }
 }
 
@@ -233,7 +242,7 @@ private fun ProductCard(p: ProductDto, me: UserDto, gated: Boolean) {
     GlowCard(glow = if (locked) SurfaceHigh else rankColor(required)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             p.imageUrl?.let {
-                AsyncImage(model = it, contentDescription = p.name, modifier = Modifier.size(64.dp), contentScale = ContentScale.Crop)
+                AsyncImage(model = it, contentDescription = p.name, modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop, colorFilter = grayscaleFilter)
                 Spacer(Modifier.width(12.dp))
             }
             Column(Modifier.weight(1f)) {
@@ -241,14 +250,14 @@ private fun ProductCard(p: ProductDto, me: UserDto, gated: Boolean) {
                 p.description?.let { Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 2) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("₹${String.format(Locale.US, "%.0f", p.priceInr)}", color = HunterGold, style = MaterialTheme.typography.labelLarge)
-                    if (p.affiliateCommissionPct > 0) Text("affiliate ${p.affiliateCommissionPct.toInt()}%", color = VenomGreen, style = MaterialTheme.typography.labelSmall)
+                    if (p.affiliateCommissionPct > 0) Text("affiliate ${p.affiliateCommissionPct.toInt()}%", color = LabelGray, style = MonoLabel)
                     if (gated) RankBadge(required)
                 }
             }
-            if (locked) Text("🔒", style = MaterialTheme.typography.titleLarge)
-            else NeonButton("BUY", { uriHandler.openUri(p.outboundUrl) }, color = if (p.category == "SUPPLEMENT") VenomGreen else ElectricBlue)
+            if (locked) Text("LOCKED", style = MonoLabel, color = PaperWhite)
+            else NeonButton("BUY", { uriHandler.openUri(p.outboundUrl) })
         }
-        if (locked) Text("Requires ${required.title} rank. Earn it.", color = CrimsonRed, style = MaterialTheme.typography.labelSmall)
+        if (locked) Text("REQUIRES ${required.title} RANK", color = PaperWhite, style = MonoLabel)
     }
 }
 
@@ -258,18 +267,18 @@ private fun DangerZoneCard(deleting: Boolean, onDelete: () -> Unit) {
     var confirm by remember { mutableStateOf(false) }
 
     GlowCard(glow = CrimsonRed, pulse = false) {
-        Text("DANGER ZONE", style = MaterialTheme.typography.labelLarge, color = CrimsonRed)
+        Text("DANGER ZONE", style = MaterialTheme.typography.labelLarge, color = PaperWhite)
         Spacer(Modifier.height(4.dp))
         Text(
             "Deletion erases your hunter record from THE SYSTEM — level, forms, VC, territory, referrals. No resurrection.",
             style = MaterialTheme.typography.labelSmall, color = TextMuted,
         )
         Spacer(Modifier.height(10.dp))
-        NeonButton(
+        GhostButton(
             if (deleting) "ERASING…" else "DELETE MY ACCOUNT",
             onClick = { if (!deleting) confirm = true },
             modifier = Modifier.fillMaxWidth(),
-            color = CrimsonRed,
+            enabled = !deleting,
         )
     }
 
@@ -277,7 +286,7 @@ private fun DangerZoneCard(deleting: Boolean, onDelete: () -> Unit) {
         AlertDialog(
             onDismissRequest = { confirm = false },
             containerColor = SurfaceHigh,
-            title = { Text("Erase this hunter?", color = CrimsonRed, style = MaterialTheme.typography.titleMedium) },
+            title = { Text("Erase this hunter?", color = PaperWhite, style = MaterialTheme.typography.titleMedium) },
             text = {
                 Text(
                     "Your account and every trace — quests, forms, battles, wallet — will be permanently destroyed. This cannot be undone.",
@@ -286,7 +295,7 @@ private fun DangerZoneCard(deleting: Boolean, onDelete: () -> Unit) {
             },
             confirmButton = {
                 TextButton(onClick = { confirm = false; onDelete() }) {
-                    Text("ERASE FOREVER", color = CrimsonRed, fontWeight = FontWeight.Bold)
+                    Text("ERASE FOREVER", color = PaperWhite, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {

@@ -1,30 +1,32 @@
 package com.thesystem.app.core.ui
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Diamond
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,70 +34,73 @@ import coil3.compose.AsyncImage
 import com.thesystem.app.core.SystemMath
 import com.thesystem.app.core.theme.*
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MONOCHROME COMPONENT LIBRARY 3.0
+// Rules: black/white/gray only · flat fills OR hairlines, never both on one
+// surface · spacing carries hierarchy · data reads in JetBrains Mono.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Rank is expressed as a ramp of GRAY SHADES. Penalty ranks invert to solid. */
 fun rankColor(rank: SystemMath.HunterRank): Color = when (rank) {
-    SystemMath.HunterRank.LOSER, SystemMath.HunterRank.GARBAGE -> CrimsonRed
-    SystemMath.HunterRank.AVERAGE -> TextMuted
-    SystemMath.HunterRank.ELITE -> ElectricBlue
-    SystemMath.HunterRank.S_RANK -> NeonPurple
-    SystemMath.HunterRank.MASTERPIECE -> HunterGold
+    SystemMath.HunterRank.LOSER, SystemMath.HunterRank.GARBAGE -> PaperWhite
+    SystemMath.HunterRank.AVERAGE -> Color(0xFF8A8A8A)
+    SystemMath.HunterRank.ELITE -> Color(0xFFB0B0B0)
+    SystemMath.HunterRank.S_RANK -> Color(0xFFD2D2D2)
+    SystemMath.HunterRank.MASTERPIECE -> PaperWhite
 }
 
-// ── CONTRAST-SAFE FLOATING CONTAINERS (spec §2) ═════════════════════════════
-// Rule: never float a bare vector icon over art or map tiles — always this shell.
+// ── CONTRAST-SAFE FLOATING SHELL (over black map / camera) ──────────────────
 
-/** 44dp touch target, 80% navy + 10% hairline: visible over ANY background. */
 @Composable
 fun FloatingIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    tint: Color = TextPrimary,
+    tint: Color = PaperWhite,
     size: Dp = 44.dp,
-    onClick: () -> Unit,   // trailing-lambda convention: callbacks ride LAST
+    onClick: () -> Unit,
 ) {
     Box(
         modifier
             .size(size)
-            .clip(androidx.compose.foundation.shape.CircleShape)
+            .clip(CircleShape)
             .background(FloatingSurface)
-            .border(1.dp, Hairline, androidx.compose.foundation.shape.CircleShape)
+            .border(1.dp, LineStrong, CircleShape)
             .pressScale(0.9f)
             .clickableNoIndication(onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(size * 0.45f))
+        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(size * 0.42f))
     }
 }
 
 private fun Modifier.clickableNoIndication(onClick: () -> Unit): Modifier =
     this.clickable(
-        interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource(),
-        indication = null, // press-scale is the feedback here; spec asks ripple on BUTTONS (NeonButton has it natively)
+        interactionSource = MutableInteractionSource(),
+        indication = null,
         onClick = onClick,
     )
 
-/** Scannable tag chip — replaces noisy sentence-badges ("+30 XP Complete Bonus" → "+30 XP"). */
+/** Neutral mono tag — mono type, hairline border, zero hue. */
 @Composable
-fun SystemChip(text: String, color: Color, modifier: Modifier = Modifier) {
+fun SystemChip(text: String, color: Color = PaperWhite, modifier: Modifier = Modifier) {
     Box(
         modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(color.copy(alpha = 0.12f))
-            .border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(6.dp))
+            .border(1.dp, LineStrong, RoundedCornerShape(6.dp))
             .padding(horizontal = 8.dp, vertical = 3.dp),
     ) {
-        Text(text.uppercase(), color = color, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        Text(text.uppercase(), color = color, style = MonoLabel, maxLines = 1)
     }
 }
 
-/** Sticky bottom execution area — anchors the primary action above the Tab Bar.
- *  Place inside a Box; renders in the floating contrast-safe shell. */
+/** Sticky bottom execution area — flat black strip with a hairline top. */
 @Composable
 fun BoxScope.StickyActionBar(
     status: String,
     statusColor: Color,
     actionText: String,
-    actionColor: Color = ElectricBlue,
+    actionColor: Color = PaperWhite,
     enabled: Boolean = true,
     onAction: () -> Unit,
 ) {
@@ -103,286 +108,272 @@ fun BoxScope.StickyActionBar(
         Modifier
             .align(Alignment.BottomCenter)
             .fillMaxWidth()
-            .padding(start = Grid.Margin, end = Grid.Margin, bottom = Grid.S12)
-            .clip(RoundedCornerShape(16.dp))
-            .background(FloatingSurface)
-            .border(1.dp, Hairline, RoundedCornerShape(16.dp))
-            .padding(horizontal = Grid.S16, vertical = Grid.S8),
+            .background(InkBlack)
+            .border(width = 1.dp, color = LineSoft)
+            .padding(horizontal = Grid.Margin, vertical = Grid.S12),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            status,
-            style = MaterialTheme.typography.labelLarge,
-            color = statusColor,
-            modifier = Modifier.weight(1f),
-        )
+        Text(status, style = MonoLabel, color = statusColor, modifier = Modifier.weight(1f))
         NeonButton(actionText, onAction, color = actionColor, enabled = enabled)
     }
 }
 
-/** Screen scaffold: dark base + optional dynamic anime wallpaper + scrim + vignette + living ambient motes.
- *  Aura is HARD-CLAMPED to 0.12–0.16 plus a black vignette — foreground text readability is non-negotiable. */
+/** Screen scaffold: pitch black + optional GRAYSCALE art plate, nothing else. */
 @Composable
 fun SystemBackground(wallpaperUrl: String? = null, wallpaperAlpha: Float = 0.14f, content: @Composable BoxScope.() -> Unit) {
-    val aura = wallpaperAlpha.coerceIn(0.12f, 0.16f)
-    Box(Modifier.fillMaxSize().background(VoidBlack)) {
+    val grayFilter = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) }
+    Box(Modifier.fillMaxSize().background(InkBlack)) {
         if (wallpaperUrl != null) {
             AsyncImage(
                 model = wallpaperUrl,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                alpha = aura,
+                colorFilter = grayFilter,
+                alpha = wallpaperAlpha.coerceIn(0.05f, 0.22f),
             )
+            // single flat scrim — no radial noise
+            Box(Modifier.fillMaxSize().background(Color(0xE6000000)))
         }
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.verticalGradient(
-                    listOf(Color(0xCC0B0E14), Color(0x880B0E14), Color(0xF20B0E14))
-                )
-            )
-        )
-        // Director's vignette: edges swallow the art so eyes land on content
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.radialGradient(listOf(Color.Transparent, Color(0x99000000), Color(0xF2030508)))
-            )
-        )
-        AmbientMotes(seed = wallpaperUrl?.hashCode() ?: 7)
         content()
     }
 }
 
 /**
- * Neon-bordered card — THE SYSTEM's core container.
- * [pulse] = slow breathing border glow for anything the user should feel is "alive"
- * (streak card, active battle, claimable reward).
+ * PANEL — the one container. Flat #0F0F0F fill, 12dp corners, NO border
+ * (fill OR border, never both — spec). [glow]/[pulse] kept for signature
+ * compatibility but do nothing: panels never glow.
  */
 @Composable
 fun GlowCard(
     modifier: Modifier = Modifier,
-    glow: Color = ElectricBlue,
-    corner: Dp = 14.dp,
+    glow: Color = PaperWhite,
+    corner: Dp = 12.dp,
     pulse: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(corner)
-    val borderGlow by if (pulse) {
-        val inf = rememberInfiniteTransition(label = "cardPulse")
-        inf.animateFloat(0.35f, 0.9f, infiniteRepeatable(tween(1300), RepeatMode.Reverse), label = "cardPulseA")
-    } else remember { mutableStateOf(0.65f) }
     Column(
         modifier = modifier
-            .clip(shape)
-            .background(Brush.verticalGradient(listOf(SurfaceDark.copy(alpha = 0.92f), SurfaceHigh.copy(alpha = 0.85f))))
-            .border(1.dp, Brush.linearGradient(listOf(glow.copy(alpha = borderGlow), glow.copy(alpha = 0.08f))), shape)
+            .clip(RoundedCornerShape(corner))
+            .background(PanelGray)
             .padding(Grid.CardPadding),
         content = content,
     )
 }
 
+/** PRIMARY ACTION — solid white plate, black text. */
 @Composable
 fun NeonButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    color: Color = ElectricBlue,
+    color: Color = PaperWhite,
     enabled: Boolean = true,
 ) {
+    // an explicitly gray color request = the quiet GHOST treatment (side B,
+    // secondary choices); white = solid execution; disabled = faint outline.
+    val ghost = color == LabelGray || color == FaintGray || color == NeonPurple
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.pressScale(if (enabled) 0.90f else 1f),
+        modifier = modifier.pressScale(if (enabled) 0.94f else 1f),
         shape = RoundedCornerShape(10.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = color.copy(alpha = 0.16f),
-            contentColor = color,
-            disabledContainerColor = SurfaceHigh,
-            disabledContentColor = TextMuted,
-        ),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp, if (enabled) color.copy(alpha = 0.8f) else Color(0x33FFFFFF)
-        ),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        colors = when {
+            !enabled -> ButtonDefaults.buttonColors(
+                containerColor = Color.Transparent,
+                contentColor = FaintGray,
+                disabledContainerColor = Color.Transparent,
+                disabledContentColor = FaintGray,
+            )
+            ghost -> ButtonDefaults.buttonColors(
+                containerColor = Color.Transparent,
+                contentColor = LabelGray,
+            )
+            else -> ButtonDefaults.buttonColors(
+                containerColor = PaperWhite,
+                contentColor = InkBlack,
+            )
+        },
+        border = when {
+            !enabled -> androidx.compose.foundation.BorderStroke(1.dp, LineSoft)
+            ghost -> androidx.compose.foundation.BorderStroke(1.dp, LineStrong)
+            else -> null
+        },
     ) {
-        Text(text, style = MaterialTheme.typography.labelLarge, color = if (enabled) color else TextMuted)
+        Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+            color = if (enabled) (if (ghost) LabelGray else InkBlack) else FaintGray, maxLines = 1)
+    }
+}
+
+/** SECONDARY ACTION — white hairline, white text (EDIT-style). */
+@Composable
+fun GhostButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.pressScale(if (enabled) 0.94f else 1f),
+        shape = RoundedCornerShape(10.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = PaperWhite, disabledContentColor = FaintGray),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (enabled) PaperWhite else LineSoft),
+    ) {
+        Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 
 @Composable
-fun SectionTitle(text: String, color: Color = ElectricBlue) {
+fun SectionTitle(text: String, color: Color = PaperWhite) {
     Text(
         text.uppercase(),
         style = MaterialTheme.typography.labelLarge,
         color = color,
-        modifier = Modifier.padding(vertical = 8.dp),
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
     )
 }
 
+/** Rank tag: outlined by default; penalty ranks invert to solid white/black. */
 @Composable
 fun RankBadge(rank: SystemMath.HunterRank, modifier: Modifier = Modifier) {
-    val c = rankColor(rank)
+    val penalty = rank.isPenaltyRank
     Box(
         modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(c.copy(alpha = 0.14f))
-            .border(1.dp, c.copy(alpha = 0.7f), RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(4.dp))
+            .then(if (penalty) Modifier.background(PaperWhite) else Modifier.border(1.dp, LineStrong, RoundedCornerShape(4.dp)))
             .padding(horizontal = 10.dp, vertical = 4.dp),
     ) {
-        Text(rank.title, color = c, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+        Text(
+            rank.title,
+            color = if (penalty) InkBlack else PaperWhite,
+            fontSize = 10.sp,
+            fontFamily = SystemMono,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp,
+        )
     }
 }
 
-// ── ANIMATED NUMBER — stats count up like a slot machine ════════════════════
-// This single component is a huge addiction lever: numbers that ROLL feel earned.
+// ── ANIMATED NUMBER — readout in JetBrains Mono ─────────────────────────────
 
 @Composable
 fun AnimatedCounter(
     target: Long,
     modifier: Modifier = Modifier,
-    color: Color = TextPrimary,
-    fontSize: androidx.compose.ui.unit.TextUnit = 22.sp,
-    fontWeight: FontWeight = FontWeight.Black,
+    color: Color = PaperWhite,
+    fontSize: androidx.compose.ui.unit.TextUnit = 18.sp,
+    fontWeight: FontWeight = FontWeight.Bold,
     format: (Long) -> String = { SystemMath.formatXp(it) },
 ) {
     val anim = remember { Animatable(target.toFloat()) }
     LaunchedEffect(target) {
         anim.animateTo(target.toFloat(), tween(650, easing = SystemMotion.Emphasize))
     }
-    Text(format(anim.value.toLong()), modifier = modifier, color = color, fontSize = fontSize, fontWeight = fontWeight)
+    Text(format(anim.value.toLong()), modifier = modifier, color = color, fontSize = fontSize,
+        fontWeight = fontWeight, fontFamily = SystemMono)
 }
 
-// ── XP RING — spring-loaded gauge with rotating halo ═════════════════════════
+// ── LEVEL DISC — one gray track + one white arc, nothing else ───────────────
 
 @Composable
-fun XpRing(xp: Long, level: Int, modifier: Modifier = Modifier, color: Color = ElectricBlue) {
+fun XpRing(xp: Long, level: Int, modifier: Modifier = Modifier, color: Color = PaperWhite) {
     val target = SystemMath.progressInLevel(xp)
     val animated by animateFloatAsState(targetValue = target, animationSpec = SystemMotion.springSoft, label = "xpRing")
-    val inf = rememberInfiniteTransition(label = "ringHalo")
-    val halo by inf.animateFloat(
-        initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(4200, easing = LinearEasing)),
-        label = "haloRot",
-    )
     Box(modifier, contentAlignment = Alignment.Center) {
         androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-            val stroke = Stroke(width = size.minDimension * 0.07f)
-            drawArc(Color(0x3300F0FF), startAngle = -90f, sweepAngle = 360f, useCenter = false, style = stroke)
-            drawArc(
-                Brush.sweepGradient(listOf(color, NeonPurple, color)),
-                startAngle = -90f, sweepAngle = 360f * animated, useCenter = false, style = stroke,
-            )
-            // rotating energy halo — makes the ring feel powered, not painted
-            drawArc(
-                color.copy(alpha = 0.35f),
-                startAngle = halo, sweepAngle = 42f, useCenter = false,
-                style = Stroke(width = size.minDimension * 0.028f),
-            )
+            val stroke = Stroke(width = size.minDimension * 0.085f, cap = StrokeCap.Round)
+            drawArc(TrackGray, startAngle = -90f, sweepAngle = 360f, useCenter = false, style = stroke)
+            drawArc(color, startAngle = -90f, sweepAngle = 360f * animated, useCenter = false, style = stroke)
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("LV", fontSize = 10.sp, color = TextMuted, letterSpacing = 2.sp)
-            Text("$level", fontSize = 30.sp, fontWeight = FontWeight.Black, color = color)
+            Text("LV", fontSize = 9.sp, color = LabelGray, fontFamily = SystemMono, letterSpacing = 2.sp)
+            Text("$level", fontSize = 28.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono, color = PaperWhite)
         }
     }
 }
 
 @Composable
-fun StatTile(label: String, value: String, color: Color = ElectricBlue, modifier: Modifier = Modifier) {
-    GlowCard(modifier = modifier, glow = color) {
-        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall)
-        Spacer(Modifier.height(4.dp))
-        Text(value, color = color, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+fun StatTile(label: String, value: String, color: Color = PaperWhite, modifier: Modifier = Modifier) {
+    GlowCard(modifier = modifier) {
+        Text(label.uppercase(), style = MonoLabel)
+        Spacer(Modifier.height(6.dp))
+        Text(value, color = color, fontSize = 17.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono)
     }
 }
 
-/** StatTile whose number rolls up when it changes. The addictive one. */
 @Composable
-fun AnimatedStatTile(label: String, value: Long, color: Color = ElectricBlue, modifier: Modifier = Modifier) {
-    GlowCard(modifier = modifier, glow = color) {
-        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall)
-        Spacer(Modifier.height(4.dp))
-        AnimatedCounter(target = value, color = color, fontSize = 18.sp)
+fun AnimatedStatTile(label: String, value: Long, color: Color = PaperWhite, modifier: Modifier = Modifier) {
+    GlowCard(modifier = modifier) {
+        Text(label.uppercase(), style = MonoLabel)
+        Spacer(Modifier.height(6.dp))
+        AnimatedCounter(target = value, color = color, fontSize = 17.sp)
     }
 }
 
-// ── STREAK TILE — flame + rolling count; fires the daily-login loop ══════════
+// ── STREAK TILE ─────────────────────────────────────────────────────────────
 
 @Composable
 fun StreakTile(days: Int, modifier: Modifier = Modifier) {
-    val color = when {
-        days >= 30 -> HunterGold
-        days >= 7  -> NeonPurple
-        days >= 1  -> ElectricBlue
-        else       -> TextMuted
-    }
-    GlowCard(modifier = modifier, glow = color, pulse = days > 0) {
-        Text("STREAK", style = MaterialTheme.typography.labelSmall)
-        Spacer(Modifier.height(4.dp))
+    GlowCard(modifier = modifier) {
+        Text("STREAK", style = MonoLabel)
+        Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            StreakFlame(days = days, modifier = Modifier.size(22.dp))
+            StreakFlame(days = days, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(6.dp))
-            AnimatedCounter(target = days.toLong(), color = color, fontSize = 18.sp, format = { "$it days" })
+            AnimatedCounter(target = days.toLong(), color = PaperWhite, fontSize = 17.sp, format = { "$it days" })
         }
     }
 }
 
+/** VC readout: white diamond + mono amount, quiet hairline chip. */
 @Composable
 fun VcChip(amount: Long, modifier: Modifier = Modifier) {
     Row(
-        modifier.clip(RoundedCornerShape(20.dp)).background(HunterGold.copy(alpha = 0.10f))
-            .border(1.dp, HunterGold.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier
+            .clip(RoundedCornerShape(6.dp))
+            .border(1.dp, LineStrong, RoundedCornerShape(6.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Text("◈ ", color = HunterGold, fontSize = 12.sp)
-        AnimatedCounter(target = amount, color = HunterGold, fontSize = 12.sp, fontWeight = FontWeight.Bold, format = { SystemMath.formatVc(it) })
+        Icon(Icons.Filled.Diamond, contentDescription = "VC", tint = PaperWhite, modifier = Modifier.size(10.dp))
+        AnimatedCounter(target = amount, color = PaperWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+            format = { SystemMath.formatVc(it) })
     }
 }
 
 @Composable
 fun EmptyState(message: String, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("∅", color = TextMuted, fontSize = 34.sp)
-        Spacer(Modifier.height(8.dp))
-        Text(message, style = MaterialTheme.typography.bodyMedium)
+        Text("—", color = FaintGray, fontSize = 28.sp, fontFamily = SystemMono)
+        Spacer(Modifier.height(10.dp))
+        Text(message, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
     }
 }
 
-// ── XP PROGRESS BAR — springy fill + traveling shine ═════════════════════════
+// ── PROGRESS LINE — white hair over dark gray track ─────────────────────────
 
 @Composable
-fun XpProgressBar(xp: Long, modifier: Modifier = Modifier, color: Color = ElectricBlue) {
+fun XpProgressBar(xp: Long, modifier: Modifier = Modifier, color: Color = PaperWhite) {
     val p by animateFloatAsState(SystemMath.progressInLevel(xp), animationSpec = SystemMotion.springSoft, label = "xpBar")
-    val inf = rememberInfiniteTransition(label = "barShine")
-    val shine by inf.animateFloat(
-        initialValue = -0.3f, targetValue = 1.3f,
-        animationSpec = infiniteRepeatable(tween(2600, easing = LinearEasing)),
-        label = "shineX",
-    )
     Box(
-        modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(SurfaceHigh)
+        modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(TrackGray)
     ) {
         Box(
-            Modifier.fillMaxHeight().fillMaxWidth(p.coerceIn(0f, 1f)).clip(RoundedCornerShape(3.dp))
-                .background(Brush.horizontalGradient(listOf(color, NeonPurple)))
-        ) {
-            // shine sweep — the "gacha bar" glint; reads as energy flowing to the next level
-            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                val sx = shine * size.width
-                drawRect(
-                    Brush.horizontalGradient(
-                        listOf(Color.Transparent, Color.White.copy(alpha = 0.35f), Color.Transparent),
-                        startX = sx - 40f, endX = sx + 40f,
-                    )
-                )
-            }
-        }
+            Modifier.fillMaxHeight().fillMaxWidth(p.coerceIn(0f, 1f)).clip(RoundedCornerShape(2.dp))
+                .background(color)
+        )
     }
 }
 
-// ── XP GAIN FLOATER — "+61 XP" rises and fades on every clear ════════════════
+// ── XP GAIN FLOATER ─────────────────────────────────────────────────────────
 
 @Composable
-fun BoxScope.XpGainFloater(signal: Int, text: String, modifier: Modifier = Modifier, color: Color = HunterGold) {
+fun BoxScope.XpGainFloater(signal: Int, text: String, modifier: Modifier = Modifier, color: Color = PaperWhite) {
     if (signal <= 0) return
     androidx.compose.runtime.key(signal) {
         val rise = remember { Animatable(0f) }
@@ -395,12 +386,12 @@ fun BoxScope.XpGainFloater(signal: Int, text: String, modifier: Modifier = Modif
                     translationY = -rise.value * 160f
                     alpha = (1f - rise.value).coerceAtLeast(0f)
                 },
-            color = color, fontSize = 20.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp,
+            color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono, letterSpacing = 1.sp,
         )
     }
 }
 
-// ── LEVEL-UP BANNER — the payday moment ═════════════════════════════════════
+// ── LEVEL-UP BANNER ─────────────────────────────────────────────────────────
 
 @Composable
 fun BoxScope.LevelUpBanner(signal: Int, level: Int, modifier: Modifier = Modifier) {
@@ -413,45 +404,96 @@ fun BoxScope.LevelUpBanner(signal: Int, level: Int, modifier: Modifier = Modifie
             modifier = modifier
                 .align(Alignment.Center)
                 .graphicsLayer {
-                    val s = 0.4f + 0.6f * v
+                    val s = 0.5f + 0.5f * v
                     scaleX = s; scaleY = s
                     alpha = v.coerceAtMost(1f)
                 },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("LEVEL UP", style = MaterialTheme.typography.displayMedium, color = ElectricBlue)
-            Text("LV $level", color = HunterGold, fontSize = 42.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
-            Text("THE SYSTEM ACKNOWLEDGES YOUR GROWTH", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+            Text("LEVEL UP", style = MaterialTheme.typography.displayMedium, color = PaperWhite)
+            Text("LV $level", color = PaperWhite, fontSize = 40.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono, letterSpacing = 3.sp)
+            Text("THE SYSTEM ACKNOWLEDGES YOUR GROWTH", style = MonoLabel)
         }
     }
 }
 
-// ── SKELETON LIST — premium-looking loading placeholders ════════════════════
+// ── SKELETON LOADING ────────────────────────────────────────────────────────
 
 @Composable
 fun SkeletonCards(count: Int = 3) {
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Grid.CardSpace)) {
         repeat(count) { i ->
-            ShimmerBox(Modifier.fillMaxWidth().height(if (i == 0) 120.dp else 84.dp).clip(RoundedCornerShape(14.dp)))
+            ShimmerBox(Modifier.fillMaxWidth().height(if (i == 0) 120.dp else 84.dp).clip(RoundedCornerShape(12.dp)))
         }
     }
 }
 
-/** Divider with a neon center dash. */
+/** Hairline divider, no glow. */
 @Composable
-fun NeonDivider(color: Color = ElectricBlue) {
-    Box(
-        Modifier.fillMaxWidth().padding(vertical = 10.dp).height(1.dp)
-            .background(Brush.horizontalGradient(listOf(Color.Transparent, color.copy(alpha = 0.5f), Color.Transparent)))
-    )
+fun NeonDivider(color: Color = LineSoft) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 10.dp).height(1.dp).background(color))
 }
 
-/** Full-width scrim line with text centered, e.g. "RESTRICTED // LEVEL 30 REQUIRED". */
+/** Restriction strip — outlined, type carries the warning (no hue available). */
 @Composable
-fun RestrictionBanner(text: String, color: Color = CrimsonRed) {
+fun RestrictionBanner(text: String, color: Color = PaperWhite) {
     Box(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.10f))
-            .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(8.dp)).padding(10.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+            .border(1.dp, LineStrong, RoundedCornerShape(8.dp)).padding(12.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text.uppercase(), color = color, style = MaterialTheme.typography.labelLarge) }
+    ) { Text(text.uppercase(), color = color, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center) }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SYSTEM TAB BAR — single-line sub-tab navigation with a hairline indicator.
+// Replaces every stock/wrapping TabRow: labels NEVER truncate, active tab is
+// marked only by a 2dp white underline.
+// ═══════════════════════════════════════════════════════════════════════════
+
+@Composable
+fun SystemTabBar(
+    tabs: List<String>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth()) {
+            tabs.forEachIndexed { i, label ->
+                val active = i == selected
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { onSelect(i) }
+                        .padding(vertical = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    // single line always — bar is meant to be placed full-bleed so
+                    // the longest label (TOURNAMENTS) never wraps to "TOURN AMENT S".
+                    Text(
+                        label,
+                        maxLines = 1,
+                        softWrap = false,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontSize = 11.sp,
+                        letterSpacing = 0.8.sp,
+                        fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                        color = if (active) PaperWhite else LabelGray,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        Modifier
+                            .height(2.dp)
+                            .width(28.dp)
+                            .background(if (active) PaperWhite else Color.Transparent)
+                    )
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(LineSoft))
+    }
 }

@@ -41,12 +41,8 @@ fun ProtocolScreen(nav: NavHostController, vm: ProtocolViewModel = hiltViewModel
 
     SystemBackground(wallpaperAlpha = 0.12f) {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin)) {
-            Text("PROTOCOL", style = MaterialTheme.typography.headlineMedium, color = NeonPurple)
-            TabRow(selectedTabIndex = subTab, containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = NeonPurple) {
-                tabs.forEachIndexed { i, label ->
-                    Tab(selected = subTab == i, onClick = { haptics.select(); subTab = i }, text = { Text(label, style = MaterialTheme.typography.labelLarge) })
-                }
-            }
+            Text("PROTOCOL", style = MaterialTheme.typography.headlineMedium, color = PaperWhite)
+            SystemTabBar(tabs = tabs, selected = subTab, onSelect = { i -> haptics.select(); subTab = i })
             // ROUND 3: skeleton shimmer while protocol resolves
             if (s.loading) SkeletonCards(3) else when (subTab) {
                 0 -> RoomsTab(s, vm, nav)
@@ -72,7 +68,7 @@ private fun RoomsTab(s: ProtocolState, vm: ProtocolViewModel, nav: NavHostContro
 private fun BlackRoomCard(s: ProtocolState, vm: ProtocolViewModel) {
     var showPay by remember { mutableStateOf(false) }
     GlowCard(glow = CrimsonRed) {
-        Text("⬛ THE BLACK ROOM", style = MaterialTheme.typography.titleLarge, color = CrimsonRed)
+        Text("THE BLACK ROOM", style = MaterialTheme.typography.titleLarge, color = PaperWhite)
         Text("Elite routines, dark arcs, shadow mentorship. Paywalled. Verified manually — no chargebacks, no mercy.",
             style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.height(8.dp))
@@ -123,7 +119,7 @@ fun UpiPaymentSheet(s: ProtocolState, onDismiss: () -> Unit, onSubmit: (String, 
 @Composable
 private fun WhiteRoomCard() {
     GlowCard(glow = ElectricBlue) {
-        Text("⬜ THE WHITE ROOM", style = MaterialTheme.typography.titleLarge, color = ElectricBlue)
+        Text("THE WHITE ROOM", style = MaterialTheme.typography.titleLarge, color = PaperWhite)
         Text("Brain training. Reflex discipline. Free forever.", style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.height(10.dp))
         ReactionGame()
@@ -144,7 +140,7 @@ private fun ReactionGame() {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
         NeonButton(
             when (phase) {
-                0 -> "START REFLEX TEST"; 1 -> "WAIT FOR NEON…"; 2 -> "⚡ TAP! ⚡"; else -> "AGAIN"
+                0 -> "START REFLEX TEST"; 1 -> "WAIT…"; 2 -> "TAP"; else -> "AGAIN"
             },
             {
                 when (phase) {
@@ -165,12 +161,12 @@ private fun ReactionGame() {
             when {
                 phase == 3 && result > 0 -> "Reaction: ${result}ms" + if (result == best) " — NEW BEST" else ""
                 phase == 0 && result == -1L -> "Too eager. The System saw that."
-                else -> "Tap the instant the button turns green."
+                else -> "Tap the instant the button turns white."
             },
             style = MaterialTheme.typography.bodyMedium,
-            color = if (phase == 3) VenomGreen else TextMuted,
+            color = if (phase == 3) PaperWhite else TextMuted,
         )
-        if (best != Long.MAX_VALUE) Text("Best: ${best}ms", style = MaterialTheme.typography.labelSmall, color = HunterGold)
+        if (best != Long.MAX_VALUE) Text("Best: ${best}ms", style = MonoLabel, color = PaperWhite)
     }
 }
 
@@ -219,7 +215,7 @@ private fun ArcCard(arc: ArcDto, progress: com.thesystem.app.data.model.ArcProgr
                 }
                 if (gated) {
                     Text(
-                        if (!unlocked) "🔒 locked — complete the prerequisite arc first" else "🔒 requires level ${arc.minLevel}",
+                        if (!unlocked) "LOCKED — COMPLETE THE PREREQUISITE ARC" else "LOCKED — REQUIRES LEVEL ${arc.minLevel}",
                         color = CrimsonRed, style = MaterialTheme.typography.labelSmall,
                     )
                 }

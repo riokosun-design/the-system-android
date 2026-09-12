@@ -130,15 +130,15 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
 
     SystemBackground(wallpaperAlpha = 0.08f) {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
-            Text("PUSH-UP WAR", style = MaterialTheme.typography.headlineMedium, color = CrimsonRed)
+            Text("PUSH-UP WAR", style = MaterialTheme.typography.headlineMedium, color = PaperWhite)
             Text("60 seconds. Winner +${SystemMath.BATTLE_WIN_XP} XP · Loser +${SystemMath.BATTLE_LOSS_XP} XP. No mercy.", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(10.dp))
 
             if (!s.cameraGranted) {
-                GlowCard(glow = CrimsonRed) {
-                    Text("CAMERA REQUIRED — ML Kit counts your reps on-device.", color = CrimsonRed, style = MaterialTheme.typography.titleMedium)
+                GlowCard {
+                    Text("CAMERA REQUIRED — ML Kit counts your reps on-device.", color = PaperWhite, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
-                    NeonButton("GRANT CAMERA", { cameraPermission.launch(Manifest.permission.CAMERA) }, color = CrimsonRed)
+                    NeonButton("GRANT CAMERA", { cameraPermission.launch(Manifest.permission.CAMERA) })
                     Spacer(Modifier.height(6.dp))
                     NeonButton("OPEN APP SETTINGS", {
                         context.startActivity(
@@ -155,14 +155,14 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                     if (s.counting) PoseMeshOverlay(points = meshPoints, repFlash = repPop.value, modifier = Modifier.matchParentSize())
                     if (!s.counting && s.battle?.status != "FINISHED") {
                         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("PHONE ON THE FLOOR — FRONT CAMERA FACING YOU", color = ElectricBlue, style = MaterialTheme.typography.labelSmall)
+                            Text("PHONE ON THE FLOOR — FRONT CAMERA FACING YOU", color = PaperWhite, style = MonoLabel)
                         }
                     }
                     if (s.counting) {
                         Text(
                             "${s.secondsLeft}s",
-                            color = if (s.secondsLeft <= 10) CrimsonRed else ElectricBlue,
-                            fontSize = 42.sp, fontWeight = FontWeight.Black,
+                            color = PaperWhite,
+                            fontSize = 42.sp, fontWeight = FontWeight.Black, fontFamily = SystemMono,
                             modifier = Modifier
                                 .align(Alignment.TopCenter).padding(8.dp)
                                 .graphicsLayer { scaleX = timerPulse.value; scaleY = timerPulse.value },
@@ -176,10 +176,10 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                         ) {
                             Text(
                                 "${s.myCount}",
-                                color = ElectricBlue, fontSize = 36.sp, fontWeight = FontWeight.Black,
+                                color = PaperWhite, fontSize = 36.sp, fontWeight = FontWeight.Black, fontFamily = SystemMono,
                                 modifier = Modifier.graphicsLayer { scaleX = repPop.value; scaleY = repPop.value },
                             )
-                            Text("REPS", color = TextMuted, fontSize = 8.sp, letterSpacing = 3.sp)
+                            Text("REPS", color = LabelGray, fontSize = 8.sp, fontFamily = SystemMono, letterSpacing = 3.sp)
                         }
                     }
                 }
@@ -188,19 +188,19 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth()) {
                     Box(Modifier.weight(1f).graphicsLayer { scaleX = repPop.value; scaleY = repPop.value }) {
-                        StatTile("YOU", "${s.myCount} reps", ElectricBlue, Modifier.fillMaxWidth())
+                        StatTile("YOU", "${s.myCount} reps", PaperWhite, Modifier.fillMaxWidth())
                     }
                     Spacer(Modifier.width(10.dp))
-                    StatTile("RIVAL", "${s.opponentCount} reps", CrimsonRed, Modifier.weight(1f))
+                    StatTile("RIVAL", "${s.opponentCount} reps", LabelGray, Modifier.weight(1f))
                 }
             }
             Spacer(Modifier.weight(1f))
 
             when {
-                s.finished -> GlowCard(glow = if (s.iWon == true) HunterGold else CrimsonRed, pulse = s.iWon == true) {
+                s.finished -> GlowCard(pulse = s.iWon == true) {
                     Text(
                         if (s.iWon == true) "VICTORY — +${SystemMath.BATTLE_WIN_XP} XP" else "DEFEAT — +${SystemMath.BATTLE_LOSS_XP} XP. Train harder.",
-                        color = if (s.iWon == true) HunterGold else CrimsonRed,
+                        color = if (s.iWon == true) PaperWhite else LabelGray,
                         style = MaterialTheme.typography.titleLarge,
                     )
                     Text("Final: ${s.battle?.scoreA} — ${s.battle?.scoreB}", style = MaterialTheme.typography.bodyMedium)
@@ -211,7 +211,6 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                     "ENTER THE ARENA (BOTH HUNTERS GO LIVE)",
                     { haptics.select(); vm.goLive(); vm.startTimer() },
                     Modifier.fillMaxWidth().height(52.dp),
-                    color = CrimsonRed,
                     enabled = s.cameraGranted,
                 )
                 !s.counting && s.battle?.status == "LIVE" -> NeonButton(
@@ -222,8 +221,8 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
         }
 
         // ── celebration overlays (State-driven, zero composition cost when idle) ═
-        XpBurst(winBurst, color = HunterGold, accent = ElectricBlue)
-        LevelUpShockwave(loseWave, color = CrimsonRed)
+        XpBurst(winBurst, color = PaperWhite)
+        LevelUpShockwave(loseWave, color = PaperWhite)
         MomentumFlash(momentum, momentumIsMine)
     }
 }
@@ -237,8 +236,8 @@ private fun BoxScope.MomentumFlash(signal: Int, mine: Boolean) {
         LaunchedEffect(Unit) { a.animateTo(1f, tween(850, easing = LinearEasing)) }
         val t = a.value
         Text(
-            if (mine) "⚡ MOMENTUM — YOU LEAD" else "⚠ MOMENTUM LOST — FIGHT BACK",
-            color = if (mine) ElectricBlue else CrimsonRed,
+            if (mine) "MOMENTUM — YOU LEAD" else "MOMENTUM LOST — FIGHT BACK",
+            color = PaperWhite,
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier
                 .align(Alignment.Center)
@@ -262,26 +261,26 @@ fun TugOfWarBar(tug: Float, modifier: Modifier = Modifier) {
     val halo by inf.animateFloat(0.8f, 1.3f, infiniteRepeatable(tween(650), RepeatMode.Reverse), label = "tugHaloR")
     Canvas(modifier) {
         val w = size.width; val h = size.height
-        // end-zone danger glow — the closer the marker gets to a wall, the hotter that side burns
+        // grayscale momentum: rival side darkens as they dominate, your side
+        // brightens. The only allowed palette: black / gray / white.
         val leftHeat = ((-animated).coerceIn(0f, 1f))
         val rightHeat = animated.coerceIn(0f, 1f)
         drawRoundRect(
             Brush.horizontalGradient(
                 listOf(
-                    CrimsonRed.copy(alpha = 0.35f + 0.4f * leftHeat),
-                    Color(0x22FFFFFF),
-                    ElectricBlue.copy(alpha = 0.35f + 0.4f * rightHeat),
+                    Color.White.copy(alpha = 0.10f + 0.28f * leftHeat),
+                    Color.White.copy(alpha = 0.05f),
+                    Color.White.copy(alpha = 0.12f + 0.40f * rightHeat),
                 )
             ),
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(18f),
         )
-        drawLine(Color.White.copy(alpha = 0.6f), Offset(w / 2, 0f), Offset(w / 2, h), 3f)
+        drawLine(Color.White.copy(alpha = 0.5f), Offset(w / 2, 0f), Offset(w / 2, h), 2f)
         val x = w / 2 + animated * (w / 2 - 30f)
-        val markerColor = if (animated >= 0) ElectricBlue else CrimsonRed
-        // pulsing halo + marker
-        drawCircle(markerColor.copy(alpha = 0.30f), radius = 22f * halo, center = Offset(x, h / 2))
-        drawCircle(Color.White, radius = 16f, center = Offset(x, h / 2))
-        drawCircle(markerColor, radius = 9f, center = Offset(x, h / 2))
+        // pulsing halo + marker — always white
+        drawCircle(Color.White.copy(alpha = 0.22f), radius = 22f * halo, center = Offset(x, h / 2))
+        drawCircle(Color.White, radius = 15f, center = Offset(x, h / 2))
+        drawCircle(Color.Black, radius = 8f, center = Offset(x, h / 2))
     }
 }
 

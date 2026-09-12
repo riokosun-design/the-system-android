@@ -1,33 +1,29 @@
 package com.thesystem.app.ui.tabs
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateOffsetAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.SystemMotion
@@ -40,9 +36,7 @@ import com.thesystem.app.ui.profile.ProfileScreen
 import com.thesystem.app.ui.social.HunterFeedGateScreen
 import com.thesystem.app.ui.territory.TerritoryScreen
 
-/** Strict 5-tab navbar (Section 1). No more, no less.
- *  Evolution 2.7: Protocol left the rail for the Hunter Feed — the rooms live
- *  one tap deeper (Status → lock glyph → Routes.PROTOCOL). */
+/** Strict 5-tab rail. Labels always on one line; active tab = white + hairline. */
 enum class SystemTab(val label: String, val icon: ImageVector) {
     DASHBOARD("Status", Icons.Default.Dashboard),
     FEED("Feed", Icons.AutoMirrored.Filled.Send),
@@ -57,23 +51,18 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
     val haptics = rememberSystemHaptics()
 
     Scaffold(
-        containerColor = VoidBlack,
+        containerColor = InkBlack,
         bottomBar = {
-            SystemNavBar(
+            SystemBottomBar(
                 selected = tab,
-                onSelect = { t ->
-                    if (t != tab) { haptics.select(); tab = t }
-                },
+                onSelect = { t -> if (t != tab) { haptics.select(); tab = t } },
             )
         },
     ) { padding ->
-        // Crossfade + micro-rise between tabs: navigation feels like teleporting,
-        // not page-flipping. AnimatedContent disposes off-screen tabs (map/camera
-        // heavy screens don't burn frames when hidden).
         AnimatedContent(
             targetState = tab,
             transitionSpec = {
-                (fadeIn(SystemMotion.snap) + slideInVertically(androidx.compose.animation.core.tween(450)) { it / 24 })
+                (fadeIn(SystemMotion.snap) + slideInVertically(tween(360)) { it / 28 })
                     .togetherWith(fadeOut(SystemMotion.snap))
             },
             label = "tabSwitch",
@@ -81,7 +70,7 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
         ) { t ->
             when (t) {
                 SystemTab.DASHBOARD -> DashboardScreen(nav = nav)
-                SystemTab.FEED -> HunterFeedGateScreen() // Coming Soon gate; reopen -> HunterFeedScreen(nav = nav)
+                SystemTab.FEED -> HunterFeedGateScreen() // flip to HunterFeedScreen(nav) to re-open
                 SystemTab.ARENA -> ArenaScreen(nav = nav)
                 SystemTab.TERRITORY -> TerritoryScreen()
                 SystemTab.PROFILE -> ProfileScreen(profile = profile, nav = nav, onSignOut = onSignOut)
@@ -90,74 +79,51 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
     }
 }
 
-// ── CUSTOM NAV BAR — glass panel + sliding neon pill + bouncing icons ════════
-// Replaces stock NavigationBar: stock indicator is fine, but OURS feels alive.
-// The pill springs between slots; icons pop on select; all graphicsLayer work.
-
+/** MONOCHROME TAB RAIL — flat black, hairline top; 2dp white underline on active. */
 @Composable
-private fun SystemNavBar(selected: SystemTab, onSelect: (SystemTab) -> Unit) {
+private fun SystemBottomBar(selected: SystemTab, onSelect: (SystemTab) -> Unit) {
     val tabs = SystemTab.entries
-    BoxWithConstraints(
+    Column(
         Modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(SurfaceDark.copy(alpha = 0.96f), VoidBlack)))
-            .border(width = 1.dp, brush = Brush.verticalGradient(listOf(GridLine, androidx.compose.ui.graphics.Color.Transparent)), shape = RoundedCornerShape(0.dp))
-            .navigationBarsPadding()
-            .height(66.dp),
+            .background(InkBlack)
+            .navigationBarsPadding(),
     ) {
-        val slotWidth = maxWidth / tabs.size
-        val slotWidthPx = with(LocalDensity.current) { slotWidth.toPx() }
-        val pillWidth = 54.dp
-        val pillOffsetPx = with(LocalDensity.current) { pillWidth.toPx() }
-        // Center-target of the pill for the selected slot, spring-animated.
-        val targetX = selected.ordinal * slotWidthPx + (slotWidthPx - pillOffsetPx) / 2f
-        val pillX by animateOffsetAsState(
-            targetValue = Offset(targetX, 0f),
-            animationSpec = spring(dampingRatio = 0.58f, stiffness = 480f),
-            label = "navPill",
-        )
-
-        // sliding neon pill — state read inside graphicsLayer, so zero relayouts per frame
-        Box(
-            Modifier
-                .graphicsLayer { translationX = pillX.x }
-                .width(pillWidth)
-                .fillMaxHeight()
-                .padding(vertical = 10.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Brush.radialGradient(listOf(ElectricBlue.copy(alpha = 0.20f), ElectricBlue.copy(alpha = 0.04f))))
-                .border(1.dp, ElectricBlue.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
-        )
-
-        Row(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(LineSoft))
+        Row(Modifier.fillMaxWidth().height(60.dp)) {
             tabs.forEach { t ->
                 val isSel = t == selected
-                val iconScale by animateFloatAsState(if (isSel) 1.22f else 1f, SystemMotion.springPop, label = "tabIcon")
-                val iconY by animateFloatAsState(if (isSel) -2f else 0f, SystemMotion.springPop, label = "tabIconY")
-                val color = if (isSel) ElectricBlue else TextMuted
+                val tint = if (isSel) PaperWhite else FaintGray
                 Column(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .pressScale(0.88f)
+                        .pressScale(0.9f)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
-                            indication = null, // indicator pill IS the feedback; ripple would double up
+                            indication = null,
                         ) { onSelect(t) },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Icon(
-                        t.icon,
-                        contentDescription = t.label,
-                        tint = color,
-                        modifier = Modifier.graphicsLayer {
-                            scaleX = iconScale; scaleY = iconScale
-                            translationY = iconY * density
-                        },
+                    Icon(t.icon, contentDescription = t.label, tint = tint, modifier = Modifier.size(21.dp))
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        t.label.uppercase(),
+                        color = tint,
+                        fontSize = 10.sp,
+                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                        letterSpacing = 1.sp,
+                        maxLines = 1,
+                        textAlign = TextAlign.Center,
                     )
-                    Spacer(Modifier.height(2.dp))
-                    Text(t.label, style = MaterialTheme.typography.labelSmall, color = color)
+                    Spacer(Modifier.height(4.dp))
+                    Box(
+                        Modifier
+                            .height(2.dp)
+                            .width(22.dp)
+                            .background(if (isSel) PaperWhite else androidx.compose.ui.graphics.Color.Transparent)
+                    )
                 }
             }
         }

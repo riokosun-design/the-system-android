@@ -45,13 +45,13 @@ fun TerminalGlitchGraph(modifier: Modifier = Modifier) {
     val p = rememberPhase(1600)
     val charset = remember { "01{}<>/\\ARISEx".toList() }
     val glyphs = remember { List(220) { charset[Random.nextInt(charset.size)] to (Random.nextFloat() to Random.nextFloat()) } }
-    val paint = rememberNativePaint(34f, 0xFF00F0FF.toInt())
+    val paint = rememberNativePaint(34f, 0xFFFFFFFF.toInt())
     Canvas(modifier) {
         val burst = (sin(p * 2 * PI * 5).toFloat() + 1f) / 2f > 0.82
         glyphs.forEachIndexed { i, (ch, pos) ->
             val flicker = abs(sin(p * 2 * PI * (i % 7 + 1) + i)).toFloat()
             paint.alpha = (60 + 195 * flicker).toInt()
-            paint.color = if (i % 9 == 0) 0xFFFF0055.toInt() else 0xFF00F0FF.toInt()
+            paint.color = if (i % 9 == 0) 0xFFBFBFBF.toInt() else 0xFFFFFFFF.toInt()
             val jitterX = if (burst && i % 5 == 0) Random.nextInt(-24, 25).toFloat() else 0f
             drawContext.canvas.nativeCanvas.drawText(
                 ch.toString(), pos.first * size.width + jitterX,
@@ -75,7 +75,7 @@ fun TerminalGlitchGraph(modifier: Modifier = Modifier) {
 @Composable
 fun LevelPulseGraph(modifier: Modifier = Modifier) {
     val p = rememberPhase(1800)
-    val paint = rememberNativePaint(90f, 0xFFEAF6FF.toInt(), Typeface.DEFAULT_BOLD)
+    val paint = rememberNativePaint(90f, 0xFFFFFFFF.toInt(), Typeface.DEFAULT_BOLD)
     Canvas(modifier) {
         val cx = size.width / 2; val cy = size.height / 2
         repeat(4) { ring ->
@@ -92,7 +92,7 @@ fun LevelPulseGraph(modifier: Modifier = Modifier) {
         drawContext.canvas.nativeCanvas.drawText("LV $level", cx, cy + 38f, paint)
         drawContext.canvas.nativeCanvas.drawText(
             "LEVEL UP", cx, cy - size.minDimension * 0.28f,
-            paint.apply { textSize = 40f; color = 0xFF9D00FF.toInt() },
+            paint.apply { textSize = 40f; color = 0xFFC4C4C4.toInt() },
         )
     }
 }
@@ -113,7 +113,7 @@ fun SpiderRadarGraph(modifier: Modifier = Modifier) {
         blips.forEach { (angle, dist) ->
             val sweep = (angle - p * 2 * PI.toFloat()).mod(2 * PI.toFloat())
             val alpha = (1f - sweep / (2 * PI.toFloat())).coerceIn(0f, 1f)
-            drawCircle(CrimsonRed.copy(alpha = alpha), radius = 8f + 6f * alpha,
+            drawCircle(PaperWhite.copy(alpha = alpha), radius = 8f + 6f * alpha,
                 center = Offset(cx + cos(angle) * r * dist, cy + sin(angle) * r * dist))
         }
     }
@@ -139,13 +139,13 @@ fun ShadowHeartbeatGraph(modifier: Modifier = Modifier) {
             val y = cy * 1.6f + spike * size.height * 0.12f
             if (x == 0) path.moveTo(x.toFloat(), y) else path.lineTo(x.toFloat(), y)
         }
-        drawPath(path, CrimsonRed, style = Stroke(4f))
+        drawPath(path, PaperWhite, style = Stroke(4f))
         // Shadow flame heart
         val pulse = 1f + beat * 0.35f
-        drawCircle(Brush.radialGradient(listOf(NeonPurple.copy(alpha = 0.8f), Color.Transparent)),
+        drawCircle(Brush.radialGradient(listOf(NeonPurple.copy(alpha = 0.55f), Color.Transparent)),
             radius = size.minDimension * 0.22f * pulse, center = Offset(cx, cy * 0.8f))
-        drawCircle(Color(0xFF12001F), radius = size.minDimension * 0.09f * pulse, center = Offset(cx, cy * 0.8f))
-        drawCircle(ElectricBlue.copy(alpha = 0.8f * beat), radius = size.minDimension * 0.035f * pulse, center = Offset(cx, cy * 0.8f))
+        drawCircle(Color.Black, radius = size.minDimension * 0.09f * pulse, center = Offset(cx, cy * 0.8f))
+        drawCircle(PaperWhite.copy(alpha = 0.8f * beat), radius = size.minDimension * 0.035f * pulse, center = Offset(cx, cy * 0.8f))
     }
 }
 
@@ -208,13 +208,13 @@ fun CombatSplineGraph(modifier: Modifier = Modifier) {
         pathA.reset(); pathA.moveTo(0f, h * 0.7f); pathA.cubicTo(w * 0.3f, h * 0.1f, w * 0.6f, h * 0.9f, w, h * 0.3f)
         pathB.reset(); pathB.moveTo(w, h * 0.7f); pathB.cubicTo(w * 0.7f, h * 0.1f, w * 0.4f, h * 0.9f, 0f, h * 0.3f)
         drawPath(pathA.asComposePath(), Brush.horizontalGradient(listOf(ElectricBlue, Color.Transparent)), style = Stroke(5f))
-        drawPath(pathB.asComposePath(), Brush.horizontalGradient(listOf(Color.Transparent, CrimsonRed)), style = Stroke(5f))
+        drawPath(pathB.asComposePath(), Brush.horizontalGradient(listOf(Color.Transparent, LabelGray)), style = Stroke(5f))
         measure.setPath(pathA, false)
         measure.getPosTan(measure.length * p, pos, null)
         drawCircle(ElectricBlue, radius = 16f, center = Offset(pos[0], pos[1]))
         measure.setPath(pathB, false)
         measure.getPosTan(measure.length * p, pos, null)
-        drawCircle(CrimsonRed, radius = 16f, center = Offset(pos[0], pos[1]))
+        drawCircle(LabelGray, radius = 16f, center = Offset(pos[0], pos[1]))
         if (p in 0.47f..0.53f) drawCircle(Color.White, radius = size.minDimension * 0.3f, center = Offset(w / 2, h / 2), alpha = 0.35f)
     }
 }
@@ -252,8 +252,8 @@ fun BattleSplitGraph(modifier: Modifier = Modifier) {
         val redPath = Path().apply {
             moveTo(w, 0f); lineTo(w * (0.85f - 0.12f * clash), 0f); lineTo(w * (0.35f + 0.12f * clash), h); lineTo(w, h); close()
         }
-        drawPath(bluePath, Brush.linearGradient(listOf(ElectricBlue.copy(alpha = 0.5f), Color(0x1100F0FF))))
-        drawPath(redPath, Brush.linearGradient(listOf(Color(0x11FF0055), CrimsonRed.copy(alpha = 0.5f))))
+        drawPath(bluePath, Brush.linearGradient(listOf(PaperWhite.copy(alpha = 0.45f), Color(0x11FFFFFF))))
+        drawPath(redPath, Brush.linearGradient(listOf(Color(0x11FFFFFF), LabelGray.copy(alpha = 0.5f))))
         // clash seam
         drawLine(Color.White.copy(alpha = clash), Offset(w * 0.5f, 0f), Offset(w * 0.5f, h), strokeWidth = 2f + 6f * clash)
     }
@@ -263,23 +263,23 @@ fun BattleSplitGraph(modifier: Modifier = Modifier) {
 @Composable
 fun BlackRoomScanGraph(modifier: Modifier = Modifier) {
     val p = rememberPhase(2800)
-    val paint = rememberNativePaint(46f, 0xFFFF0055.toInt(), Typeface.DEFAULT_BOLD)
+    val paint = rememberNativePaint(46f, 0xFFFFFFFF.toInt(), Typeface.DEFAULT_BOLD)
     Canvas(modifier) {
         // faint room grid
         for (i in 0..20) {
             val y = size.height * i / 20f
-            drawLine(Color(0x1400F0FF), Offset(0f, y), Offset(size.width, y), 1f)
+            drawLine(Color(0x14FFFFFF), Offset(0f, y), Offset(size.width, y), 1f)
         }
         val scanY = size.height * p
-        drawRect(Brush.verticalGradient(listOf(Color.Transparent, CrimsonRed.copy(alpha = 0.35f), Color.Transparent)),
+        drawRect(Brush.verticalGradient(listOf(Color.Transparent, PaperWhite.copy(alpha = 0.30f), Color.Transparent)),
             Offset(0f, scanY - 60f), androidx.compose.ui.geometry.Size(size.width, 120f))
         // lock glyph revealed under the scan line
         val cx = size.width / 2; val cy = size.height / 2
         val reveal = (1f - abs(p - 0.5f) * 2f).coerceIn(0.05f, 1f)
-        drawRoundRect(CrimsonRed.copy(alpha = reveal),
+        drawRoundRect(PaperWhite.copy(alpha = reveal),
             Offset(cx - 70f, cy - 20f), androidx.compose.ui.geometry.Size(140f, 110f),
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(18f), style = Stroke(6f))
-        drawArc(CrimsonRed.copy(alpha = reveal), startAngle = 180f, sweepAngle = 180f, useCenter = false, style = Stroke(6f),
+        drawArc(PaperWhite.copy(alpha = reveal), startAngle = 180f, sweepAngle = 180f, useCenter = false, style = Stroke(6f),
             topLeft = Offset(cx - 45f, cy - 90f), size = androidx.compose.ui.geometry.Size(90f, 90f))
         paint.alpha = (reveal * 255).toInt()
         drawContext.canvas.nativeCanvas.drawText("RESTRICTED", cx, cy + 190f, paint)

@@ -228,10 +228,10 @@ private fun ValuePage(onNext: () -> Unit) {
         Text("WHAT YOU ARE JOINING", style = MaterialTheme.typography.headlineMedium, color = NeonPurple)
         Spacer(Modifier.height(16.dp))
         listOf(
-            "⚔  Hardcore leveling: XP = 100 × N¹·⁸. Skip days and you decay to GARBAGE.",
-            "◈  Capture real-world 1KM territory zones with your Shadow Guild.",
-            "❖  Realtime push-up wars. Predict battles. Win VC.",
-            "⬢  Level-gated merch. S-Rank hoodies are earned, never just bought.",
+            "Hardcore leveling: XP = 100 × N¹·⁸. Skip days and you decay to GARBAGE.",
+            "Capture real-world 1KM territory zones with your Shadow Guild.",
+            "Realtime push-up wars. Predict battles. Win VC.",
+            "Level-gated merch. S-Rank hoodies are earned, never just bought.",
         ).forEach {
             Text(it, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(vertical = 6.dp))
         }

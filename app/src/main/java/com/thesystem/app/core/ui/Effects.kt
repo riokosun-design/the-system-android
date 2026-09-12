@@ -24,7 +24,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import com.thesystem.app.core.theme.ElectricBlue
 import com.thesystem.app.core.theme.HunterGold
+import com.thesystem.app.core.theme.LabelGray
 import com.thesystem.app.core.theme.NeonPurple
+import com.thesystem.app.core.theme.PaperWhite
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -143,10 +145,11 @@ fun StreakFlame(days: Int, modifier: Modifier = Modifier) {
         animationSpec = infiniteRepeatable(tween(420), RepeatMode.Reverse),
         label = "flicker",
     )
+    // Monochrome tiers: brightness alone carries streak seniority.
     val color = when {
-        days >= 30 -> HunterGold
-        days >= 7  -> NeonPurple
-        else       -> ElectricBlue
+        days >= 30 -> PaperWhite   // white-hot
+        days >= 7  -> NeonPurple   // light gray
+        else       -> LabelGray    // mid-gray ember
     }
     Canvas(modifier) {
         val w = size.width; val h = size.height

@@ -71,7 +71,7 @@ class GeofenceReceiver : BroadcastReceiver() {
         )
         val notification = android.app.Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_map)
-            .setContentTitle(if (entered) "⚔ CONTESTED ZONE ENTERED" else "ZONE EXITED")
+            .setContentTitle(if (entered) "! CONTESTED ZONE ENTERED" else "ZONE EXITED")
             .setContentText(
                 if (entered) "Zone $zone — train here to claim it, or bleed the 5% guild tribute."
                 else "You left zone $zone. Its ruler stays its ruler."

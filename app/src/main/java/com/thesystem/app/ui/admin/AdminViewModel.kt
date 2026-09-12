@@ -92,7 +92,7 @@ class AdminViewModel @Inject constructor(
         _state.value = _state.value.copy(busy = true)
         admin.advanceBracket(id)
             .onSuccess { created ->
-                val msg = if (created > 0) "ROUND ADVANCED — $created new battles." else "🏆 CHAMPION CROWNED — prize pool paid."
+                val msg = if (created > 0) "ROUND ADVANCED — $created new battles." else "CHAMPION CROWNED — PRIZE POOL PAID."
                 _state.value = _state.value.copy(busy = false, notice = msg); refresh()
             }
             .onFailure { _state.value = _state.value.copy(busy = false, error = it.message?.take(160)) }

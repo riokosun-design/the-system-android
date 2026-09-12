@@ -1,87 +1,54 @@
 package com.thesystem.app.ui.territory
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.thesystem.app.BuildConfig
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
 
 /**
- * ── THE SYSTEM MAP ENGINE ────────────────────────────────────────────────────
- * MapTiler dark raster tiles through osmdroid with a strict QUOTA BUDGET:
+ * ── THE SYSTEM MAP ENGINE — MONOCHROME FIELD TERMINAL ───────────────────────
+ * No street tiles, no network, no quota. The map is a pitch-black plane;
+ * territory is drawn by TerritoryScreen as thin white geohash GRID lines
+ * (secret-military-system look). osmdroid is used purely as the geospatial
+ * projection + zoom/pan engine, fully offline.
  *
- *  1. AGGRESSIVE DISK CACHE — SqlTileWriter base + 150MB trim budget.
- *     Re-viewing a captured 1KM cell = ZERO API requests after first touch.
- *  2. ZOOM CLAMPED to 13.0–18.0 — nobody fans out to world-view tile spam.
- *  3. LAZY LIFECYCLE — MapView is only instantiated while the Territory tab is
- *     visible (Compose disposes it on tab switch), and tile downloads pause on
- *     ON_STOP via lifecycle observer.
- *  4. OFFLINE FALLBACK — the moment connectivity drops, dataConnection flips
- *     off and the provider serves cached tiles only. No crash, grey grid of cache.
- *
- * Free-tier budget (100k tiles/mo): a 13–18 zoom raid of one district ≈ 40–120
- * tiles per NEW area, 0 thereafter. Thousands of hunters fit inside the quota.
+ *  · zoom clamped 13.0–18.0
+ *  · data connection permanently off — the void tile source never fetches
+ *  · MapView paints its own black background where tiles would be
+ *  · lazy lifecycle: created while the Map tab lives, detached on switch
  */
 object SystemMapEngine {
 
     const val MIN_ZOOM = 13.0
     const val MAX_ZOOM = 18.0
 
-    // MapTiler dark raster — 256px PNGs (key sourced from BuildConfig, NOT hardcoded)
-    // streets-v2-dark = GLOBAL coverage (ch-swisstopo-lbm-dark is Switzerland-only →
-    // blank tiles outside CH — the Kolkata blank-map bug).
-    private fun tileUrl() =
-        "https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}.png?key=${BuildConfig.MAPTILER_API_KEY}"
-
-    val DarkTileSource: OnlineTileSourceBase by lazy {
-        object : OnlineTileSourceBase(
-            "SystemDarkMapTiler",
-            MIN_ZOOM.toInt(), MAX_ZOOM.toInt(), 256, ".png",
-            arrayOf("https://api.maptiler.com/maps/streets-v2-dark/"),
-        ) {
-            override fun getTileURLString(pMapTileIndex: Long): String =
-                baseUrl +
-                    MapTileIndex.getZoom(pMapTileIndex) + "/" +
-                    MapTileIndex.getX(pMapTileIndex) + "/" +
-                    MapTileIndex.getY(pMapTileIndex) +
-                    ".png?key=" + BuildConfig.MAPTILER_API_KEY
-        }
+    /** Network-less tile source: URL is never called (useDataConnection=false). */
+    private val VoidTileSource: OnlineTileSourceBase = object : OnlineTileSourceBase(
+        "VoidGrid",
+        MIN_ZOOM.toInt(), MAX_ZOOM.toInt(), 256, ".png",
+        arrayOf("http://127.0.0.1/"),
+    ) {
+        override fun getTileURLString(pMapTileIndex: Long): String = ""
     }
 
-    /** Cache budget — call once from Application.onCreate (osmdroid config singleton). */
+    /** Kept for the Application bootstrap; harmless with no network tiles. */
     fun configureDiskCache(context: Context) {
         val c = Configuration.getInstance()
         c.osmdroidTileCache = java.io.File(context.cacheDir, "system_tiles")
-        c.tileFileSystemCacheMaxBytes = 150L * 1024 * 1024      // 150MB ceiling…
-        c.tileFileSystemCacheTrimBytes = 100L * 1024 * 1024     // …trims DOWN to 100MB (the "min 100MB" you asked for)
-        c.expirationOverrideDuration = 1000L * 60 * 60 * 24 * 30  // treat tiles fresh for 30 days — re-views = 0 requests
+        c.tileFileSystemCacheMaxBytes = 50L * 1024 * 1024
+        c.tileFileSystemCacheTrimBytes = 32L * 1024 * 1024
     }
 
-    private fun isOnline(context: Context): Boolean {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val nc = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
-        return nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-    }
-
-    /**
-     * The Compose wrapper. Creates the MapView ONCE per tab-visit, wires
-     * lifecycle pause/resume, watches connectivity for the cache-only fallback,
-     * and fully detaches on tab switch (AnimatedContent disposal).
-     */
     @Composable
     fun rememberSystemMap(configure: MapView.() -> Unit): MapView {
         val context = LocalContext.current
@@ -89,43 +56,34 @@ object SystemMapEngine {
 
         val map = remember {
             MapView(context).apply {
-                setTileSource(DarkTileSource)
+                setTileSource(VoidTileSource)
                 setMultiTouchControls(true)
                 minZoomLevel = MIN_ZOOM
                 maxZoomLevel = MAX_ZOOM
                 isHorizontalMapRepetitionEnabled = false
                 isVerticalMapRepetitionEnabled = false
-                setUseDataConnection(isOnline(context)) // offline at birth → cache-only mode
-                zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER) // System rail owns zoom (2.6)
+                // void plane — always, no connectivity handling required
+                setUseDataConnection(false)
+                setBackgroundColor(android.graphics.Color.BLACK)
+                zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
                 configure()
             }
         }
 
-        // Lifecycle: pause tile threads the instant the app backgrounds
         DisposableEffect(lifecycleOwner) {
             val observer = LifecycleEventObserver { _, event ->
                 when (event) {
-                    Lifecycle.Event.ON_RESUME -> { map.setUseDataConnection(isOnline(context)); map.onResume() }
-                    Lifecycle.Event.ON_STOP -> map.onPause()   // downloads halt; cached rendering stays
+                    Lifecycle.Event.ON_RESUME -> map.onResume()
+                    Lifecycle.Event.ON_STOP -> map.onPause()
                     else -> Unit
                 }
             }
             lifecycleOwner.lifecycle.addObserver(observer)
-            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-        }
-
-        // Connectivity watch: offline → serve SQLite cache; online → quota-approved fetches
-        DisposableEffect(context) {
-            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            val cb = object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) { map.post { map.setUseDataConnection(true); map.invalidate() } }
-                override fun onLost(network: Network) { map.post { map.setUseDataConnection(false); map.invalidate() } }
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
             }
-            runCatching { cm.registerNetworkCallback(NetworkRequest.Builder().build(), cb) }
-            onDispose { runCatching { cm.unregisterNetworkCallback(cb) } }
         }
 
-        // Tab switch (this composable leaves composition) → FULL detach, zero tile churn
         DisposableEffect(Unit) {
             onDispose { map.onDetach() }
         }
@@ -134,8 +92,7 @@ object SystemMapEngine {
     }
 }
 
-/** Drop-in AndroidView bound to the quota-optimized engine.
- *  Returns the live MapView so callers can drive floating controls (zoom/recenter). */
+/** Drop-in AndroidView bound to the void engine. */
 @Composable
 fun SystemMapView(
     modifier: Modifier = Modifier,
