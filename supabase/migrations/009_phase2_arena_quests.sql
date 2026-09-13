@@ -25,6 +25,7 @@ alter table public.battles
 -- Tournament bracket fixtures stay 60s, nobody READY yet (same UX as before).
 
 -- ── create_battle now carries the chosen duel duration ──────────────────────
+drop function if exists public.create_battle(uuid);
 create or replace function public.create_battle(p_opponent uuid, p_duration_sec int default 60)
 returns uuid
 language plpgsql security definer set search_path = public as $$
@@ -118,7 +119,7 @@ begin
   v_losses := coalesce(v_total,0) - coalesce(v_wins,0);
   select level into v_level from public.users where id = p_user;
 
-  select coalesce(jsonb_agg(row order by (row->>'at') desc), '[]'::jsonb)
+  select coalesce(jsonb_agg(jr order by (jr->>'at') desc), '[]'::jsonb)
     into v_recent
   from (
     select jsonb_build_object(
@@ -126,7 +127,7 @@ begin
       'score_foe', case when player_a = p_user then score_b else score_a end,
       'won', winner = p_user,
       'at', finished_at
-    ) row
+    ) jr
     from public.battles
     where status = 'FINISHED' and p_user in (player_a, player_b)
     order by finished_at desc limit 5
