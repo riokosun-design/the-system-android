@@ -76,6 +76,14 @@ data class ProductDto(
     val active: Boolean = true,
 )
 
+/** log_quest_proof RPC result — server progress after the verified session. */
+@Serializable
+data class QuestProofResult(
+    val progress: Int = 0,
+    val target: Int = 0,
+    val complete: Boolean = false,
+)
+
 @Serializable
 data class QuestDto(
     val id: Long,

@@ -40,6 +40,19 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
     val scope = rememberCoroutineScope()
     var selectedCourse by remember { mutableStateOf(TrainingCourse.MONARCH) }
 
+    // returning from a verified proof session re-pulls quest progress
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        var first = true
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                if (first) first = false else vm.refresh()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     // ── effect signals: bump → one-shot animation fires ══════════════════════
     val (burstSignal, fireBurst) = rememberEffectSignal()
     val (floaterSignal, fireFloater) = rememberEffectSignal()
@@ -116,10 +129,11 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
                     } else {
                         item {
                             Box(Modifier.enterAnim(4)) {
+                                // LOG never trusts a tap — every goal opens an
+                                // on-device camera/sensor proof session first.
                                 AdaptiveQuestWindow(s.quests, selectedCourse) { q ->
-                                    haptics.success()
-                                    fireBurst()
-                                    vm.completeQuest(q)
+                                    haptics.tick()
+                                    nav.navigate(com.thesystem.app.Routes.questProof(q.id, q.focus().name, q.targetValue))
                                 }
                             }
                         }

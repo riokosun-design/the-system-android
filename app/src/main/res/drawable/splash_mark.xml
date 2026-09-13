@@ -1,37 +1,38 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
-  THE SYSTEM — monochrome cold-start mark.
-  Pure white "system window": squared frame + scan line + center node.
-  240dp canvas; art lives inside the central 160dp safe zone the
-  splash icon is masked to. No color anywhere, by contract.
--->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="240dp"
     android:height="240dp"
     android:viewportWidth="240"
-    android:viewportHeight="240">
-
-    <!-- outer system window -->
+    android:viewportHeight="240"
+    android:tint="#FFFFFF">
+    <!--
+      THE SYSTEM cold-start mark.
+      Android 12+ splash icons are masked to the central 2/3 safe circle
+      (~160/240), so every stroke stays inside radius 76 of the centre —
+      nothing is clipped. A precision-instrument watch bezel: thin ring,
+      12 o'clock index, one pivot dot. Pure white on black, no hue.
+    -->
+    <!-- bezel ring -->
     <path
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="6"
+        android:strokeWidth="7"
         android:fillColor="#00000000"
-        android:pathData="M66,58 H174 Q182,58 182,66 V174 Q182,182 174,182 H66 Q58,182 58,174 V66 Q58,58 66,58 Z" />
-
-    <!-- horizontal scan line -->
+        android:pathData="M120,46 A74,74 0 1 1 119.9,46 Z" />
+    <!-- 12 o'clock index -->
     <path
         android:strokeColor="#FFFFFF"
-        android:strokeAlpha="0.55"
-        android:strokeWidth="4"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
         android:fillColor="#00000000"
-        android:pathData="M78,120 H162" />
-
-    <!-- level node -->
+        android:pathData="M120,56 L120,70" />
+    <!-- 3 / 6 / 9 quiet ticks -->
+    <path
+        android:strokeColor="#888888"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M184,120 L172,120 M120,184 L120,170 M56,120 L68,120" />
+    <!-- pivot dot -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M120,104 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:fillAlpha="0.45"
-        android:pathData="M120,140 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+        android:pathData="M120,120 m-9,0 a9,9 0 1 0 18,0 a9,9 0 1 0 -18,0" />
 </vector>

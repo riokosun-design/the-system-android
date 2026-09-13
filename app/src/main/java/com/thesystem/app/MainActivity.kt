@@ -31,6 +31,7 @@ import com.thesystem.app.ui.chat.ChatHomeScreen
 import com.thesystem.app.ui.chat.ConversationScreen
 import com.thesystem.app.ui.onboarding.AwakeningFlowScreen
 import com.thesystem.app.ui.protocol.ProtocolScreen
+import com.thesystem.app.ui.quest.QuestProofScreen
 import com.thesystem.app.ui.splash.DynamicSplash
 import com.thesystem.app.ui.splash.SplashVariant
 import com.thesystem.app.ui.tabs.MainTabs
@@ -92,10 +93,12 @@ object Routes {
     const val CHAT = "chat"
     const val DM = "dm/{otherId}/{otherName}"
     const val BATTLE = "battle/{battleId}"
+    const val QUEST_PROOF = "quest/{questId}/{mode}/{target}"
     const val ADMIN = "admin"
     const val PROTOCOL = "protocol" // Black/White rooms + arcs — off the tab rail since 2.7
     fun dm(otherId: String, otherName: String) = "dm/$otherId/$otherName"
     fun battle(id: String) = "battle/$id"
+    fun questProof(questId: Long, mode: String, target: Int) = "quest/$questId/$mode/$target"
 }
 
 @AndroidEntryPoint
@@ -156,5 +159,11 @@ fun AppNavHost(profile: RootState.Ready, onSignOut: () -> Unit) {
         }
         composable(Routes.ADMIN) { AdminScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.PROTOCOL) { ProtocolScreen(nav = nav) }
+        composable(Routes.QUEST_PROOF) { backStack ->
+            val questId = backStack.arguments?.getString("questId")?.toLongOrNull() ?: return@composable
+            val mode = backStack.arguments?.getString("mode") ?: "PUSH"
+            val target = backStack.arguments?.getString("target")?.toIntOrNull() ?: 1
+            QuestProofScreen(questId = questId, mode = mode, target = target, onExit = { nav.popBackStack() })
+        }
     }
 }

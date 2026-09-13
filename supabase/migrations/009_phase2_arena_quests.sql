@@ -286,6 +286,62 @@ grant execute on function public.cancel_battle(uuid)                to authentic
 grant execute on function public.hunter_battle_stats(uuid)          to authenticated;
 grant execute on function public.ensure_daily_quests()              to authenticated;
 
+-- ── QUEST PROOF: a LOG only counts once a verified session is recorded ─────
+-- Tapping LOG with no camera/sensor evidence must never complete a quest.
+-- log_quest_proof writes an immutable workouts row AND advances progress
+-- atomically; complete_quest refuses until progress reaches the target.
+create or replace function public.log_quest_proof(
+  p_quest_id bigint, p_kind text, p_amount int, p_duration_sec int default 0
+) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare q public.daily_quests%rowtype; v_new int;
+begin
+  if p_kind not in ('QUEST_PUSH','QUEST_SQUAT','QUEST_RUN') then raise exception 'bad_kind'; end if;
+  if p_amount <= 0 then raise exception 'bad_amount'; end if;
+  select * into q from public.daily_quests where id = p_quest_id and user_id = auth.uid() for update;
+  if not found then raise exception 'no_quest'; end if;
+  if q.completed then raise exception 'already_done'; end if;
+
+  insert into public.workouts (user_id, kind, reps, duration_sec, xp_earned)
+  values (auth.uid(), p_kind,
+          case when p_kind = 'QUEST_RUN' then 0 else p_amount end,
+          greatest(p_duration_sec, 0), 0);
+
+  update public.daily_quests
+     set progress = least(progress + p_amount, target_value)
+   where id = q.id
+  returning progress into v_new;
+
+  return jsonb_build_object('progress', v_new, 'target', q.target_value,
+                            'complete', v_new >= q.target_value);
+end $$;
+
+-- Hardened: completion requires the verified target (server-enforced).
+create or replace function public.complete_quest(p_quest_id bigint) returns void
+language plpgsql security definer set search_path = public as $$
+declare q public.daily_quests%rowtype; bonus int := 0;
+begin
+  select * into q from public.daily_quests where id = p_quest_id and user_id = auth.uid() for update;
+  if not found then raise exception 'no_quest'; end if;
+  if q.completed then raise exception 'already_done'; end if;
+  if q.progress < q.target_value then raise exception 'quest_not_verified'; end if;
+
+  update public.daily_quests set completed = true, progress = q.target_value where id = q.id;
+  perform public.apply_xp(auth.uid(), q.xp_reward, null);
+  bonus := round(q.xp_reward * 0.25)::int;
+  perform public.credit_vc(auth.uid(), bonus, 'QUEST_REWARD', 'quest:' || q.id);
+end $$;
+
+grant execute on function public.log_quest_proof(bigint, text, int, int) to authenticated;
+
+-- Deprecated: naked progress bumps bypass physical proof. All advancement
+-- now goes through log_quest_proof (camera/sensor verified).
+create or replace function public.add_quest_progress(p_quest_id bigint, p_amount int) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  raise exception 'use log_quest_proof';
+end $$;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- ROLLBACK (manual, only if required):
 --   drop function public.hunter_battle_stats(uuid);

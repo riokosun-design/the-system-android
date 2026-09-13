@@ -102,10 +102,22 @@ class SystemRepository @Inject constructor(
         supabase.postgrest.rpc("complete_quest", buildJsonObject { put("p_quest_id", questId) }); Unit
     }
 
-    suspend fun addQuestProgress(questId: Long, amount: Int): Result<Unit> = runCatching {
-        supabase.postgrest.rpc("add_quest_progress", buildJsonObject {
-            put("p_quest_id", questId); put("p_amount", amount)
-        }); Unit
+    /**
+     * Log a physically-verified session (camera rep counts / sensor distance)
+     * against a quest: writes an immutable workouts proof row and advances
+     * progress atomically. Returns the post-log server progress state.
+     */
+    suspend fun logQuestProof(
+        questId: Long,
+        kind: String,        // QUEST_PUSH | QUEST_SQUAT | QUEST_RUN
+        amount: Int,         // reps (push/squat) or meters (run)
+        durationSec: Int,
+    ): Result<QuestProofResult> = runCatching {
+        val raw = supabase.postgrest.rpc("log_quest_proof", buildJsonObject {
+            put("p_quest_id", questId); put("p_kind", kind)
+            put("p_amount", amount); put("p_duration_sec", durationSec)
+        }).data ?: error("no response")
+        cacheJson.decodeFromString(QuestProofResult.serializer(), raw)
     }
 
     // ── Training Arcs (4-month anime courses, progression locked) ────────────
