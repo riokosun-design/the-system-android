@@ -49,11 +49,18 @@ class AuthRepository @Inject constructor(private val supabase: SupabaseClient) {
     }.getOrDefault(false)
 
     /** Final step of onboarding: write metrics + mark gate complete. Role/xp columns are trigger-guarded. */
-    suspend fun completeOnboarding(age: Int, heightCm: Double, weightKg: Double, goal: String): Result<Unit> = runCatching {
+    suspend fun completeOnboarding(
+        age: Int,
+        heightCm: Double,
+        weightKg: Double,
+        goal: String,
+        activityLevel: String = "STEADY",
+    ): Result<Unit> = runCatching {
         val uid = currentUserId ?: error("Not signed in")
         supabase.from("users").update({
             set("age", age); set("height_cm", heightCm); set("weight_kg", weightKg)
-            set("goal", goal); set("onboarding_completed", true)
+            set("goal", goal); set("activity_level", activityLevel.uppercase())
+            set("onboarding_completed", true)
         }) { filter { eq("id", uid) } }
         Unit
     }

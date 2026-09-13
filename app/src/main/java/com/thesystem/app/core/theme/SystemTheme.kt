@@ -31,6 +31,12 @@ val LabelGray  = Color(0xFF888888)  // secondary text / labels (spec #888)
 val FaintGray  = Color(0xFF555555)  // tertiary / disabled text
 val PaperWhite = Color(0xFFFFFFFF)  // primary text + primary actions
 
+// Phase-2 TRAINING accent — sky-blue is intentionally restricted to the
+// training surfaces (course carousel, quest window, system notifications).
+// The rest of the app stays pure black/white/gray.
+val SkyBlue = Color(0xFF38BDF8)
+val SkyBlueDim = Color(0x1F38BDF8)   // frosted-blue glass fill ~12%
+
 // ── Legacy token names — retained so the whole app inherits the re-skin.
 // Every former hue now resolves to a gray of the same semantic weight.
 val VoidBlack   = InkBlack

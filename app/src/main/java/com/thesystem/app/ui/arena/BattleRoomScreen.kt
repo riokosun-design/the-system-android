@@ -131,7 +131,7 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
     SystemBackground(wallpaperAlpha = 0.08f) {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
             Text("PUSH-UP WAR", style = MaterialTheme.typography.headlineMedium, color = PaperWhite)
-            Text("60 seconds. Winner +${SystemMath.BATTLE_WIN_XP} XP · Loser +${SystemMath.BATTLE_LOSS_XP} XP. No mercy.", style = MaterialTheme.typography.bodyMedium)
+            Text("${s.durationSec} SECONDS · Winner +${SystemMath.BATTLE_WIN_XP} XP · Loser +${SystemMath.BATTLE_LOSS_XP} XP. No mercy.", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(10.dp))
 
             if (!s.cameraGranted) {
@@ -207,15 +207,13 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                     Spacer(Modifier.height(8.dp))
                     NeonButton("LEAVE THE ARENA", onExit, Modifier.fillMaxWidth())
                 }
-                s.battle?.status == "LOBBY" -> NeonButton(
-                    "ENTER THE ARENA (BOTH HUNTERS GO LIVE)",
-                    { haptics.select(); vm.goLive(); vm.startTimer() },
-                    Modifier.fillMaxWidth().height(52.dp),
-                    enabled = s.cameraGranted,
-                )
-                !s.counting && s.battle?.status == "LIVE" -> NeonButton(
-                    "START COUNTDOWN", { vm.startTimer() }, Modifier.fillMaxWidth().height(52.dp)
-                )
+                s.battle?.status == "LOBBY" -> LobbyCard(s, vm, haptics, onExit)
+                s.battle?.status == "CANCELLED" -> GlowCard {
+                    Text("BATTLE CANCELLED", style = MaterialTheme.typography.titleLarge, color = PaperWhite)
+                    Text("The lobby was dismissed. Any prediction stakes are refunded.", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    NeonButton("LEAVE", onExit, Modifier.fillMaxWidth())
+                }
             }
             s.error?.let { Spacer(Modifier.height(8.dp)); RestrictionBanner(it) }
         }
@@ -247,6 +245,88 @@ private fun BoxScope.MomentumFlash(signal: Int, mine: Boolean) {
                     scaleX = sc; scaleY = sc
                 },
         )
+    }
+}
+
+/**
+ * LOBBY WAIT STAGE — both hunters must arm READY before the war goes LIVE.
+ * Quick-tap signal/taunt presets live here (no typing); spectators use this
+ * window to inspect profiles and join the prediction pool.
+ */
+private val LOBBY_PRESETS = listOf(
+    "Please wait, setting up phone.",
+    "Ready when you are, Hunter.",
+    "You are cooked.",
+    "I am cooked.",
+)
+
+@Composable
+private fun LobbyCard(s: BattleRoomState, vm: BattleRoomViewModel, haptics: SystemHaptics, onExit: () -> Unit) {
+    val b = s.battle
+    val opponentReady = s.opponentReadyOf(b, s.myId)
+    val amHost = b?.host == null || b.host == s.myId // older rows: player A hosts
+    GlowCard {
+        Text("LOBBY — ARM READY", style = MaterialTheme.typography.labelLarge, color = PaperWhite)
+        Text(
+            "Both hunters must be READY. The duel runs ${s.durationSec}s. Spectators are inspecting and joining the prediction pool.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(8.dp))
+        androidx.compose.foundation.layout.Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(if (s.myReady) "YOU — READY" else "YOU — WAITING",
+                    color = if (s.myReady) PaperWhite else LabelGray,
+                    style = MaterialTheme.typography.labelLarge)
+            }
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(if (opponentReady) "RIVAL — READY" else "RIVAL — WAITING",
+                    color = if (opponentReady) PaperWhite else LabelGray,
+                    style = MaterialTheme.typography.labelLarge)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+
+        // taunt/signal feed
+        if (s.taunts.isNotEmpty()) {
+            s.taunts.takeLast(3).forEach { line ->
+                Text(
+                    (if (line.fromMe) "YOU: " else "RIVAL: ") + line.text,
+                    color = if (line.fromMe) PaperWhite else LabelGray,
+                    style = MonoLabel,
+                    modifier = Modifier.padding(vertical = 2.dp),
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+
+        // one-tap presets, 2×2
+        LOBBY_PRESETS.chunked(2).forEach { pair ->
+            androidx.compose.foundation.layout.Row(
+                Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                pair.forEach { msg ->
+                    GhostButton(msg, { haptics.tick(); vm.sendTaunt(msg) }, Modifier.weight(1f))
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+
+        NeonButton(
+            if (s.myReady) "STAND DOWN" else if (s.cameraGranted) "READY" else "GRANT CAMERA TO READY",
+            { haptics.select(); vm.toggleReady() },
+            Modifier.fillMaxWidth().height(52.dp),
+            enabled = s.cameraGranted || s.myReady,
+        )
+        Spacer(Modifier.height(8.dp))
+        GhostButton(if (amHost) "CANCEL — RIVAL NEVER SHOWED" else "LEAVE LOBBY", {
+            haptics.select()
+            if (amHost) vm.cancelLobby(onExit) else onExit()
+        }, Modifier.fillMaxWidth())
     }
 }
 

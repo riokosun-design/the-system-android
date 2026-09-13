@@ -318,7 +318,7 @@ private fun PoolsTab(s: AdminState, vm: AdminViewModel) {
             GlowCard(glow = ElectricBlue) {
                 Text("Pool ${SystemMath.formatVc(pool.totalPoolVc)} · A ${SystemMath.formatVc(pool.totalAVc)} / B ${SystemMath.formatVc(pool.totalBVc)} · ${pool.status}",
                     color = TextPrimary, style = MaterialTheme.typography.titleMedium)
-                Text("House cut: ${pool.platformCutBps / 100}% taken before distribution.", style = MaterialTheme.typography.labelSmall)
+                Text("Platform cut ${pool.platformCutBps / 100}% · 20% of it is paid to the war winner on settle.", style = MaterialTheme.typography.labelSmall)
                 if (pool.status != "SETTLED") Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
                     NeonButton("A WON", { haptics.slam(); vm.settlePool(pool.id, "A") }, Modifier.weight(1f), enabled = !s.busy)
                     NeonButton("B WON", { haptics.slam(); vm.settlePool(pool.id, "B") }, Modifier.weight(1f), color = CrimsonRed, enabled = !s.busy)

@@ -187,8 +187,35 @@ data class BattleDto(
     @SerialName("score_a") val scoreA: Int = 0,
     @SerialName("score_b") val scoreB: Int = 0,
     val status: String = "LOBBY", // LOBBY | LIVE | FINISHED | CANCELLED
+    @SerialName("duration_sec") val durationSec: Int = 60,
+    @SerialName("player_a_ready") val playerAReady: Boolean = false,
+    @SerialName("player_b_ready") val playerBReady: Boolean = false,
+    val host: String? = null,
     val winner: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("started_at") val startedAt: String? = null,
+)
+
+/** Hunter battle-stats sheet (RPC hunter_battle_stats) — pre-prediction inspection. */
+@Serializable
+data class HunterStatsDto(
+    @SerialName("user_id") val userId: String,
+    val level: Int = 1,
+    val total: Int = 0,
+    val wins: Int = 0,
+    val losses: Int = 0,
+    @SerialName("win_rate") val winRate: Int = 0,
+    @SerialName("avg_score") val avgScore: Int = 0,
+    @SerialName("pace_per_min") val pacePerMin: Int = 0,
+    val recent: List<HunterStatsRecentDto> = emptyList(),
+)
+
+@Serializable
+data class HunterStatsRecentDto(
+    @SerialName("score_me") val scoreMe: Int = 0,
+    @SerialName("score_foe") val scoreFoe: Int = 0,
+    val won: Boolean = false,
+    val at: String? = null,
 )
 
 @Serializable

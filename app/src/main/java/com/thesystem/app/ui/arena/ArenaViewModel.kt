@@ -27,6 +27,11 @@ data class ArenaState(
     val searchingOpponent: Boolean = false,
     val opponentQuery: String = "",
     val opponentResults: List<UserDto> = emptyList(),
+    // profile-inspection sheet (pre-prediction diligence)
+    val inspectingUserId: String? = null,
+    val inspectingName: String = "",
+    val hunterStats: HunterStatsDto? = null,
+    val statsLoading: Boolean = false,
     val notice: String? = null,
     val error: String? = null,
 )
@@ -83,17 +88,31 @@ class ArenaViewModel @Inject constructor(
         }
     }
 
-    fun challenge(opponent: UserDto, onCreated: (String) -> Unit) = viewModelScope.launch {
-        arena.challenge(opponent.id)
+    fun challenge(opponent: UserDto, durationSec: Int, onCreated: (String) -> Unit) = viewModelScope.launch {
+        arena.challenge(opponent.id, durationSec)
             .onSuccess { battleId -> onCreated(battleId) }
             .onFailure { _state.value = _state.value.copy(error = friendlyRpcError(it.message)) }
     }
 
+    // ── Hunter profile inspection (win rate, level, pace, last 5 wars) ──────
+    fun inspectHunter(id: String, username: String) = viewModelScope.launch {
+        _state.value = _state.value.copy(
+            inspectingUserId = id, inspectingName = username,
+            hunterStats = null, statsLoading = true,
+        )
+        val stats = arena.hunterStats(id)
+        _state.value = _state.value.copy(hunterStats = stats, statsLoading = false)
+    }
+
+    fun dismissInspection() {
+        _state.value = _state.value.copy(inspectingUserId = null, hunterStats = null, statsLoading = false)
+    }
+
     // ── Prediction betting ───────────────────────────────────────────────────
-    fun placeBet(pool: PoolDto, side: String, amount: Long) = viewModelScope.launch {
+    fun placePrediction(pool: PoolDto, side: String, amount: Long) = viewModelScope.launch {
         arena.placeBet(pool.id, side, amount)
             .onSuccess {
-                _state.value = _state.value.copy(notice = "BET LOCKED · ${SystemMath.formatVc(amount)} on side $side · 15% house cut applies to the pool.")
+                _state.value = _state.value.copy(notice = "PREDICTION LOCKED · ${SystemMath.formatVc(amount)} backing side $side · 15% platform cut, 20% of it pays the war winner.")
                 refresh()
             }
             .onFailure { _state.value = _state.value.copy(error = friendlyRpcError(it.message)) }
@@ -104,7 +123,9 @@ class ArenaViewModel @Inject constructor(
         msg.contains("insufficient_vc") -> "Insufficient VC. Grind quests, the CPA wall, or sell your glory."
         msg.contains("treasury_insufficient") -> "Guild treasury can't cover the entry fee. Fill the coffers via territory taxes first."
         msg.contains("already_joined") -> "You are already registered for this tournament."
-        msg.contains("already_bet") -> "One bet per pool, hunter. Stand by your conviction."
+        msg.contains("already_bet") -> "One prediction per pool, hunter. Stand by your backing."
+        msg.contains("bad_duration") -> "Pick a legal duel length: 30, 60 or 120 seconds."
+        msg.contains("not_in_lobby") -> "The lobby has already closed."
         msg.contains("pool_locked") -> "This pool is locked — the battle has begun."
         msg.contains("not_member") -> "Your Shadow Guild must join clan tournaments as a unit."
         msg.contains("clan_required") -> "You need a Shadow Guild to enter clan tournaments."

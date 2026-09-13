@@ -214,7 +214,7 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
 
     // Google seal → finalize the contract through the existing VM pipeline
     LaunchedEffect(ui.signedInProfile != null) {
-        if (ui.signedInProfile != null) vm.finish(onDone)
+        if (ui.signedInProfile != null) vm.finish(onDone, activityName)
     }
 
     SystemBackdrop {

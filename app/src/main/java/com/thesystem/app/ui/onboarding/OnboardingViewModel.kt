@@ -133,7 +133,7 @@ class OnboardingViewModel @Inject constructor(
     }
 
     /** Finalize: claim handle → save metrics → mark complete → apply referral (optional). */
-    fun finish(onDone: () -> Unit) {
+    fun finish(onDone: () -> Unit, activityLevel: String = "STEADY") {
         val s = _ui.value
         if (s.busy || s.usernameAvailable != true) return
         _ui.value = s.copy(busy = true, error = null)
@@ -143,7 +143,7 @@ class OnboardingViewModel @Inject constructor(
                 _ui.value = _ui.value.copy(busy = false, error = claimed.exceptionOrNull()?.message ?: "Username rejected")
                 return@launch
             }
-            auth.completeOnboarding(s.age, s.heightCm.toDouble(), s.weightKg.toDouble(), s.goal)
+            auth.completeOnboarding(s.age, s.heightCm.toDouble(), s.weightKg.toDouble(), s.goal, activityLevel)
                 .onFailure { _ui.value = _ui.value.copy(error = it.message) }
             if (s.referralCode.isNotBlank()) runCatching { auth.applyReferralCode(s.referralCode) }
             _ui.value = _ui.value.copy(busy = false)

@@ -1,5 +1,7 @@
 package com.thesystem.app.ui.arena
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -62,10 +64,24 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
 @Composable
 private fun BattlesTab(s: ArenaState, vm: ArenaViewModel, nav: NavHostController) {
     val haptics = rememberSystemHaptics()
+    var duelDuration by remember { mutableIntStateOf(60) }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
         item {
             GlowCard(glow = CrimsonRed) {
                 Text("SUMMON A RIVAL", style = MaterialTheme.typography.labelLarge, color = CrimsonRed)
+                Spacer(Modifier.height(6.dp))
+                Text("DUEL LENGTH", style = MonoLabel)
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf(30, 60, 120).forEach { secs ->
+                        val picked = duelDuration == secs
+                        val label = if (secs < 60) "${secs}s" else "${secs / 60} min"
+                        NeonButton(label, { haptics.tick(); duelDuration = secs }, Modifier.weight(1f),
+                            color = if (picked) PaperWhite else LabelGray)
+                    }
+                }
                 OutlinedTextField(
                     value = s.opponentQuery,
                     onValueChange = vm::onOpponentQuery,
@@ -77,7 +93,7 @@ private fun BattlesTab(s: ArenaState, vm: ArenaViewModel, nav: NavHostController
                 s.opponentResults.take(4).forEach { u ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("@${u.username} · LV ${u.level}", color = TextPrimary, modifier = Modifier.weight(1f))
-                        NeonButton("CHALLENGE", { haptics.select(); vm.challenge(u) { id -> nav.navigate(Routes.battle(id)) } }, color = CrimsonRed)
+                        NeonButton("CHALLENGE", { haptics.select(); vm.challenge(u, duelDuration) { id -> nav.navigate(Routes.battle(id)) } }, color = CrimsonRed)
                     }
                 }
             }
@@ -98,7 +114,14 @@ private fun BattlesTab(s: ArenaState, vm: ArenaViewModel, nav: NavHostController
                             color = if (b.status == "LIVE") CrimsonRed else TextMuted)
                     }
                     when {
-                        meIn && b.status != "FINISHED" -> NeonButton("ENTER", { nav.navigate(Routes.battle(b.id)) })
+                        meIn && b.status == "LOBBY" -> Column(horizontalAlignment = Alignment.End) {
+                            val readyCount = listOf(b.playerAReady, b.playerBReady).count { it }
+                            Text("READY $readyCount/2", color = PaperWhite, style = MonoLabel)
+                            Spacer(Modifier.height(4.dp))
+                            NeonButton("ENTER LOBBY", { nav.navigate(Routes.battle(b.id)) })
+                        }
+                        meIn && b.status == "LIVE" -> NeonButton("ENTER WAR", { nav.navigate(Routes.battle(b.id)) })
+                        b.status == "LOBBY" -> Text("[ OPEN LOBBY · ${b.durationSec}s ]", color = LabelGray, style = MonoLabel)
                         b.status == "LIVE" -> Text("[ LIVE ]", color = PaperWhite, style = MonoLabel)
                         b.status == "FINISHED" -> Text(if (b.winner == s.profile?.id) "VICTORY" else "CLOSED", color = VenomGreen, style = MaterialTheme.typography.labelLarge)
                     }
@@ -152,37 +175,44 @@ private fun TournamentsTab(s: ArenaState, vm: ArenaViewModel) {
     }
 }
 
-// ── PREDICT (dynamic betting, 15% house cut) ─────────────────────────────────
+// ── PREDICT (prediction pools; "bet/wager" language is deliberately absent) ──
 @Composable
 private fun PredictTab(s: ArenaState, vm: ArenaViewModel) {
     val haptics = rememberSystemHaptics()
-    var betPool by remember { mutableStateOf<PoolDto?>(null) }
-    var betBattle by remember { mutableStateOf<BattleDto?>(null) }
-    var betSide by remember { mutableStateOf("A") }
-    var betAmount by remember { mutableStateOf("100") }
+    var poolSheet by remember { mutableStateOf<PoolDto?>(null) }
+    var sheetBattle by remember { mutableStateOf<BattleDto?>(null) }
+    var sheetSide by remember { mutableStateOf("A") }
+    var sheetAmount by remember { mutableStateOf("100") }
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
-        item { SectionTitle("Prediction Pools — 15% house cut", ElectricBlue) }
+        item { SectionTitle("Prediction Pools · 15% platform cut · 20% to winner", ElectricBlue) }
         if (s.pools.isEmpty()) item { EmptyState("No open pools. Pools spawn automatically when a battle is created.") }
         items(s.pools, key = { it.first.id }) { (pool, battle) ->
             GlowCard(glow = ElectricBlue) {
-                Text("@${battle?.playerAName ?: "A"} vs @${battle?.playerBName ?: "B"}", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+                // combatant row — tap a name to inspect the hunter before backing
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    HunterNameChip(battle?.playerA, battle?.playerAName, vm, Modifier.weight(1f))
+                    Text(" VS ", style = MonoLabel)
+                    HunterNameChip(battle?.playerB, battle?.playerBName, vm, Modifier.weight(1f), alignEnd = true)
+                }
                 Text(
                     "Pool ${SystemMath.formatVc(pool.totalPoolVc)} · A ${SystemMath.formatVc(pool.totalAVc)} / B ${SystemMath.formatVc(pool.totalBVc)}",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(8.dp))
-                NeonButton("PLACE PREDICTION", { haptics.select(); betPool = pool; betBattle = battle; betSide = "A"; betAmount = "100" }, Modifier.fillMaxWidth())
+                NeonButton("PREDICT — BACK A HUNTER", {
+                    haptics.select(); poolSheet = pool; sheetBattle = battle; sheetSide = "A"; sheetAmount = "100"
+                }, Modifier.fillMaxWidth())
             }
         }
-        item { SectionTitle("My Bets", ElectricBlue) }
-        items(s.myBets, key = { it.id }) { bet ->
+        item { SectionTitle("My Predictions", ElectricBlue) }
+        items(s.myBets, key = { it.id }) { pred ->
             Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Side ${bet.side}", style = MaterialTheme.typography.labelSmall, color = ElectricBlue, modifier = Modifier.width(60.dp))
-                Text(SystemMath.formatVc(bet.amountVc), color = TextPrimary, modifier = Modifier.weight(1f))
+                Text("SIDE ${pred.side}", style = MaterialTheme.typography.labelSmall, color = ElectricBlue, modifier = Modifier.width(70.dp))
+                Text(SystemMath.formatVc(pred.amountVc), color = TextPrimary, modifier = Modifier.weight(1f))
                 Text(
-                    when (bet.status) { "WON" -> "+${SystemMath.formatVc(bet.payoutVc ?: 0)} WON"; "LOST" -> "LOST"; "REFUNDED" -> "REFUNDED"; else -> "OPEN" },
-                    color = when (bet.status) { "WON" -> VenomGreen; "LOST" -> CrimsonRed; else -> TextMuted },
+                    when (pred.status) { "WON" -> "+${SystemMath.formatVc(pred.payoutVc ?: 0)} WON"; "LOST" -> "MISSED"; "REFUNDED" -> "REFUNDED"; else -> "OPEN" },
+                    color = when (pred.status) { "WON" -> VenomGreen; "LOST" -> CrimsonRed; else -> TextMuted },
                     style = MaterialTheme.typography.labelLarge,
                 )
             }
@@ -190,43 +220,113 @@ private fun PredictTab(s: ArenaState, vm: ArenaViewModel) {
         item { Spacer(Modifier.height(80.dp)) }
     }
 
-    // Betting sheet with live payout preview: (Bet / WinningPool) × TotalPool × 0.85
-    betPool?.let { pool ->
-        val amount = betAmount.toLongOrNull() ?: 0L
-        val projectedWinningPool = (if (betSide == "A") pool.totalAVc else pool.totalBVc) + amount
+    // Inspection sheet — win rate / level / pace / last 5 wars before predicting
+    s.inspectingUserId?.let {
+        HunterInspectDialog(s, vm)
+    }
+
+    // Prediction sheet with live payout preview: (Back / WinningPool) × Total × 0.85
+    poolSheet?.let { pool ->
+        val amount = sheetAmount.toLongOrNull() ?: 0L
+        val projectedWinningPool = (if (sheetSide == "A") pool.totalAVc else pool.totalBVc) + amount
         val projectedTotal = pool.totalPoolVc + amount
         val payout = SystemMath.expectedPayout(amount, projectedWinningPool, projectedTotal)
         AlertDialog(
-            onDismissRequest = { betPool = null },
+            onDismissRequest = { poolSheet = null },
             containerColor = SurfaceDark,
-            title = { Text("PREDICT — @${betBattle?.playerAName ?: "A"} vs @${betBattle?.playerBName ?: "B"}", color = ElectricBlue) },
+            title = { Text("BACK A HUNTER — @${sheetBattle?.playerAName ?: "A"} vs @${sheetBattle?.playerBName ?: "B"}", color = ElectricBlue) },
             text = {
                 Column {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        NeonButton("SIDE A — @${betBattle?.playerAName ?: "A"}", { betSide = "A" }, Modifier.weight(1f), color = if (betSide == "A") ElectricBlue else TextMuted)
-                        NeonButton("SIDE B — @${betBattle?.playerBName ?: "B"}", { betSide = "B" }, Modifier.weight(1f), color = if (betSide == "B") CrimsonRed else TextMuted)
+                        NeonButton("BACK A · @${sheetBattle?.playerAName ?: "A"}", { sheetSide = "A" }, Modifier.weight(1f), color = if (sheetSide == "A") PaperWhite else LabelGray)
+                        NeonButton("BACK B · @${sheetBattle?.playerBName ?: "B"}", { sheetSide = "B" }, Modifier.weight(1f), color = if (sheetSide == "B") PaperWhite else LabelGray)
                     }
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
-                        value = betAmount, onValueChange = { betAmount = it.filter(Char::isDigit).take(9) },
-                        label = { Text("Bet (VC)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        value = sheetAmount, onValueChange = { sheetAmount = it.filter(Char::isDigit).take(9) },
+                        label = { Text("Backing amount (VC)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ElectricBlue, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary),
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text("Projected payout: ${SystemMath.formatVc(payout)}", color = HunterGold, fontWeight = FontWeight.Bold)
-                    Text("Formula: (your bet ${SystemMath.formatVc(amount)} ÷ winning pool ${SystemMath.formatVc(projectedWinningPool)}) × (total ${SystemMath.formatVc(projectedTotal)} × 0.85)",
+                    Text("Projected payout: ${SystemMath.formatVc(payout)}", color = PaperWhite, fontWeight = FontWeight.Bold)
+                    Text("Formula: (your backing ${SystemMath.formatVc(amount)} ÷ winning side pool ${SystemMath.formatVc(projectedWinningPool)}) × (total ${SystemMath.formatVc(projectedTotal)} × 0.85)",
                         style = MaterialTheme.typography.bodyMedium)
                     Text("Balance: ${SystemMath.formatVc(s.profile?.vcBalance ?: 0)}", style = MaterialTheme.typography.labelSmall)
                 }
             },
             confirmButton = {
-                NeonButton("LOCK BET", {
-                    haptics.success(); vm.placeBet(pool, betSide, amount); betPool = null
-                }, enabled = amount > 0 && amount <= (s.profile?.vcBalance ?: 0), color = HunterGold)
+                NeonButton("LOCK PREDICTION", {
+                    haptics.success(); vm.placePrediction(pool, sheetSide, amount); poolSheet = null
+                }, enabled = amount > 0 && amount <= (s.profile?.vcBalance ?: 0))
             },
-            dismissButton = { TextButton(onClick = { betPool = null }) { Text("Cancel", color = TextMuted) } },
+            dismissButton = { TextButton(onClick = { poolSheet = null }) { Text("Cancel", color = TextMuted) } },
         )
     }
+}
+
+/** Tappable hunter label that opens the stats inspection sheet. */
+@Composable
+private fun HunterNameChip(
+    id: String?,
+    name: String?,
+    vm: ArenaViewModel,
+    modifier: Modifier = Modifier,
+    alignEnd: Boolean = false,
+) {
+    val haptics = rememberSystemHaptics()
+    if (id == null) { Text("@${name ?: "?"}", modifier = modifier); return }
+    Text(
+        "@${name ?: "?"}  ⓘ",
+        color = PaperWhite,
+        style = MaterialTheme.typography.titleMedium,
+        textAlign = if (alignEnd) androidx.compose.ui.text.style.TextAlign.End else androidx.compose.ui.text.style.TextAlign.Start,
+        modifier = modifier
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { haptics.tick(); vm.inspectHunter(id, name ?: "?") },
+    )
+}
+
+/** Pre-prediction hunter dossier: win rate, level, pace, recent wars. */
+@Composable
+private fun HunterInspectDialog(s: ArenaState, vm: ArenaViewModel) {
+    AlertDialog(
+        onDismissRequest = vm::dismissInspection,
+        containerColor = SurfaceDark,
+        title = { Text("@${s.inspectingName}", color = ElectricBlue) },
+        text = {
+            Column {
+                if (s.statsLoading || s.hunterStats == null) {
+                    Text("Compiling dossier…", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    val st = s.hunterStats
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        StatTile("LEVEL", "${st.level}", modifier = Modifier.weight(1f))
+                        StatTile("WIN RATE", "${st.winRate}%", modifier = Modifier.weight(1f))
+                        StatTile("WARS", "${st.total}", modifier = Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        StatTile("W / L", "${st.wins}/${st.losses}", modifier = Modifier.weight(1f))
+                        StatTile("AVG REPS", "${st.avgScore}", modifier = Modifier.weight(1f))
+                        StatTile("PACE/MIN", "${st.pacePerMin}", modifier = Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text("RECENT 5 WARS", style = MonoLabel)
+                    Spacer(Modifier.height(4.dp))
+                    st.recent.forEach { r ->
+                        val tag = if (r.won) "W  " else "L  "
+                        Text("$tag ${r.scoreMe} – ${r.scoreFoe}",
+                            color = if (r.won) PaperWhite else LabelGray,
+                            style = MaterialTheme.typography.labelLarge)
+                    }
+                    if (st.recent.isEmpty()) Text("No wars on record yet.", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        },
+        confirmButton = { NeonButton("CLOSE", vm::dismissInspection) },
+    )
 }
 
 // ── RANKS — ROUND 5: rows spring to new positions, climbers show ▲▼ deltas ═══

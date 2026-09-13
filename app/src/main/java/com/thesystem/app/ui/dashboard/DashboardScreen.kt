@@ -38,6 +38,7 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
     val haptics = rememberSystemHaptics()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    var selectedCourse by remember { mutableStateOf(TrainingCourse.MONARCH) }
 
     // ── effect signals: bump → one-shot animation fires ══════════════════════
     val (burstSignal, fireBurst) = rememberEffectSignal()
@@ -105,16 +106,22 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
                         }
                     }
                     item { Box(Modifier.enterAnim(3)) { BuffsCard(s) } }
-                    item { Box(Modifier.enterAnim(4)) { SectionTitle("Daily Anime Quests — Leguna S.1 AI") } }
-                    if (s.quests.isEmpty()) item { EmptyState("Leguna is compiling your daily protocol… pull to refresh.") }
-                    items(s.quests, key = { it.id }) { q ->
-                        // PENALTY RISK tags arm in the evening or once decay has begun
-                        val lateDay = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) >= 21
-                        val risk = (s.profile?.missedDays ?: 0) > 0 || lateDay
-                        QuestCard(q, penaltyRisk = risk) {
-                            haptics.success()
-                            fireBurst()
-                            vm.completeQuest(q)
+                    item {
+                        Box(Modifier.enterAnim(4)) {
+                            CourseCarousel(selectedCourse, onSelect = { c -> haptics.tick(); selectedCourse = c })
+                        }
+                    }
+                    if (s.quests.isEmpty()) {
+                        item { EmptyState("The System is compiling your adaptive protocol… pull to refresh.") }
+                    } else {
+                        item {
+                            Box(Modifier.enterAnim(4)) {
+                                AdaptiveQuestWindow(s.quests, selectedCourse) { q ->
+                                    haptics.success()
+                                    fireBurst()
+                                    vm.completeQuest(q)
+                                }
+                            }
                         }
                     }
                     item { Box(Modifier.enterAnim(5)) { FormsStrip(s) } }
@@ -128,8 +135,8 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
                 val total = s.quests.size
                 val cleared = s.quests.count { it.completed }
                 val allDone = cleared == total
-                val base = 4 + if ((s.profile?.missedDays ?: 0) > 0) 1 else 0
-                val firstOpen = base + s.quests.indexOfFirst { !it.completed }
+                // header, [penalty], stats, buffs, carousel, quest window → index 4 (+penalty)
+                val firstOpen = 4 + if ((s.profile?.missedDays ?: 0) > 0) 1 else 0
                 StickyActionBar(
                     status = "$cleared/$total QUESTS CLEARED",
                     statusColor = if (allDone) VenomGreen else ElectricBlue,
@@ -150,6 +157,19 @@ fun DashboardScreen(nav: NavHostController, vm: DashboardViewModel = hiltViewMod
                 LevelUpBanner(levelUpSignal, level = previousLevel)
             }
             SnackbarHost(snack, Modifier.align(Alignment.BottomCenter))
+
+            // one-time Player qualification modal (HUD notification language)
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val prefs = remember { ctx.getSharedPreferences("system_hud", 0) }
+            var showPlayerNote by remember { mutableStateOf(!prefs.getBoolean("notif_player_v1", false)) }
+            SystemNotificationModal(
+                visible = showPlayerNote && !s.loading && s.profile != null,
+                body = "You have acquired the qualifications to be a Player. Your daily protocol is calibrated from your body metrics and grows with you. Will you accept?",
+                onAccept = {
+                    showPlayerNote = false
+                    prefs.edit().putBoolean("notif_player_v1", true).apply()
+                },
+            )
         }
     }
 }
@@ -227,72 +247,36 @@ private fun BuffsCard(s: DashboardState) {
     }
 }
 
-// ── QUEST CARD — animated fill, press-squish, CLEARED flips green ═══════════
+// ── ADAPTIVE QUEST WINDOW — BMR-scaled daily protocol, sky-blue HUD frame ────
+
+private fun QuestDto.focus(): QuestFocus = when {
+    title.contains("PUSH", ignoreCase = true) -> QuestFocus.PUSH
+    title.contains("SQUAT", ignoreCase = true) -> QuestFocus.SQUAT
+    else -> QuestFocus.RUN
+}
+
+private fun QuestDto.goalLabel(): String = when (focus()) {
+    QuestFocus.PUSH -> "PUSH-UP"
+    QuestFocus.SQUAT -> "SQUAT"
+    QuestFocus.RUN -> "RUN"
+}
 
 @Composable
-private fun QuestCard(q: QuestDto, penaltyRisk: Boolean = false, onComplete: () -> Unit) {
-    val done = q.completed
-    val progress by animateFloatAsState(
-        targetValue = if (q.targetValue > 0) (q.progress.toFloat() / q.targetValue).coerceIn(0f, 1f) else 0f,
-        animationSpec = SystemMotion.springSoft,
-        label = "questFill",
-    )
-    val doneAlpha by animateFloatAsState(if (done) 1f else 0f, label = "questDone")
-    // MONOCHROME: flat panel, status carried by type/shade only, one white line
-    // for progress over a dark-gray track. No side bars, no hue anywhere.
-    HudFrameCard(modifier = Modifier.pressScale(0.98f)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("DAILY QUEST", color = FaintGray, fontSize = 9.sp,
-                fontFamily = SystemMono, letterSpacing = 2.sp)
-            Spacer(Modifier.weight(1f))
-            when {
-                done -> HudTag("COMPLETE", PaperWhite)
-                penaltyRisk -> HudTag("PENALTY RISK", PaperWhite)
-                else -> HudTag("IN PROGRESS", LabelGray)
-            }
-        }
-        Spacer(Modifier.height(Grid.S8))
-        Text(q.title, style = MaterialTheme.typography.titleMedium, color = if (done) LabelGray else PaperWhite)
-        Spacer(Modifier.height(Grid.S8))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                // white hair over dark gray track — the only progress language
-                Box(Modifier.fillMaxWidth().height(2.dp).background(TrackGray, androidx.compose.foundation.shape.RoundedCornerShape(1.dp))) {
-                    Box(
-                        Modifier.fillMaxHeight().fillMaxWidth(progress)
-                            .background(if (done) LabelGray else PaperWhite, androidx.compose.foundation.shape.RoundedCornerShape(1.dp))
-                    )
-                }
-                Spacer(Modifier.height(Grid.S8))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    SystemChip("+${q.xpReward} XP", PaperWhite)
-                    Spacer(Modifier.width(Grid.S8))
-                    Text("${q.progress}/${q.targetValue}", style = MonoLabel)
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Box(contentAlignment = Alignment.Center) {
-                // LOG fades out / CLEARED stamps in — crossfade on one slot
-                if (doneAlpha < 1f) {
-                    Box(Modifier.graphicsLayer { alpha = 1f - doneAlpha }) {
-                        NeonButton("LOG", onComplete)
-                    }
-                }
-                if (doneAlpha > 0f) {
-                    Text(
-                        "CLEARED",
-                        color = PaperWhite,
-                        style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.graphicsLayer {
-                            alpha = doneAlpha
-                            val s = 0.8f + 0.2f * doneAlpha
-                            scaleX = s; scaleY = s
-                        },
-                    )
-                }
-            }
-        }
+private fun AdaptiveQuestWindow(
+    quests: List<QuestDto>,
+    course: TrainingCourse,
+    onLog: (QuestDto) -> Unit,
+) {
+    // the selected course's focus rows first, then the rest of the protocol
+    val ordered = quests.sortedByDescending { it.focus() == course.focus }
+    val goals = ordered.map { q ->
+        QuestGoal(
+            label = q.goalLabel(),
+            progress = q.progress.coerceAtMost(q.targetValue),
+            target = q.targetValue,
+        ) { onLog(q) }
     }
+    QuestWindowCard(goals)
 }
 
 // ── FORMS STRIP — power rolls up; mystery stays mysterious ══════════════════

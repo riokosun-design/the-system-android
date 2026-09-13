@@ -15,6 +15,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -25,6 +26,8 @@ import javax.inject.Singleton
 /** Arena: tournaments (VC entry fees), realtime push-up battles, prediction pools, leaderboards. */
 @Singleton
 class ArenaRepository @Inject constructor(private val supabase: SupabaseClient) {
+
+    private val statsJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
     private val uid: String? get() = supabase.auth.currentSessionOrNull()?.user?.id
 
@@ -62,18 +65,32 @@ class ArenaRepository @Inject constructor(private val supabase: SupabaseClient) 
         supabase.from("battles_with_names").select { filter { eq("id", id) } }.decodeList<BattleDto>().firstOrNull()
     }.getOrNull()
 
-    suspend fun challenge(opponentId: String): Result<String> = runCatching {
-        val res = supabase.postgrest.rpc("create_battle", buildJsonObject { put("p_opponent", opponentId) })
+    suspend fun challenge(opponentId: String, durationSec: Int = 60): Result<String> = runCatching {
+        val res = supabase.postgrest.rpc("create_battle", buildJsonObject {
+            put("p_opponent", opponentId); put("p_duration_sec", durationSec)
+        })
         res.data?.trim('"') ?: error("create_battle returned no id")
     }
 
-    /** Falls out of the lobby into LIVE for both players simultaneously (via Realtime). */
-    suspend fun goLive(battleId: String): Result<Unit> = runCatching {
-        supabase.from("battles").update({
-            set("status", "LIVE"); set("started_at", java.time.Instant.now().toString())
-        }) { filter { eq("id", battleId); eq("status", "LOBBY") } }
-        Unit
+    /** Arm/disarm READY in the lobby; the server flips the battle LIVE once BOTH are ready. */
+    suspend fun setReady(battleId: String, ready: Boolean): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("set_battle_ready", buildJsonObject {
+            put("p_battle_id", battleId); put("p_ready", ready)
+        }); Unit
     }
+
+    /** Abort a dead lobby; the server refunds any early prediction stakes. */
+    suspend fun cancelBattle(battleId: String): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("cancel_battle", buildJsonObject { put("p_battle_id", battleId) }); Unit
+    }
+
+    /** Pre-prediction inspection sheet: win rate, level, pace, last 5 wars. */
+    suspend fun hunterStats(userId: String): HunterStatsDto? = runCatching {
+        val data = supabase.postgrest.rpc(
+            "hunter_battle_stats", buildJsonObject { put("p_user", userId) }
+        ).data ?: return@runCatching null
+        statsJson.decodeFromString(HunterStatsDto.serializer(), data)
+    }.getOrNull()
 
     /** Called by player A when the 60s timer ends. Server awards +150 / +20 XP and locks scores. */
     suspend fun finishBattle(battleId: String, scoreA: Int, scoreB: Int): Result<Unit> = runCatching {
@@ -103,6 +120,23 @@ class ArenaRepository @Inject constructor(private val supabase: SupabaseClient) 
 
     suspend fun sendScore(channel: io.github.jan.supabase.realtime.RealtimeChannel, userId: String, count: Int) {
         channel.broadcast(event = "score", buildJsonObject { put("u", userId); put("c", count) })
+    }
+
+    /** One-tap lobby taunts/signal — ephemeral broadcast, nothing persisted. */
+    suspend fun sendTaunt(channel: io.github.jan.supabase.realtime.RealtimeChannel, userId: String, message: String) {
+        channel.broadcast(event = "taunt", buildJsonObject { put("u", userId); put("m", message.take(120)) })
+    }
+
+    fun tauntFlow(channel: io.github.jan.supabase.realtime.RealtimeChannel, myId: String): Flow<Pair<String, String>> = callbackFlow {
+        val job = launch {
+            channel.broadcastFlow<JsonObject>(event = "taunt").collect { payload ->
+                val u = payload["u"]?.jsonPrimitive?.content ?: return@collect
+                val m = payload["m"]?.jsonPrimitive?.content ?: return@collect
+                if (u != myId) trySend(u to m)
+            }
+        }
+        channel.subscribe()
+        awaitClose { job.cancel(); launch { supabase.realtime.runCatching { channel.unsubscribe() } } }
     }
 
     fun opponentScoreFlow(channel: io.github.jan.supabase.realtime.RealtimeChannel, myId: String): Flow<Int> = callbackFlow {
