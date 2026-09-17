@@ -96,15 +96,20 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
     val timerPulse = remember { Animatable(1f) }
     LaunchedEffect(s.secondsLeft) { if (s.counting) { timerPulse.snapTo(1.22f); timerPulse.animateTo(1f, tween(280)) } }
 
+    // SPECTATOR MODE — WATCH reuses this war room; watchers never open the camera
+    val spectating = s.battle?.let { b -> s.myId != null && s.myId != b.playerA && s.myId != b.playerB } ?: false
+
     // DESIGN 2.5 — hologram mesh: ML Kit landmarks flow into the overlay canvas
     var meshPoints by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
-    val counter = remember { PosePushUpCounter(onRep = vm::onRep, onLandmarks = { meshPoints = it }) }
-    DisposableEffect(Unit) { onDispose { counter.close() } }
+    val counter = remember {
+        if (spectating) null else PosePushUpCounter(onRep = vm::onRep, onLandmarks = { meshPoints = it })
+    }
+    DisposableEffect(counter) { onDispose { counter?.close() } }
 
     val cameraPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { vm.onCameraPermission(it) }
-    LaunchedEffect(Unit) { cameraPermission.launch(Manifest.permission.CAMERA) }
+    LaunchedEffect(spectating) { if (!spectating) cameraPermission.launch(Manifest.permission.CAMERA) }
 
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
@@ -121,7 +126,7 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
             val analysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
-                .also { it.setAnalyzer(analysisExecutor) { proxy -> counter.process(proxy) } }
+                .also { it.setAnalyzer(analysisExecutor) { proxy -> counter?.process(proxy) } }
             provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, preview, analysis)
         } else {
             provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, preview)
@@ -130,11 +135,36 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
 
     SystemBackground(wallpaperAlpha = 0.08f) {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
-            Text("PUSH-UP WAR", style = MaterialTheme.typography.headlineMedium, color = PaperWhite)
-            Text("${s.durationSec} SECONDS · Winner +${SystemMath.BATTLE_WIN_XP} XP · Loser +${SystemMath.BATTLE_LOSS_XP} XP. No mercy.", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                (if (s.battle?.exerciseType == "SQUAT") "SQUAT WAR" else "PUSH-UP WAR") +
+                    if (spectating) " · SPECTATOR" else "",
+                style = MaterialTheme.typography.headlineMedium, color = PaperWhite,
+            )
+            Text(
+                if (spectating) "Watching live. Your camera stays off — this is not your war."
+                else "${s.durationSec} SECONDS · Winner +${SystemMath.BATTLE_WIN_XP} XP · Loser +${SystemMath.BATTLE_LOSS_XP} XP. No mercy.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
             Spacer(Modifier.height(10.dp))
 
-            if (!s.cameraGranted) {
+            if (spectating) {
+                GlowCard {
+                    Text("LIVE BOARD", style = MonoLabel, color = SkyBlue)
+                    Spacer(Modifier.height(6.dp))
+                    TugOfWarBar(s.tug, Modifier.fillMaxWidth().height(54.dp))
+                    Spacer(Modifier.height(10.dp))
+                    Row(Modifier.fillMaxWidth()) {
+                        StatTile("PLAYER A", "${s.battle?.scoreA ?: 0}", PaperWhite, Modifier.weight(1f))
+                        Spacer(Modifier.width(10.dp))
+                        StatTile("PLAYER B", "${s.battle?.scoreB ?: 0}", PaperWhite, Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Status ${s.battle?.status ?: "…"} · ${s.secondsLeft}s on the clock",
+                        style = MaterialTheme.typography.bodySmall, color = LabelGray,
+                    )
+                }
+            } else if (!s.cameraGranted) {
                 GlowCard {
                     Text("CAMERA REQUIRED — ML Kit counts your reps on-device.", color = PaperWhite, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
