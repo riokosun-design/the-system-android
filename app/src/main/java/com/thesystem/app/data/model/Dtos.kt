@@ -27,6 +27,11 @@ data class UserDto(
     @SerialName("referred_by") val referredBy: String? = null,
     @SerialName("onboarding_completed") val onboardingCompleted: Boolean = false,
     @SerialName("black_room_until") val blackRoomUntil: String? = null,
+    @SerialName("activity_level") val activityLevel: String? = null,
+    @SerialName("athletic_experience") val athleticExperience: String? = null,
+    @SerialName("weight_verified_at") val weightVerifiedAt: String? = null,
+    /** FREE, non-redeemable spectator points — the only prediction currency. */
+    @SerialName("prediction_points") val predictionPoints: Long = 0,
 ) {
     val isAdmin: Boolean get() = role == "SUPER_ADMIN" || role == "ADMIN"
     val isSuperAdmin: Boolean get() = role == "SUPER_ADMIN"
@@ -94,8 +99,23 @@ data class QuestDto(
     val progress: Int = 0,
     @SerialName("xp_reward") val xpReward: Int = 50,
     val completed: Boolean = false,
-    val source: String = "LEGUNA_S1_AI",
-)
+    val source: String = "DAILY_PROTOCOL",
+    // ── sequential protocol (migration 012): 01 → 02 → 03 ───────────────────
+    val seq: Int = 1,
+    @SerialName("exercise_kind") val exerciseKind: String? = null,
+    @SerialName("target_unit") val targetUnit: String = "REPS",
+    @SerialName("est_duration_sec") val estDurationSec: Int = 300,
+    @SerialName("rest_sec") val restSec: Int = 150,
+    val difficulty: String = "EASY",
+    val verification: String = "CAMERA",       // CAMERA | STEPS | TIMER | MANUAL
+    val status: String = "READY",              // LOCKED READY ACTIVE VERIFYING COMPLETE MISSED PENALIZED
+) {
+    val isLocked: Boolean get() = status == "LOCKED"
+    val isDone: Boolean get() = completed || status == "COMPLETE"
+    val isDead: Boolean get() = status == "MISSED" || status == "PENALIZED"
+    /** 01 / 02 / 03 — the protocol block number shown in the HUD. */
+    val blockLabel: String get() = seq.toString().padStart(2, '0')
+}
 
 @Serializable
 data class ArcDto(
@@ -196,6 +216,8 @@ data class BattleDto(
     @SerialName("score_b") val scoreB: Int = 0,
     val status: String = "LOBBY", // LOBBY | LIVE | FINISHED | CANCELLED
     @SerialName("duration_sec") val durationSec: Int = 60,
+    @SerialName("exercise_type") val exerciseType: String = "PUSHUP",
+    @SerialName("scheduled_at") val scheduledAt: String? = null,
     @SerialName("player_a_ready") val playerAReady: Boolean = false,
     @SerialName("player_b_ready") val playerBReady: Boolean = false,
     val host: String? = null,

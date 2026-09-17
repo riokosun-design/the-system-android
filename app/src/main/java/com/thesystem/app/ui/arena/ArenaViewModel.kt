@@ -2,7 +2,6 @@ package com.thesystem.app.ui.arena
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.thesystem.app.core.SystemMath
 import com.thesystem.app.data.model.*
 import com.thesystem.app.data.repo.ArenaRepository
 import com.thesystem.app.data.repo.SocialRepository
@@ -14,24 +13,31 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * ARENA — three sections, in this order (spec):
+ *   1 MATCHMAKING      — username search, live challenge, scheduled war, filters
+ *   2 PREDICTION / SPECTATOR — free non-redeemable points, WATCH a live board
+ *   3 CHALLENGES       — created / received / scheduled / completed / history
+ */
 data class ArenaState(
     val loading: Boolean = true,
-    val profile: UserDto? = null,
-    val tournaments: List<TournamentDto> = emptyList(),
-    val myTournamentIds: Set<String> = emptySet(),
-    val openBattles: List<BattleDto> = emptyList(),
-    val pools: List<Pair<PoolDto, BattleDto?>> = emptyList(),
-    val myBets: List<BetDto> = emptyList(),
-    val leaders: List<UserDto> = emptyList(),
-    val myClan: ClanMemberDto? = null,
-    val searchingOpponent: Boolean = false,
+    val myProfile: UserDto? = null,
+    val live: List<ArenaLiveRow> = emptyList(),
+    val hub: List<PredictionHubRow> = emptyList(),
+    val myPredictions: List<PredictionBetDto> = emptyList(),
+    val predictionPoints: Long = 0,
+    val matches: List<ScheduledMatchDto> = emptyList(),
+    val challenges: List<BattleChallengeDto> = emptyList(),
+    val myBattles: List<BattleDto> = emptyList(),
+    val recent: List<BattleDto> = emptyList(),
     val opponentQuery: String = "",
     val opponentResults: List<UserDto> = emptyList(),
-    // profile-inspection sheet (pre-prediction diligence)
-    val inspectingUserId: String? = null,
-    val inspectingName: String = "",
-    val hunterStats: HunterStatsDto? = null,
-    val statsLoading: Boolean = false,
+    val inspecting: HunterStatsDto? = null,
+    val inspectingName: String? = null,
+    /** the duel the fighter is composing right now */
+    val draftExercise: String = "PUSHUP",
+    val draftDuration: Int = 60,
+    val draftScheduledAt: String? = null,
     val notice: String? = null,
     val error: String? = null,
 )
@@ -50,88 +56,129 @@ class ArenaViewModel @Inject constructor(
 
     fun refresh() = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true)
-        val p = async { system.profile() }
-        val t = async { arena.tournaments() }
-        val b = async { arena.openBattles() }
-        val pools = async { arena.openPools() }
-        val bets = async { arena.myBets() }
-        val leads = async { arena.xpLeaderboard() }
-        val joined = async { arena.myParticipations() }
-        val clan = async { social.myMembership() }
+        val profileD = async { system.profile() }
+        val liveD = async { arena.arenaLive() }
+        val hubD = async { arena.predictionHub() }
+        val predsD = async { arena.myPredictions() }
+        val matchesD = async { arena.scheduledMatches() }
+        val challengesD = async { arena.dailyChallenges() }
+        val openD = async { arena.openBattles() }
+        val profile = profileD.await()
         _state.value = _state.value.copy(
             loading = false,
-            profile = p.await(), tournaments = t.await(), openBattles = b.await(),
-            pools = pools.await(), myBets = bets.await(), leaders = leads.await(),
-            myTournamentIds = joined.await().map { it.first }.toSet(), myClan = clan.await(),
+            myProfile = profile,
+            live = liveD.await(),
+            hub = hubD.await(),
+            myPredictions = predsD.await(),
+            predictionPoints = profile?.predictionPoints ?: 0,
+            matches = matchesD.await(),
+            challenges = challengesD.await(),
+            myBattles = openD.await(),
+            error = if (profile == null) "OFFLINE — the Arena needs the grid." else null,
         )
     }
 
-    // ── Tournament entry-fee gate (admin-controlled pricing) ─────────────────
-    fun joinTournament(t: TournamentDto) = viewModelScope.launch {
-        arena.joinTournament(t.id, clanId = if (t.type == "CLAN") _state.value.myClan?.clanId else null)
-            .onSuccess {
-                _state.value = _state.value.copy(notice = "ENTRY PAID · −${SystemMath.formatVc(t.entryFeeVc)} · See you in the bracket.")
-                refresh()
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(error = friendlyRpcError(e.message))
-            }
-    }
-
-    // ── Challenges ───────────────────────────────────────────────────────────
-    fun onOpponentQuery(q: String) {
+    // ── SECTION 1 — matchmaking ──────────────────────────────────────────────
+    fun onQuery(q: String) {
         _state.value = _state.value.copy(opponentQuery = q)
-        if (q.length < 3) { _state.value = _state.value.copy(opponentResults = emptyList()); return }
+        if (q.trim().length < 2) { _state.value = _state.value.copy(opponentResults = emptyList()); return }
         viewModelScope.launch {
-            _state.value = _state.value.copy(opponentResults = social.searchUsers(q)
-                .filter { it.id != _state.value.profile?.id })
+            _state.value = _state.value.copy(opponentResults = social.searchUsers(q.trim()))
         }
     }
 
-    fun challenge(opponent: UserDto, durationSec: Int, onCreated: (String) -> Unit) = viewModelScope.launch {
-        arena.challenge(opponent.id, durationSec)
-            .onSuccess { battleId -> onCreated(battleId) }
-            .onFailure { _state.value = _state.value.copy(error = friendlyRpcError(it.message)) }
-    }
-
-    // ── Hunter profile inspection (win rate, level, pace, last 5 wars) ──────
-    fun inspectHunter(id: String, username: String) = viewModelScope.launch {
+    /** Username → profile → challenge. The stats sheet is the last step. */
+    fun inspect(user: UserDto) = viewModelScope.launch {
+        val stats = arena.hunterStats(user.id)
         _state.value = _state.value.copy(
-            inspectingUserId = id, inspectingName = username,
-            hunterStats = null, statsLoading = true,
+            inspecting = stats,
+            inspectingName = user.displayName ?: user.username,
         )
-        val stats = arena.hunterStats(id)
-        _state.value = _state.value.copy(hunterStats = stats, statsLoading = false)
     }
 
-    fun dismissInspection() {
-        _state.value = _state.value.copy(inspectingUserId = null, hunterStats = null, statsLoading = false)
+    fun dismissInspect() { _state.value = _state.value.copy(inspecting = null, inspectingName = null) }
+
+    fun setExercise(kind: String) { _state.value = _state.value.copy(draftExercise = kind) }
+    fun setDuration(sec: Int) { _state.value = _state.value.copy(draftDuration = sec) }
+    fun setScheduledAt(iso: String?) { _state.value = _state.value.copy(draftScheduledAt = iso) }
+
+    /** LIVE challenge — the war room opens the moment it is created. */
+    fun challenge(opponentId: String, onBattle: (String) -> Unit) = viewModelScope.launch {
+        val s = _state.value
+        arena.challengeLive(opponentId, s.draftExercise, s.draftDuration)
+            .onSuccess { battleId -> onBattle(battleId) }
+            .onFailure { _state.value = _state.value.copy(error = friendly(it.message)) }
     }
 
-    // ── Prediction betting ───────────────────────────────────────────────────
-    fun placePrediction(pool: PoolDto, side: String, amount: Long) = viewModelScope.launch {
-        arena.placeBet(pool.id, side, amount)
+    /** SCHEDULED war — the opponent gets a MATCH READY card and a reminder. */
+    fun schedule(opponentId: String) = viewModelScope.launch {
+        val s = _state.value
+        val at = s.draftScheduledAt
+        if (at == null) {
+            _state.value = s.copy(error = "Pick a date and time for the scheduled war first.")
+            return@launch
+        }
+        arena.scheduleDuel(opponentId, s.draftExercise, s.draftDuration, at)
             .onSuccess {
-                _state.value = _state.value.copy(notice = "PREDICTION LOCKED · ${SystemMath.formatVc(amount)} backing side $side · 15% platform cut, 20% of it pays the war winner.")
+                _state.value = _state.value.copy(notice = "War scheduled. The opponent has to accept.")
                 refresh()
             }
-            .onFailure { _state.value = _state.value.copy(error = friendlyRpcError(it.message)) }
+            .onFailure { _state.value = _state.value.copy(error = friendly(it.message)) }
     }
 
-    private fun friendlyRpcError(msg: String?): String = when {
-        msg == null -> "Unknown error."
-        msg.contains("insufficient_vc") -> "Insufficient VC. Grind quests, the CPA wall, or sell your glory."
-        msg.contains("treasury_insufficient") -> "Guild treasury can't cover the entry fee. Fill the coffers via territory taxes first."
-        msg.contains("already_joined") -> "You are already registered for this tournament."
-        msg.contains("already_bet") -> "One prediction per pool, hunter. Stand by your backing."
-        msg.contains("bad_duration") -> "Pick a legal duel length: 30, 60 or 120 seconds."
-        msg.contains("not_in_lobby") -> "The lobby has already closed."
-        msg.contains("pool_locked") -> "This pool is locked — the battle has begun."
-        msg.contains("not_member") -> "Your Shadow Guild must join clan tournaments as a unit."
-        msg.contains("clan_required") -> "You need a Shadow Guild to enter clan tournaments."
-        msg.contains("level_req") -> "Your level is below the gate requirement."
-        else -> msg.take(160)
+    fun respond(matchId: String, accept: Boolean) = viewModelScope.launch {
+        arena.respondDuel(matchId, accept)
+            .onSuccess { _state.value = _state.value.copy(notice = if (accept) "War accepted." else "War declined."); refresh() }
+            .onFailure { _state.value = _state.value.copy(error = friendly(it.message)) }
+    }
+
+    fun cancelMatch(matchId: String) = viewModelScope.launch {
+        arena.cancelScheduled(matchId)
+            .onSuccess { _state.value = _state.value.copy(notice = "Scheduled war cancelled."); refresh() }
+            .onFailure { _state.value = _state.value.copy(error = friendly(it.message)) }
+    }
+
+    // ── SECTION 2 — predictions on FREE points ──────────────────────────────
+    fun claimAllowance() = viewModelScope.launch {
+        arena.claimPredictionAllowance()
+            .onSuccess { earned ->
+                _state.value = _state.value.copy(notice = "+$earned free prediction points claimed.")
+                refresh()
+            }
+            .onFailure { _state.value = _state.value.copy(error = "Allowance already claimed today.") }
+    }
+
+    fun predict(row: PredictionHubRow, side: String, points: Long) = viewModelScope.launch {
+        val pool = row.poolId ?: run {
+            _state.value = _state.value.copy(error = "This board has no open pool yet.")
+            return@launch
+        }
+        arena.placePrediction(pool, side, points)
+            .onSuccess { _state.value = _state.value.copy(notice = "Prediction locked: ${row.playerAName} vs ${row.playerBName}."); refresh() }
+            .onFailure { _state.value = _state.value.copy(error = friendly(it.message)) }
+    }
+
+    // ── SECTION 3 — daily challenge blocks ──────────────────────────────────
+    fun claimChallenge(kind: String) = viewModelScope.launch {
+        arena.claimBattleChallenge(kind)
+            .onSuccess { _state.value = _state.value.copy(notice = "$kind challenge claimed — +120 XP, +25 VC."); refresh() }
+            .onFailure { _state.value = _state.value.copy(error = friendly(it.message)) }
     }
 
     fun consumeNotice() { _state.value = _state.value.copy(notice = null, error = null) }
+
+    private fun friendly(raw: String?): String = when {
+        raw == null -> "Action failed. Try again."
+        raw.contains("not_enough_points") -> "Not enough prediction points — claim the free daily allowance."
+        raw.contains("min_backing_5") -> "Minimum prediction is 5 points."
+        raw.contains("already_bet") -> "You already backed this board."
+        raw.contains("no_self_bet") -> "You are in this war — no predictions on your own match."
+        raw.contains("no_self_battle") -> "You cannot challenge yourself."
+        raw.contains("bad_time") -> "That time has already passed."
+        raw.contains("bad_duration") -> "Allowed war lengths: 30 / 60 / 120 seconds."
+        raw.contains("pool_locked") -> "The pool closed before your prediction landed."
+        raw.contains("challenge_incomplete") -> "Win the required battles first."
+        raw.contains("already_claimed") -> "Already claimed today."
+        else -> "Arena: $raw"
+    }
 }

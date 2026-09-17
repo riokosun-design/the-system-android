@@ -175,4 +175,7 @@ class SystemRepository @Inject constructor(
         supabase.from("system_config").select { filter { eq("key", key) } }
             .decodeSingle<SystemConfigDto>().value
     }.getOrNull()
+
+    /** Sequential protocol bookkeeping lives server-side; the client only mirrors it. */
+    suspend fun dailyQuestsStatus(): List<QuestDto> = dailyQuests()
 }

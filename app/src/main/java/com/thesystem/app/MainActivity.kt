@@ -31,7 +31,7 @@ import com.thesystem.app.ui.chat.ChatHomeScreen
 import com.thesystem.app.ui.chat.ConversationScreen
 import com.thesystem.app.ui.onboarding.AwakeningFlowScreen
 import com.thesystem.app.ui.protocol.ProtocolScreen
-import com.thesystem.app.ui.quest.QuestProofScreen
+import com.thesystem.app.ui.training.QuestProofScreen
 import com.thesystem.app.ui.splash.DynamicSplash
 import com.thesystem.app.ui.splash.SplashVariant
 import com.thesystem.app.ui.tabs.MainTabs
@@ -93,12 +93,27 @@ object Routes {
     const val CHAT = "chat"
     const val DM = "dm/{otherId}/{otherName}"
     const val BATTLE = "battle/{battleId}"
-    const val QUEST_PROOF = "quest/{questId}/{mode}/{target}"
+    const val TRAINING = "training"
+    const val BLACK_ROOM = "blackroom"
     const val ADMIN = "admin"
-    const val PROTOCOL = "protocol" // Black/White rooms + arcs — off the tab rail since 2.7
+    const val PROTOCOL = "protocol"
+    const val ARENA_ADD = "arenaAdd"
+    /** Verified proof session: every field is server content, not a client guess. */
+    const val QUEST_PROOF =
+        "quest/{questId}/{mode}/{exercise}/{target}/{seq}/{unit}/{rest}/{xp}/{title}"
+
     fun dm(otherId: String, otherName: String) = "dm/$otherId/$otherName"
     fun battle(id: String) = "battle/$id"
-    fun questProof(questId: Long, mode: String, target: Int) = "quest/$questId/$mode/$target"
+    fun questProof(q: com.thesystem.app.data.model.QuestDto): String {
+        val title = java.net.URLEncoder.encode(q.title, "UTF-8")
+        val mode = q.verification.uppercase()
+        val exercise = q.exerciseKind ?: when {
+            q.title.contains("SQUAT", true) -> "SQUAT"
+            q.title.contains("RUN", true) -> "RUN"
+            else -> "PUSHUP"
+        }
+        return "quest/${q.id}/$mode/$exercise/${q.targetValue}/${q.seq}/${q.targetUnit}/${q.restSec}/${q.xpReward}/$title"
+    }
 }
 
 @AndroidEntryPoint
@@ -159,11 +174,15 @@ fun AppNavHost(profile: RootState.Ready, onSignOut: () -> Unit) {
         }
         composable(Routes.ADMIN) { AdminScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.PROTOCOL) { ProtocolScreen(nav = nav) }
-        composable(Routes.QUEST_PROOF) { backStack ->
-            val questId = backStack.arguments?.getString("questId")?.toLongOrNull() ?: return@composable
-            val mode = backStack.arguments?.getString("mode") ?: "PUSH"
-            val target = backStack.arguments?.getString("target")?.toIntOrNull() ?: 1
-            QuestProofScreen(questId = questId, mode = mode, target = target, onExit = { nav.popBackStack() })
+        composable(Routes.TRAINING) {
+            com.thesystem.app.ui.training.TrainingCatalogScreen(
+                onBack = { nav.popBackStack() },
+                onOpenBlackRoom = { nav.navigate(Routes.BLACK_ROOM) },
+            )
         }
+        composable(Routes.BLACK_ROOM) {
+            com.thesystem.app.ui.training.BlackRoomScreen(onBack = { nav.popBackStack() })
+        }
+        composable(Routes.QUEST_PROOF) { QuestProofScreen(onExit = { nav.popBackStack() }) }
     }
 }

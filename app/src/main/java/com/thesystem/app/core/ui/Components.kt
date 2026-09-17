@@ -173,6 +173,8 @@ fun NeonButton(
     // an explicitly gray color request = the quiet GHOST treatment (side B,
     // secondary choices); white = solid execution; disabled = faint outline.
     val ghost = color == LabelGray || color == FaintGray || color == NeonPurple
+    // Sky-blue is the TRAINING/HUD accent: filled blue plate with black text.
+    val sky = color == SkyBlue
     Button(
         onClick = onClick,
         enabled = enabled,
@@ -190,6 +192,10 @@ fun NeonButton(
                 containerColor = Color.Transparent,
                 contentColor = LabelGray,
             )
+            sky -> ButtonDefaults.buttonColors(
+                containerColor = SkyBlue,
+                contentColor = InkBlack,
+            )
             else -> ButtonDefaults.buttonColors(
                 containerColor = PaperWhite,
                 contentColor = InkBlack,
@@ -198,6 +204,7 @@ fun NeonButton(
         border = when {
             !enabled -> androidx.compose.foundation.BorderStroke(1.dp, LineSoft)
             ghost -> androidx.compose.foundation.BorderStroke(1.dp, LineStrong)
+            sky -> null
             else -> null
         },
     ) {

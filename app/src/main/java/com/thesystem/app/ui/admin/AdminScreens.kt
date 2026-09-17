@@ -41,7 +41,7 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel()) {
         (s.notice ?: s.error)?.let { snack.showSnackbar(it); vm.consumeNotice() }
     }
 
-    val sections = listOf("OVERVIEW", "LEGAL", "STORE", "TOURNAMENTS", "PAYMENTS", "POOLS", "ASSETS")
+    val sections = listOf("OVERVIEW", "LEGAL", "STORE", "TOURNAMENTS", "PAYMENTS", "POOLS", "ASSETS", "TRAINING")
     var tab by remember { mutableIntStateOf(0) }
 
     SystemBackground(wallpaperAlpha = 0.06f) {
@@ -88,6 +88,7 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel()) {
                 4 -> PaymentsTab(s, vm)
                 5 -> PoolsTab(s, vm)
                 6 -> AssetsTab(s, vm)
+                7 -> AdminTrainingTabs(s, vm)
             }
         }
         Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.BottomCenter) { SnackbarHost(snack) }

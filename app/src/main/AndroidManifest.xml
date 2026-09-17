@@ -4,16 +4,17 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <!-- Required for 1KM territory geofences to fire while the app is closed -->
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Run-distance quest proof via the hardware step counter -->
+    <!-- Run / walk quest proof via the hardware step counter (foreground service) -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Scheduled war reminders + recovery countdown between quest blocks -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
-    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
     <application
         android:name=".TheSystemApplication"
@@ -35,9 +36,14 @@
             </intent-filter>
         </activity>
 
-        <!-- 1KM geofence events for territory zones (see ui/territory/GeofenceCenter.kt) -->
-        <receiver
-            android:name=".ui.territory.GeofenceReceiver"
-            android:exported="false" />
+        <!-- Foreground HEALTH service: step / distance / active-time tracking only.
+             Runs through music, app switching and lock screen. Camera proof is
+             always an in-app screen — never backgrounded. -->
+        <service
+            android:name=".service.StepCounterService"
+            android:exported="false"
+            android:foregroundServiceType="health" />
+
+        <receiver android:name=".service.QuestReminderReceiver" android:exported="false" />
     </application>
 </manifest>

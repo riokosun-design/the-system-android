@@ -1,6 +1,5 @@
 package com.thesystem.app.data.repo
 
-import com.thesystem.app.core.Geohash
 import com.thesystem.app.data.model.*
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -20,7 +19,7 @@ import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Clans (Shadow Guilds), territory capture, realtime chat (clan + global DM), referrals, search. */
+/** Clans (Shadow Guilds), realtime chat (clan + global DM), referrals, member search. */
 @Singleton
 class SocialRepository @Inject constructor(private val supabase: SupabaseClient) {
 
@@ -71,30 +70,6 @@ class SocialRepository @Inject constructor(private val supabase: SupabaseClient)
         val id = uid ?: error("Not signed in")
         supabase.from("clan_members").delete { filter { eq("user_id", id) } }; Unit
     }
-
-    // ── Territory (1KM geofenced zones) ──────────────────────────────────────
-    suspend fun leaderboardsFor(zones: List<String>): List<ZoneLeaderboardDto> = runCatching {
-        supabase.from("zone_leaderboard").select { filter { isIn("zone", zones) } }.decodeList<ZoneLeaderboardDto>()
-    }.getOrDefault(emptyList())
-
-    suspend fun clanTerritories(zones: List<String>): List<ClanTerritoryDto> = runCatching {
-        supabase.from("clan_territories_with_tag").select { filter { isIn("zone", zones) } }
-            .decodeList<ClanTerritoryDto>()
-    }.getOrDefault(emptyList())
-
-    /** Capture = a verified workout logged to this geohash cell. Server credits XP (+ guild tax if shielded). */
-    suspend fun captureZone(zone: String, reps: Int, durationSec: Int): Result<Unit> = runCatching {
-        supabase.postgrest.rpc("capture_zone", buildJsonObject {
-            put("p_zone", zone); put("p_reps", reps); put("p_duration_sec", durationSec)
-        }); Unit
-    }
-
-    /** Claim a dominated zone for your clan → activates the Guild Shield + 5% tax. */
-    suspend fun claimTerritoryForClan(zone: String): Result<Unit> = runCatching {
-        supabase.postgrest.rpc("claim_territory", buildJsonObject { put("p_zone", zone) }); Unit
-    }
-
-    fun zoneOf(lat: Double, lon: Double): String = Geohash.encode(lat, lon)
 
     // ── Realtime Chat (Clan + DM) ────────────────────────────────────────────
     private suspend fun loadClanHistory(clanId: String): List<MessageDto> = runCatching {

@@ -1,364 +1,389 @@
 package com.thesystem.app.ui.arena
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.thesystem.app.Routes
-import com.thesystem.app.core.SystemMath
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
 import com.thesystem.app.data.model.*
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 
-/** Tab 3 — Arena: realtime battles, clan tournaments, prediction pools, leaderboards. */
+/**
+ * ARENA — three clearly ordered sections.
+ *
+ * 1 MATCHMAKING — search a username → inspect their public battle record →
+ *   challenge LIVE (push-up / squat) or SCHEDULE a war for a date and time.
+ * 2 PREDICTION / SPECTATOR — back a board with FREE, non-redeemable points
+ *   (13+ product: no cash, no purchase, no withdrawal, no payout) and WATCH a
+ *   live board through the war-room engine.
+ * 3 CHALLENGES — created / received / scheduled / completed history.
+ */
 @Composable
 fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
-    val snack = remember { SnackbarHostState() }
     val haptics = rememberSystemHaptics()
+    val snack = remember { SnackbarHostState() }
+
     LaunchedEffect(s.notice, s.error) {
-        if (s.error != null) haptics.error()
-        (s.notice ?: s.error)?.let { snack.showSnackbar(it); vm.consumeNotice() }
+        s.error?.let { snack.showSnackbar(it); vm.consumeNotice() }
+        s.notice?.let { snack.showSnackbar(it); vm.consumeNotice() }
     }
 
-    var subTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("BATTLES", "EVENTS", "PREDICT", "RANKS")
-
-    SystemBackground(wallpaperAlpha = 0.12f) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = Grid.Margin),
+    SystemBackground {
+        Box(Modifier.fillMaxSize()) {
+            LazyColumn(
+                Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin),
+                verticalArrangement = Arrangement.spacedBy(Grid.CardSpace),
+                contentPadding = PaddingValues(vertical = Grid.S16),
             ) {
-                Text("THE ARENA", style = MaterialTheme.typography.headlineMedium, color = PaperWhite, modifier = Modifier.weight(1f))
-                VcChip(s.profile?.vcBalance ?: 0)
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("SYSTEM", style = MonoLabel, color = SkyBlue)
+                            Text("ARENA", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 26.sp, letterSpacing = 1.5.sp)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("PREDICTION PTS", style = MonoLabel, color = LabelGray)
+                            Text("${s.predictionPoints}", style = MonoData, color = SkyBlue)
+                        }
+                    }
+                }
+
+                // ══ 1 · MATCHMAKING ═════════════════════════════════════════
+                item { SectionTitle("1 · MATCHMAKING", SkyBlue) }
+                item {
+                    GlowCard(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "Search a hunter by username, check their public record, then send the challenge.",
+                            style = MaterialTheme.typography.bodySmall, color = LabelGray,
+                        )
+                        Spacer(Modifier.height(Grid.S8))
+                        OutlinedTextField(
+                            value = s.opponentQuery,
+                            onValueChange = vm::onQuery,
+                            label = { Text("USERNAME", style = MonoLabel) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(Grid.S8))
+                        Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
+                            s.opponentResults.take(8).forEach { u ->
+                                SystemChip(
+                                    "@${u.username}",
+                                    PaperWhite,
+                                    Modifier.clickable { haptics.tick(); vm.inspect(u) },
+                                )
+                            }
+                        }
+                        if (s.opponentQuery.length >= 2 && s.opponentResults.isEmpty()) {
+                            Spacer(Modifier.height(6.dp))
+                            Text("No hunter under that handle.", style = MaterialTheme.typography.bodySmall, color = FaintGray)
+                        }
+                    }
+                }
+
+                // draft selector (exercise + length + optional schedule)
+                item {
+                    GlowCard(modifier = Modifier.fillMaxWidth()) {
+                        Text("WAR CONFIGURATION", style = MaterialTheme.typography.labelLarge, color = TextMuted)
+                        Spacer(Modifier.height(Grid.S8))
+                        Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
+                            FilterChipPill("PUSH-UP", s.draftExercise == "PUSHUP") { vm.setExercise("PUSHUP") }
+                            FilterChipPill("SQUAT", s.draftExercise == "SQUAT") { vm.setExercise("SQUAT") }
+                        }
+                        Spacer(Modifier.height(Grid.S8))
+                        Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
+                            listOf(30, 60, 120).forEach { d ->
+                                FilterChipPill("${d}s", s.draftDuration == d) { vm.setDuration(d) }
+                            }
+                        }
+                        Spacer(Modifier.height(Grid.S12))
+                        Text("SCHEDULED WAR — optional", style = MonoLabel, color = LabelGray)
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
+                            listOf(1, 3, 24).forEach { h ->
+                                FilterChipPill("+${h}H", s.draftScheduledAt != null) {
+                                    vm.setScheduledAt(
+                                        LocalDateTime.now(ZoneId.systemDefault()).plusHours(h.toLong())
+                                            .withSecond(0).withNano(0).toString() + "Z"
+                                    )
+                                }
+                            }
+                            FilterChipPill("NOW", s.draftScheduledAt == null) { vm.setScheduledAt(null) }
+                        }
+                        s.draftScheduledAt?.let {
+                            Spacer(Modifier.height(6.dp))
+                            Text("Scheduled: $it", style = MonoLabel, color = SkyBlue)
+                        }
+                    }
+                }
+
+                // live boards (spectate)
+                if (s.live.isNotEmpty()) {
+                    item { Text("LIVE NOW", style = MonoLabel, color = SkyBlue) }
+                    items(s.live.take(6), key = { it.battleId }) { row ->
+                        LiveBoardRow(row) { haptics.select(); nav.navigate(Routes.battle(row.battleId)) }
+                    }
+                }
+
+                // ══ 2 · PREDICTION / SPECTATOR ══════════════════════════════
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SectionTitle("2 · PREDICTION / SPECTATOR", SkyBlue)
+                        Spacer(Modifier.weight(1f))
+                        GhostButton("CLAIM +50", { vm.claimAllowance() })
+                    }
+                }
+                item {
+                    Text(
+                        "Free, non-redeemable points. They cannot be bought, cashed out or withdrawn — " +
+                            "predictions are a spectator sport, nothing else.",
+                        style = MaterialTheme.typography.bodySmall, color = LabelGray,
+                    )
+                }
+                if (s.hub.isEmpty()) {
+                    item { EmptyState("No open boards right now. Live wars appear here as soon as they are created.") }
+                } else {
+                    items(s.hub.take(8), key = { it.battleId }) { row -> PredictionRow(row, vm) }
+                }
+                if (s.myPredictions.isNotEmpty()) {
+                    item { Text("MY SLIPS", style = MonoLabel, color = LabelGray) }
+                    items(s.myPredictions.take(6), key = { it.id }) { b ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text("SIDE ${b.side}", style = MonoLabel, color = if (b.status == "WON") SkyBlue else LabelGray)
+                            Spacer(Modifier.weight(1f))
+                            Text("${b.amount} pts · ${b.status}", style = MaterialTheme.typography.bodySmall, color = LabelGray)
+                        }
+                    }
+                }
+
+                // ══ 3 · CHALLENGES ══════════════════════════════════════════
+                item { SectionTitle("3 · CHALLENGES") }
+                items(s.challenges, key = { it.id }) { c ->
+                    GlowCard(modifier = Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(c.exercise, color = PaperWhite, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "WON TODAY ${c.wins}/${c.required} · +120 XP · +25 VC",
+                                    style = MaterialTheme.typography.bodySmall, color = LabelGray,
+                                )
+                            }
+                            if (c.claimed) Text("CLAIMED", style = MonoLabel, color = LabelGray)
+                            else NeonButton("CLAIM", { vm.claimChallenge(c.id) }, color = SkyBlue,
+                                enabled = c.wins >= c.required)
+                        }
+                    }
+                }
+
+                // received / sent scheduled wars
+                if (s.matches.isNotEmpty()) {
+                    item { Text("SCHEDULED WARS", style = MonoLabel, color = SkyBlue) }
+                    items(s.matches, key = { it.id }) { m -> ScheduledRow(m, s.myProfile?.id, vm, nav) }
+                }
+
+                // open lobbies + history
+                if (s.myBattles.isNotEmpty()) {
+                    item { Text("MY OPEN WARS", style = MonoLabel, color = LabelGray) }
+                    items(s.myBattles.take(6), key = { it.id }) { b ->
+                        Row(Modifier.fillMaxWidth().clickable { nav.navigate(Routes.battle(b.id)) },
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text("${b.exerciseType} · ${b.durationSec}s", style = MonoData, color = PaperWhite)
+                            Spacer(Modifier.weight(1f))
+                            Text(b.status, style = MonoLabel, color = LabelGray)
+                        }
+                    }
+                }
+                item { Spacer(Modifier.height(60.dp)) }
+            }
+
+            SnackbarHost(snack, Modifier.align(Alignment.BottomCenter))
+
+            // inspect sheet → challenge / schedule
+            s.inspecting?.let { stats ->
+                OpponentSheet(
+                    name = s.inspectingName ?: "HUNTER",
+                    stats = stats,
+                    scheduled = s.draftScheduledAt != null,
+                    onChallenge = { vm.dismissInspect(); vm.challenge(stats.userId) { id -> nav.navigate(Routes.battle(id)) } },
+                    onSchedule = { vm.dismissInspect(); vm.schedule(stats.userId) },
+                    onDismiss = { vm.dismissInspect() },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveBoardRow(row: ArenaLiveRow, onWatch: () -> Unit) {
+    GlowCard(modifier = Modifier.fillMaxWidth().clickable { onWatch() }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("${row.playerAName} vs ${row.playerBName}", color = PaperWhite, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "${row.exerciseType} · ${row.durationSec}s · ${row.status}" +
+                        if (row.iAmIn) " · YOU ARE IN" else "",
+                    style = MaterialTheme.typography.bodySmall, color = LabelGray,
+                )
+            }
+            Text("${row.scoreA} : ${row.scoreB}", style = MonoData, color = SkyBlue)
+            Spacer(Modifier.width(Grid.S12))
+            Text(if (row.iAmIn) "ENTER" else "WATCH", style = MonoLabel, color = if (row.iAmIn) SkyBlue else LabelGray)
+        }
+    }
+}
+
+@Composable
+private fun PredictionRow(row: PredictionHubRow, vm: ArenaViewModel) {
+    var points by remember { mutableStateOf(10L) }
+    GlowCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("${row.playerAName} vs ${row.playerBName}", color = PaperWhite, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "${row.exerciseType} · ${row.durationSec}s" +
+                        (row.scheduledAt?.let { " · ${it.take(16).replace('T', ' ')}" } ?: ""),
+                    style = MaterialTheme.typography.bodySmall, color = LabelGray,
+                )
+            }
+            Text("x${row.oddsA ?: "—"} / x${row.oddsB ?: "—"}", style = MonoLabel, color = LabelGray)
+        }
+        Spacer(Modifier.height(Grid.S8))
+        if (row.mySide != null) {
+            Text("BACKED ${row.mySide} · ${row.myAmount} pts", style = MonoLabel, color = SkyBlue)
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
+                Text("PTS", style = MonoLabel, color = LabelGray)
+                listOf(5L, 10L, 25L).forEach { p ->
+                    FilterChipPill("$p", points == p) { points = p }
+                }
+                Spacer(Modifier.weight(1f))
+                NeonButton("BACK A", { vm.predict(row, "A", points) }, color = SkyBlue)
+                Spacer(Modifier.width(6.dp))
+                NeonButton("BACK B", { vm.predict(row, "B", points) }, color = LabelGray)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScheduledRow(m: ScheduledMatchDto, myId: String?, vm: ArenaViewModel, nav: NavHostController) {
+    val incoming = m.player2Id == myId && m.status == "PENDING"
+    GlowCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "${m.player1Name} vs ${m.player2Name}",
+                    color = PaperWhite, style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    "${m.exerciseType} · ${m.durationSeconds}s · ${m.scheduledTime.take(16).replace('T', ' ')} · ${m.status}",
+                    style = MaterialTheme.typography.bodySmall, color = LabelGray,
+                )
+            }
+            when {
+                incoming -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    NeonButton("ACCEPT", { vm.respond(m.id, true) }, color = SkyBlue)
+                    NeonButton("DECLINE", { vm.respond(m.id, false) }, color = LabelGray)
+                }
+                m.status == "ACCEPTED" -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("MATCH READY", style = MonoLabel, color = SkyBlue)
+                    GhostButton("WAR ROOM", { nav.navigate(Routes.battle(m.battleId)) })
+                }
+                m.status == "PENDING" -> GhostButton("CANCEL", { vm.cancelMatch(m.id) })
+                else -> Text(m.status, style = MonoLabel, color = LabelGray)
+            }
+        }
+    }
+}
+
+@Composable
+private fun OpponentSheet(
+    name: String,
+    stats: HunterStatsDto,
+    scheduled: Boolean,
+    onChallenge: () -> Unit,
+    onSchedule: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Box(
+        Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.78f))
+            .clickable { onDismiss() },
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .background(PanelGray)
+                .border(1.dp, SkyBlue.copy(alpha = 0.45f), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .clickable(enabled = false) {}
+                .padding(Grid.S16),
+        ) {
+            Text("HUNTER RECORD", style = MonoLabel, color = SkyBlue)
+            Text(name, color = PaperWhite, style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(Grid.S8))
+            Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
+                StatTile("LEVEL", "${stats.level}", PaperWhite, Modifier.weight(1f))
+                StatTile("WINS", "${stats.wins}", SkyBlue, Modifier.weight(1f))
+                StatTile("WIN %", "${stats.winRate}", PaperWhite, Modifier.weight(1f))
+                StatTile("PACE", "${stats.pacePerMin}/m", PaperWhite, Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(Grid.S8))
+            if (stats.recent.isNotEmpty()) {
+                Text("RECENT VERIFIED", style = MonoLabel, color = LabelGray)
+                stats.recent.take(3).forEach { r ->
+                    Text(
+                        "${if (r.won) "WIN " else "LOSS"} ${r.scoreMe}:${r.scoreFoe} · ${r.at?.take(10) ?: ""}",
+                        style = MaterialTheme.typography.bodySmall, color = if (r.won) PaperWhite else LabelGray,
+                    )
+                }
             }
             Spacer(Modifier.height(Grid.S12))
-            // full-bleed tab rail — labels stay on one line even on 320dp devices
-            SystemTabBar(tabs = tabs, selected = subTab, onSelect = { i -> haptics.select(); subTab = i })
-            Box(Modifier.fillMaxSize().padding(horizontal = Grid.Margin)) {
-                // skeleton shimmer while the arena resolves — never a dead spinner
-                if (s.loading) SkeletonCards(4) else when (subTab) {
-                    0 -> BattlesTab(s, vm, nav)
-                    1 -> TournamentsTab(s, vm)
-                    2 -> PredictTab(s, vm)
-                    3 -> LeaderboardTab(s)
-                }
-            }
+            NeonButton("CHALLENGE LIVE", onChallenge, Modifier.fillMaxWidth(), color = SkyBlue)
+            Spacer(Modifier.height(6.dp))
+            GhostButton(if (scheduled) "CONFIRM SCHEDULED WAR" else "PICK A TIME ABOVE FIRST", onSchedule, Modifier.fillMaxWidth())
         }
-        Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.BottomCenter) { SnackbarHost(snack) }
     }
 }
 
-// ── BATTLES ──────────────────────────────────────────────────────────────────
 @Composable
-private fun BattlesTab(s: ArenaState, vm: ArenaViewModel, nav: NavHostController) {
-    val haptics = rememberSystemHaptics()
-    var duelDuration by remember { mutableIntStateOf(60) }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
-        item {
-            GlowCard(glow = CrimsonRed) {
-                Text("SUMMON A RIVAL", style = MaterialTheme.typography.labelLarge, color = CrimsonRed)
-                Spacer(Modifier.height(6.dp))
-                Text("DUEL LENGTH", style = MonoLabel)
-                Row(
-                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    listOf(30, 60, 120).forEach { secs ->
-                        val picked = duelDuration == secs
-                        val label = if (secs < 60) "${secs}s" else "${secs / 60} min"
-                        NeonButton(label, { haptics.tick(); duelDuration = secs }, Modifier.weight(1f),
-                            color = if (picked) PaperWhite else LabelGray)
-                    }
-                }
-                OutlinedTextField(
-                    value = s.opponentQuery,
-                    onValueChange = vm::onOpponentQuery,
-                    label = { Text("Search @username") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CrimsonRed, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary),
-                )
-                s.opponentResults.take(4).forEach { u ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("@${u.username} · LV ${u.level}", color = TextPrimary, modifier = Modifier.weight(1f))
-                        NeonButton("CHALLENGE", { haptics.select(); vm.challenge(u, duelDuration) { id -> nav.navigate(Routes.battle(id)) } }, color = CrimsonRed)
-                    }
-                }
-            }
-        }
-        item { SectionTitle("Live & Open Battles", CrimsonRed) }
-        if (s.openBattles.isEmpty()) item { EmptyState("No wars raging. Summon a rival above.") }
-        items(s.openBattles, key = { it.id }) { b ->
-            val meIn = b.playerA == s.profile?.id || b.playerB == s.profile?.id
-            // DESIGN 2.5 MONARCH EDGE — live battles are System windows: chamfer + hologram frame
-            HudFrameCard(
-                accent = if (b.status == "LIVE") CrimsonRed else if (meIn) ElectricBlue else TextMuted,
-                glow = b.status == "LIVE",
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("@${b.playerAName ?: "?"} vs @${b.playerBName ?: "?"}", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
-                        Text("${b.scoreA} — ${b.scoreB} · ${b.status}", style = MaterialTheme.typography.bodyMedium,
-                            color = if (b.status == "LIVE") CrimsonRed else TextMuted)
-                    }
-                    when {
-                        meIn && b.status == "LOBBY" -> Column(horizontalAlignment = Alignment.End) {
-                            val readyCount = listOf(b.playerAReady, b.playerBReady).count { it }
-                            Text("READY $readyCount/2", color = PaperWhite, style = MonoLabel)
-                            Spacer(Modifier.height(4.dp))
-                            NeonButton("ENTER LOBBY", { nav.navigate(Routes.battle(b.id)) })
-                        }
-                        meIn && b.status == "LIVE" -> NeonButton("ENTER WAR", { nav.navigate(Routes.battle(b.id)) })
-                        b.status == "LOBBY" -> Text("[ OPEN LOBBY · ${b.durationSec}s ]", color = LabelGray, style = MonoLabel)
-                        b.status == "LIVE" -> Text("[ LIVE ]", color = PaperWhite, style = MonoLabel)
-                        b.status == "FINISHED" -> Text(if (b.winner == s.profile?.id) "VICTORY" else "CLOSED", color = VenomGreen, style = MaterialTheme.typography.labelLarge)
-                    }
-                }
-            }
-        }
-        item { Spacer(Modifier.height(80.dp)) }
-    }
-}
-
-// ── TOURNAMENTS (entry-fee gate) ─────────────────────────────────────────────
-@Composable
-private fun TournamentsTab(s: ArenaState, vm: ArenaViewModel) {
-    val haptics = rememberSystemHaptics()
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
-        item { SectionTitle("Solo & Clan Tournaments", HunterGold) }
-        if (s.tournaments.isEmpty()) item { EmptyState("The admins have not opened a bracket yet.") }
-        items(s.tournaments, key = { it.id }) { t ->
-            val joined = t.id in s.myTournamentIds
-            val canAfford = (s.profile?.vcBalance ?: 0) >= t.entryFeeVc
-            GlowCard(glow = if (t.type == "CLAN") NeonPurple else HunterGold) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(t.title, style = MaterialTheme.typography.titleMedium, color = TextPrimary)
-                        Text(
-                            listOfNotNull(
-                                if (t.type == "CLAN") "CLAN WAR" else "SOLO",
-                                t.status,
-                                t.startsAt?.let { "opens ${it.take(10)}" },
-                            ).joinToString(" · "),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        if (t.type == "CLAN" && s.myClan == null) {
-                            Text("Requires Shadow Guild membership", color = CrimsonRed, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        VcChip(t.entryFeeVc)
-                        Spacer(Modifier.height(6.dp))
-                        when {
-                            joined -> Text("ENLISTED", color = VenomGreen, style = MaterialTheme.typography.labelLarge)
-                            t.status != "OPEN" -> Text(t.status, color = TextMuted, style = MaterialTheme.typography.labelLarge)
-                            !canAfford -> Text("TOO POOR", color = CrimsonRed, style = MaterialTheme.typography.labelLarge)
-                            else -> NeonButton("PAY & JOIN", { haptics.success(); vm.joinTournament(t) }, color = HunterGold)
-                        }
-                    }
-                }
-            }
-        }
-        item { Spacer(Modifier.height(80.dp)) }
-    }
-}
-
-// ── PREDICT (prediction pools; "bet/wager" language is deliberately absent) ──
-@Composable
-private fun PredictTab(s: ArenaState, vm: ArenaViewModel) {
-    val haptics = rememberSystemHaptics()
-    var poolSheet by remember { mutableStateOf<PoolDto?>(null) }
-    var sheetBattle by remember { mutableStateOf<BattleDto?>(null) }
-    var sheetSide by remember { mutableStateOf("A") }
-    var sheetAmount by remember { mutableStateOf("100") }
-
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
-        item { SectionTitle("Prediction Pools · 15% platform cut · 20% to winner", ElectricBlue) }
-        if (s.pools.isEmpty()) item { EmptyState("No open pools. Pools spawn automatically when a battle is created.") }
-        items(s.pools, key = { it.first.id }) { (pool, battle) ->
-            GlowCard(glow = ElectricBlue) {
-                // combatant row — tap a name to inspect the hunter before backing
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    HunterNameChip(battle?.playerA, battle?.playerAName, vm, Modifier.weight(1f))
-                    Text(" VS ", style = MonoLabel)
-                    HunterNameChip(battle?.playerB, battle?.playerBName, vm, Modifier.weight(1f), alignEnd = true)
-                }
-                Text(
-                    "Pool ${SystemMath.formatVc(pool.totalPoolVc)} · A ${SystemMath.formatVc(pool.totalAVc)} / B ${SystemMath.formatVc(pool.totalBVc)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Spacer(Modifier.height(8.dp))
-                NeonButton("PREDICT — BACK A HUNTER", {
-                    haptics.select(); poolSheet = pool; sheetBattle = battle; sheetSide = "A"; sheetAmount = "100"
-                }, Modifier.fillMaxWidth())
-            }
-        }
-        item { SectionTitle("My Predictions", ElectricBlue) }
-        items(s.myBets, key = { it.id }) { pred ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("SIDE ${pred.side}", style = MaterialTheme.typography.labelSmall, color = ElectricBlue, modifier = Modifier.width(70.dp))
-                Text(SystemMath.formatVc(pred.amountVc), color = TextPrimary, modifier = Modifier.weight(1f))
-                Text(
-                    when (pred.status) { "WON" -> "+${SystemMath.formatVc(pred.payoutVc ?: 0)} WON"; "LOST" -> "MISSED"; "REFUNDED" -> "REFUNDED"; else -> "OPEN" },
-                    color = when (pred.status) { "WON" -> VenomGreen; "LOST" -> CrimsonRed; else -> TextMuted },
-                    style = MaterialTheme.typography.labelLarge,
-                )
-            }
-        }
-        item { Spacer(Modifier.height(80.dp)) }
-    }
-
-    // Inspection sheet — win rate / level / pace / last 5 wars before predicting
-    s.inspectingUserId?.let {
-        HunterInspectDialog(s, vm)
-    }
-
-    // Prediction sheet with live payout preview: (Back / WinningPool) × Total × 0.85
-    poolSheet?.let { pool ->
-        val amount = sheetAmount.toLongOrNull() ?: 0L
-        val projectedWinningPool = (if (sheetSide == "A") pool.totalAVc else pool.totalBVc) + amount
-        val projectedTotal = pool.totalPoolVc + amount
-        val payout = SystemMath.expectedPayout(amount, projectedWinningPool, projectedTotal)
-        AlertDialog(
-            onDismissRequest = { poolSheet = null },
-            containerColor = SurfaceDark,
-            title = { Text("BACK A HUNTER — @${sheetBattle?.playerAName ?: "A"} vs @${sheetBattle?.playerBName ?: "B"}", color = ElectricBlue) },
-            text = {
-                Column {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        NeonButton("BACK A · @${sheetBattle?.playerAName ?: "A"}", { sheetSide = "A" }, Modifier.weight(1f), color = if (sheetSide == "A") PaperWhite else LabelGray)
-                        NeonButton("BACK B · @${sheetBattle?.playerBName ?: "B"}", { sheetSide = "B" }, Modifier.weight(1f), color = if (sheetSide == "B") PaperWhite else LabelGray)
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = sheetAmount, onValueChange = { sheetAmount = it.filter(Char::isDigit).take(9) },
-                        label = { Text("Backing amount (VC)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ElectricBlue, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text("Projected payout: ${SystemMath.formatVc(payout)}", color = PaperWhite, fontWeight = FontWeight.Bold)
-                    Text("Formula: (your backing ${SystemMath.formatVc(amount)} ÷ winning side pool ${SystemMath.formatVc(projectedWinningPool)}) × (total ${SystemMath.formatVc(projectedTotal)} × 0.85)",
-                        style = MaterialTheme.typography.bodyMedium)
-                    Text("Balance: ${SystemMath.formatVc(s.profile?.vcBalance ?: 0)}", style = MaterialTheme.typography.labelSmall)
-                }
-            },
-            confirmButton = {
-                NeonButton("LOCK PREDICTION", {
-                    haptics.success(); vm.placePrediction(pool, sheetSide, amount); poolSheet = null
-                }, enabled = amount > 0 && amount <= (s.profile?.vcBalance ?: 0))
-            },
-            dismissButton = { TextButton(onClick = { poolSheet = null }) { Text("Cancel", color = TextMuted) } },
+fun FilterChipPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (selected) SkyBlue.copy(alpha = 0.18f) else RaisedGray)
+            .border(1.dp, if (selected) SkyBlue else LineStrong, RoundedCornerShape(6.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    ) {
+        Text(
+            label.uppercase(), style = MonoLabel,
+            color = if (selected) SkyBlue else LabelGray, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
-    }
-}
-
-/** Tappable hunter label that opens the stats inspection sheet. */
-@Composable
-private fun HunterNameChip(
-    id: String?,
-    name: String?,
-    vm: ArenaViewModel,
-    modifier: Modifier = Modifier,
-    alignEnd: Boolean = false,
-) {
-    val haptics = rememberSystemHaptics()
-    if (id == null) { Text("@${name ?: "?"}", modifier = modifier); return }
-    Text(
-        "@${name ?: "?"}  ⓘ",
-        color = PaperWhite,
-        style = MaterialTheme.typography.titleMedium,
-        textAlign = if (alignEnd) androidx.compose.ui.text.style.TextAlign.End else androidx.compose.ui.text.style.TextAlign.Start,
-        modifier = modifier
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) { haptics.tick(); vm.inspectHunter(id, name ?: "?") },
-    )
-}
-
-/** Pre-prediction hunter dossier: win rate, level, pace, recent wars. */
-@Composable
-private fun HunterInspectDialog(s: ArenaState, vm: ArenaViewModel) {
-    AlertDialog(
-        onDismissRequest = vm::dismissInspection,
-        containerColor = SurfaceDark,
-        title = { Text("@${s.inspectingName}", color = ElectricBlue) },
-        text = {
-            Column {
-                if (s.statsLoading || s.hunterStats == null) {
-                    Text("Compiling dossier…", style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    val st = s.hunterStats
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        StatTile("LEVEL", "${st.level}", modifier = Modifier.weight(1f))
-                        StatTile("WIN RATE", "${st.winRate}%", modifier = Modifier.weight(1f))
-                        StatTile("WARS", "${st.total}", modifier = Modifier.weight(1f))
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        StatTile("W / L", "${st.wins}/${st.losses}", modifier = Modifier.weight(1f))
-                        StatTile("AVG REPS", "${st.avgScore}", modifier = Modifier.weight(1f))
-                        StatTile("PACE/MIN", "${st.pacePerMin}", modifier = Modifier.weight(1f))
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Text("RECENT 5 WARS", style = MonoLabel)
-                    Spacer(Modifier.height(4.dp))
-                    st.recent.forEach { r ->
-                        val tag = if (r.won) "W  " else "L  "
-                        Text("$tag ${r.scoreMe} – ${r.scoreFoe}",
-                            color = if (r.won) PaperWhite else LabelGray,
-                            style = MaterialTheme.typography.labelLarge)
-                    }
-                    if (st.recent.isEmpty()) Text("No wars on record yet.", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        },
-        confirmButton = { NeonButton("CLOSE", vm::dismissInspection) },
-    )
-}
-
-// ── RANKS — ROUND 5: rows spring to new positions, climbers show ▲▼ deltas ═══
-@Composable
-private fun LeaderboardTab(s: ArenaState) {
-    val rows = s.leaders.take(50)
-    val positions = rows.mapIndexed { i, u -> u.id to i }.toMap()
-    var prevPositions by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
-    SideEffect { prevPositions = positions } // after every successful composition, positions become history
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
-        item { SectionTitle("Global XP Leaderboard", NeonPurple) }
-        items(rows, key = { it.id }) { u ->
-            val i = positions[u.id] ?: 0
-            val delta = prevPositions[u.id]?.let { it - i } ?: 0 // + = climbed, − = overtaken
-            val rank = SystemMath.rankFor(u.level, u.missedDays)
-            GlowCard(
-                glow = if (u.id == s.profile?.id) HunterGold else SurfaceHigh,
-                pulse = u.id == s.profile?.id, // your row breathes — always findable
-                modifier = Modifier.animateItem(), // smooth teleport when the ladder reorders
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("#${i + 1}", color = HunterGold, style = MaterialTheme.typography.titleMedium, modifier = Modifier.width(44.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("@${u.username}", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
-                        Text("LV ${u.level} · ${SystemMath.formatXp(u.xp)}", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (delta > 0) Text("▲$delta", color = VenomGreen, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(end = 8.dp))
-                    else if (delta < 0) Text("▼${-delta}", color = CrimsonRed, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(end = 8.dp))
-                    RankBadge(rank)
-                }
-            }
-        }
-        item { Spacer(Modifier.height(80.dp)) }
     }
 }

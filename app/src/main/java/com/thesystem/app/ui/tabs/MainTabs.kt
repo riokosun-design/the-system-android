@@ -33,15 +33,16 @@ import com.thesystem.app.data.model.UserDto
 import com.thesystem.app.ui.arena.ArenaScreen
 import com.thesystem.app.ui.dashboard.DashboardScreen
 import com.thesystem.app.ui.profile.ProfileScreen
-import com.thesystem.app.ui.social.HunterFeedGateScreen
-import com.thesystem.app.ui.territory.TerritoryScreen
+import com.thesystem.app.ui.market.MarketScreen
 
-/** Strict 5-tab rail. Labels always on one line; active tab = white + hairline. */
+/**
+ * Strict 4-tab rail. The training catalog and the Black Room are reached from
+ * Status and the Market — they are not tabs.
+ */
 enum class SystemTab(val label: String, val icon: ImageVector) {
     DASHBOARD("Status", Icons.Default.Dashboard),
-    FEED("Feed", Icons.AutoMirrored.Filled.Send),
     ARENA("Arena", Icons.Default.Whatshot),
-    TERRITORY("Map", Icons.Default.Map),
+    MARKET("Market", Icons.Default.Storefront),
     PROFILE("Vault", Icons.Default.Person),
 }
 
@@ -70,9 +71,8 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
         ) { t ->
             when (t) {
                 SystemTab.DASHBOARD -> DashboardScreen(nav = nav)
-                SystemTab.FEED -> HunterFeedGateScreen() // flip to HunterFeedScreen(nav) to re-open
                 SystemTab.ARENA -> ArenaScreen(nav = nav)
-                SystemTab.TERRITORY -> TerritoryScreen()
+                SystemTab.MARKET -> MarketScreen(nav = nav)
                 SystemTab.PROFILE -> ProfileScreen(profile = profile, nav = nav, onSignOut = onSignOut)
             }
         }

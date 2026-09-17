@@ -15,6 +15,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -185,4 +186,86 @@ class ArenaRepository @Inject constructor(private val supabase: SupabaseClient) 
     suspend fun xpLeaderboard(): List<UserDto> = runCatching {
         supabase.from("users").select { order("xp", Order.DESCENDING); limit(50) }.decodeList<UserDto>()
     }.getOrDefault(emptyList())
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // v0.4.1 — ARENA 3 SECTIONS (migration 012, live)
+    //   1 MATCHMAKING · 2 PREDICTION/SPECTATOR · 3 CHALLENGES
+    // Predictions run on FREE, non-redeemable points. No cash, no withdrawal.
+    // ═════════════════════════════════════════════════════════════════════════
+
+    /** SECTION 2 — live boards (LIVE + last 24h). Spectate via the War Room engine. */
+    suspend fun arenaLive(): List<ArenaLiveRow> = runCatching {
+        val raw = supabase.postgrest.rpc("arena_live").data ?: return emptyList()
+        statsJson.decodeFromString(kotlinx.serialization.builtins.ListSerializer(ArenaLiveRow.serializer()), raw)
+    }.getOrDefault(emptyList())
+
+    /** SECTION 2 — open boards, other hunters only, odds from the server. */
+    suspend fun predictionHub(): List<PredictionHubRow> = runCatching {
+        val raw = supabase.postgrest.rpc("prediction_hub").data ?: return emptyList()
+        statsJson.decodeFromString(kotlinx.serialization.builtins.ListSerializer(PredictionHubRow.serializer()), raw)
+    }.getOrDefault(emptyList())
+
+    suspend fun myPredictions(): List<PredictionBetDto> {
+        val me = uid ?: return emptyList()
+        return runCatching {
+            supabase.from("prediction_bets").select {
+                filter { eq("user_id", me) }; order("created_at", Order.DESCENDING); limit(40)
+            }.decodeList<PredictionBetDto>()
+        }.getOrDefault(emptyList())
+    }
+
+    /** FREE points only — server debits prediction_points, never VC or cash. */
+    suspend fun placePrediction(poolId: String, side: String, points: Long): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("place_bet", buildJsonObject {
+            put("p_pool_id", poolId); put("p_side", side); put("p_amount", points)
+        }); Unit
+    }
+
+    /** Daily free allowance (server caps it at one claim per day). */
+    suspend fun claimPredictionAllowance(): Result<Int> = runCatching {
+        val raw = supabase.postgrest.rpc("claim_prediction_allowance").data ?: error("no response")
+        Json.decodeFromString(Int.serializer(), raw)
+    }
+
+    /** SECTION 1/3 — live challenge with the chosen exercise (PUSHUP | SQUAT). */
+    suspend fun challengeLive(opponentId: String, exercise: String, durationSec: Int): Result<String> = runCatching {
+        val raw = supabase.postgrest.rpc("create_battle", buildJsonObject {
+            put("p_opponent", opponentId); put("p_duration_sec", durationSec); put("p_exercise", exercise)
+        }).data ?: error("no response")
+        Json.decodeFromString(String.serializer(), raw)
+    }
+
+    /** SECTION 3 — SCHEDULED war: date + time, opponent accepts, reminder fires. */
+    suspend fun scheduleDuel(opponentId: String, exercise: String, durationSec: Int, atIso: String): Result<String> = runCatching {
+        val raw = supabase.postgrest.rpc("schedule_duel", buildJsonObject {
+            put("p_opponent", opponentId); put("p_exercise", exercise)
+            put("p_duration", durationSec); put("p_at", atIso)
+        }).data ?: error("no response")
+        Json.decodeFromString(String.serializer(), raw)
+    }
+
+    suspend fun scheduledMatches(): List<ScheduledMatchDto> = runCatching {
+        supabase.from("scheduled_matches_with_names").select { order("scheduled_time", Order.ASCENDING); limit(60) }
+            .decodeList<ScheduledMatchDto>()
+    }.getOrDefault(emptyList())
+
+    suspend fun respondDuel(matchId: String, accept: Boolean): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("respond_duel", buildJsonObject {
+            put("p_match", matchId); put("p_accept", accept)
+        }); Unit
+    }
+
+    suspend fun cancelScheduled(matchId: String): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("cancel_scheduled", buildJsonObject { put("p_match", matchId) }); Unit
+    }
+
+    /** SECTION 3 — today's PUSH-UP + SQUAT challenge blocks, rank-adapted. */
+    suspend fun dailyChallenges(): List<BattleChallengeDto> = runCatching {
+        val raw = supabase.postgrest.rpc("daily_battle_challenges").data ?: return emptyList()
+        statsJson.decodeFromString(kotlinx.serialization.builtins.ListSerializer(BattleChallengeDto.serializer()), raw)
+    }.getOrDefault(emptyList())
+
+    suspend fun claimBattleChallenge(kind: String): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("claim_battle_challenge", buildJsonObject { put("p_kind", kind) }); Unit
+    }
 }

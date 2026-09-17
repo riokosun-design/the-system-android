@@ -1,0 +1,7 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <!-- SYSTEM mark: single white glyph on transparent (tinted by the platform) -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2L4,6v6.2c0,4.6 3.2,8.9 8,9.8 4.8,-0.9 8,-5.2 8,-9.8V6L12,2zM12,8.5l1.9,3.4h-3.8L12,8.5zM12,17.6c-1.9,-0.4 -3.5,-1.5 -4.6,-3h9.2c-1.1,1.5 -2.7,2.6 -4.6,3z" />
+</vector>

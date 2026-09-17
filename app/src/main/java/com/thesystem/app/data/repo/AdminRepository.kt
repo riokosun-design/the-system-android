@@ -157,4 +157,91 @@ class AdminRepository @Inject constructor(private val supabase: SupabaseClient) 
         supabase.from("system_config").upsert(buildJsonObject { put("key", key); put("value", value) })
         Unit
     }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // v0.4.1 CONTENT CMS — courses, course quests, daily quest templates,
+    // Black Room review + per-user program building, scheduled-duel ops.
+    // Everything ships without an app update. RLS re-checks is_admin().
+    // ═════════════════════════════════════════════════════════════════════════
+
+    suspend fun allCourses(): List<CourseDto> = runCatching {
+        supabase.from("courses").select { order("sort", Order.ASCENDING) }.decodeList<CourseDto>()
+    }.getOrDefault(emptyList())
+
+    suspend fun upsertCourse(c: CourseDto, scheduleJson: String): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("admin_upsert_course", buildJsonObject {
+            put("p_slug", c.slug); put("p_title", c.title); put("p_type", c.type)
+            put("p_description", c.description ?: "")
+            put("p_duration_months", c.durationMonths)
+            put("p_schedule", Json.parseToJsonElement(scheduleJson))
+            put("p_attribute", c.attribute)
+            put("p_image_url", c.imageUrl)
+            put("p_difficulty", c.difficulty)
+            put("p_target", c.target ?: "FULL BODY")
+            put("p_equipment", c.equipment ?: "BODYWEIGHT")
+            put("p_active", c.active)
+            put("p_sort", c.sort)
+        }); Unit
+    }
+
+    suspend fun upsertCourseQuest(q: CourseQuestDto, courseSlug: String): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("admin_upsert_course_quest", buildJsonObject {
+            put("p_course_slug", courseSlug); put("p_week", q.week); put("p_day", q.day); put("p_sort", q.sort)
+            put("p_title", q.title); put("p_description", q.description); put("p_exercise", q.exercise)
+            put("p_sets", q.sets); put("p_reps", q.reps); put("p_duration_sec", q.durationSec)
+            put("p_rest_sec", q.restSec); put("p_xp", q.xp); put("p_difficulty", q.difficulty)
+            put("p_verification", q.verification); put("p_equipment", q.equipment)
+            put("p_alternatives", q.alternatives)
+            put("p_min_age", q.minAge); put("p_max_age", q.maxAge)
+            put("p_min_level", q.minLevel); put("p_active", q.active)
+        }); Unit
+    }
+
+    suspend fun allCourseQuests(courseId: String): List<CourseQuestDto> = runCatching {
+        supabase.from("course_quests").select { filter { eq("course_id", courseId) }; order("week", Order.ASCENDING) }
+            .decodeList<CourseQuestDto>()
+    }.getOrDefault(emptyList())
+
+    suspend fun questTemplates(): List<QuestTemplateDto> = runCatching {
+        supabase.from("daily_quest_templates").select { order("seq", Order.ASCENDING) }.decodeList<QuestTemplateDto>()
+    }.getOrDefault(emptyList())
+
+    suspend fun upsertQuestTemplate(t: QuestTemplateDto): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("admin_upsert_quest_template", buildJsonObject {
+            put("p_seq", t.seq); put("p_title", t.title); put("p_kind", t.exerciseKind)
+            put("p_light", t.targetLight); put("p_steady", t.targetSteady); put("p_unit", t.targetUnit)
+            put("p_est_sec", t.estDurationSec); put("p_rest_sec", t.restSec); put("p_xp", t.xp)
+            put("p_difficulty", t.difficulty); put("p_verification", t.verification); put("p_active", t.active)
+        }); Unit
+    }
+
+    // ── Black Room: review the application, then hand-build the program ─────
+    suspend fun pendingBlackRooms(): List<BlackRoomApplicationDto> = runCatching {
+        supabase.from("black_room_applications_with_user")
+            .select { order("created_at", Order.DESCENDING); limit(80) }
+            .decodeList<BlackRoomApplicationDto>()
+    }.getOrDefault(emptyList())
+
+    suspend fun reviewBlackRoom(applicationId: String, approve: Boolean, regiment: String = ""): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("review_black_room", buildJsonObject {
+            put("p_application", applicationId); put("p_approve", approve); put("p_regiment", regiment)
+        }); Unit
+    }
+
+    suspend fun saveBlackRoomProgram(
+        applicationId: String, week: Int, day: Int, title: String, exercise: String,
+        sets: Int, reps: String, durationSec: Int, restSec: Int, notes: String,
+    ): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("admin_save_black_room_program", buildJsonObject {
+            put("p_application", applicationId); put("p_week", week); put("p_day", day)
+            put("p_title", title); put("p_exercise", exercise); put("p_sets", sets); put("p_reps", reps)
+            put("p_duration_sec", durationSec); put("p_rest_sec", restSec); put("p_notes", notes)
+        }); Unit
+    }
+
+    suspend fun uploadCourseCover(slug: String, bytes: ByteArray, extension: String = "webp"): Result<String> = runCatching {
+        val path = "courses/$slug.$extension"
+        supabase.storage.from("system_assets").upload(path, bytes) { upsert = true }
+        supabase.storage.from("system_assets").publicUrl(path)
+    }
 }

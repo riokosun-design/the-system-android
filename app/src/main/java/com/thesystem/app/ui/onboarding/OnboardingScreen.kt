@@ -110,7 +110,7 @@ private fun IntroPage(onBegin: () -> Unit) {
     val haptics = rememberSystemHaptics()
     Box(Modifier.fillMaxSize()) {
         DynamicSplash(
-            variants = listOf(SplashVariant.LEVEL_PULSE, SplashVariant.SHADOW_HEARTBEAT, SplashVariant.LIMIT_BREAKER),
+            variants = listOf(SplashVariant.RANK_BARS, SplashVariant.BLACK_ROOM_SCAN, SplashVariant.TERRITORY_GRID),
             showBranding = true,
         )
         NeonButton("AWAKEN", { haptics.slam(); onBegin() }, Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp).fillMaxWidth(0.7f))

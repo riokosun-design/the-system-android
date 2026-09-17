@@ -21,19 +21,19 @@ import com.thesystem.app.core.ui.Scanlines
 import com.thesystem.app.core.ui.SystemMotion
 import kotlinx.coroutines.delay
 
-/** The 11 modular splash graphs (Section 2-A). Admin can reorder/restrict via remote config later. */
+/**
+ * The launch sequence — trimmed to the three marks the product actually stands
+ * on: RANK → BLACK ROOM → TERRITORY.
+ *
+ * Radar, combat, quest-donut, limit-break and battle-split animations are
+ * DELETED from the rotation (they advertised removed or secondary systems).
+ * The Territory card is a pure visual: territory gameplay no longer exists.
+ * Their canvas implementations remain unreferenced in SplashCanvases.kt.
+ */
 enum class SplashVariant(val label: String) {
-    TERMINAL_GLITCH("TERMINAL"),
-    LEVEL_PULSE("LEVEL UP"),
-    SPIDER_RADAR("RADAR"),
-    SHADOW_HEARTBEAT("HEARTBEAT"),
     RANK_BARS("RANKS"),
-    TERRITORY_GRID("TERRITORY"),
-    COMBAT_SPLINE("COMBAT"),
-    QUEST_DONUT("QUESTS"),
-    BATTLE_SPLIT("BATTLE"),
     BLACK_ROOM_SCAN("BLACK ROOM"),
-    LIMIT_BREAKER("LIMIT BREAK"),
+    TERRITORY_GRID("TERRITORY"),
 }
 
 /**
@@ -97,16 +97,8 @@ fun DynamicSplash(
 @Composable
 fun SplashGraph(variant: SplashVariant, modifier: Modifier = Modifier) {
     when (variant) {
-        SplashVariant.TERMINAL_GLITCH -> TerminalGlitchGraph(modifier)
-        SplashVariant.LEVEL_PULSE -> LevelPulseGraph(modifier)
-        SplashVariant.SPIDER_RADAR -> SpiderRadarGraph(modifier)
-        SplashVariant.SHADOW_HEARTBEAT -> ShadowHeartbeatGraph(modifier)
         SplashVariant.RANK_BARS -> RankBarsGraph(modifier)
-        SplashVariant.TERRITORY_GRID -> TerritoryGridGraph(modifier)
-        SplashVariant.COMBAT_SPLINE -> CombatSplineGraph(modifier)
-        SplashVariant.QUEST_DONUT -> QuestDonutGraph(modifier)
-        SplashVariant.BATTLE_SPLIT -> BattleSplitGraph(modifier)
         SplashVariant.BLACK_ROOM_SCAN -> BlackRoomScanGraph(modifier)
-        SplashVariant.LIMIT_BREAKER -> LimitBreakerGraph(modifier)
+        SplashVariant.TERRITORY_GRID -> TerritoryGridGraph(modifier)
     }
 }
