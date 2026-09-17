@@ -17,3 +17,4 @@ DEPLOYED_LIVE.md
 *.keystore
 !debug.keystore
 keystore/*.base64.txt
+.kotlin/

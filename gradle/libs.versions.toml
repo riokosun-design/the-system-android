@@ -15,8 +15,6 @@ supabase = "3.0.2"
 ktor = "3.0.1"
 coil = "3.0.4"
 datastore = "1.1.1"
-location = "21.3.0"
-osmdroid = "6.1.20"
 mlkitPose = "17.0.0"
 profileinstaller = "1.4.1"
 splashscreen = "1.0.1"
@@ -39,6 +37,7 @@ compose-foundation = { module = "androidx.compose.foundation:foundation" }
 compose-activity = { module = "androidx.activity:activity-compose", version.ref = "activity" }
 lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+lifecycle-service = { module = "androidx.lifecycle:lifecycle-service", version.ref = "lifecycle" }
 navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "hilt" }
@@ -56,8 +55,6 @@ ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "kto
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 androidx-datastore = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
-play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "location" }
-osmdroid = { module = "org.osmdroid:osmdroid-android", version.ref = "osmdroid" }
 mlkit-pose = { module = "com.google.mlkit:pose-detection", version.ref = "mlkitPose" }
 camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
 camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }

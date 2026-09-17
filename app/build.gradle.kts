@@ -20,14 +20,13 @@ android {
         applicationId = "com.thesystem.app"
         minSdk = 26 // low-end / older Android first
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.3.1"
+        versionCode = 8
+        versionName = "0.4.1"
 
         buildConfigField("String", "SUPABASE_URL", "\"${backendProp("SUPABASE_URL", "https://YOUR_PROJECT_REF.supabase.co")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${backendProp("SUPABASE_ANON_KEY", "YOUR_PUBLIC_ANON_KEY")}\"")
         buildConfigField("String", "GOOGLE_SERVER_CLIENT_ID", "\"${backendProp("GOOGLE_SERVER_CLIENT_ID", "YOUR_WEB_OAUTH_CLIENT_ID")}\"")
         buildConfigField("String", "OFFERWALL_URL", "\"${backendProp("OFFERWALL_URL", "https://YOUR_CPA_OFFERWALL_URL")}\"")
-        buildConfigField("String", "MAPTILER_API_KEY", "\"${backendProp("MAPTILER_API_KEY", "YOUR_MAPTILER_KEY")}\"")
     }
 
     // ── Signing: committed debug keystore keeps SHA-1 identical on ANY machine
@@ -110,8 +109,7 @@ dependencies {
     implementation(libs.coil.network.okhttp)
 
     implementation(libs.androidx.datastore)
-    implementation(libs.play.services.location)
-    implementation(libs.osmdroid)
+    implementation(libs.lifecycle.service)
     implementation(libs.mlkit.pose)
     implementation(libs.androidx.profileinstaller)
     implementation(libs.camera.core)
