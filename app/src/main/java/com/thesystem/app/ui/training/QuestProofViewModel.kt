@@ -73,7 +73,10 @@ class QuestProofViewModel @Inject constructor(
     private val exerciseRaw: String = savedStateHandle.get<String>("exercise") ?: "PUSHUP"
     private val targetArg: Int = (savedStateHandle.get<String>("target") ?: "1").toInt()
     private val seqArg: Int = (savedStateHandle.get<String>("seq") ?: "1").toInt()
-    private val titleArg: String = savedStateHandle.get<String>("title") ?: "DAILY PROTOCOL"
+    // Navigation may hand the path segment back still percent-encoded
+    private val titleArg: String = runCatching {
+        java.net.URLDecoder.decode(savedStateHandle.get<String>("title") ?: "DAILY PROTOCOL", "UTF-8")
+    }.getOrDefault(savedStateHandle.get<String>("title") ?: "DAILY PROTOCOL")
     private val unitArg: String = savedStateHandle.get<String>("unit") ?: "REPS"
     private val restArg: Int = (savedStateHandle.get<String>("rest") ?: "150").toInt()
     private val xpArg: Int = (savedStateHandle.get<String>("xp") ?: "35").toInt()
