@@ -9,6 +9,7 @@ import com.google.mlkit.vision.pose.defaults.PoseDetectorOptions
 import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
@@ -79,30 +80,77 @@ class PoseRepCounter(
     private var imgH = 1f
     private var lastStatus = PoseStatus.WAITING
 
-    // ── FRONT-VIEW push-up window (phone flat on floor, camera up) ───────────
-    // From this geometry the elbow's 2D angle barely changes (elbows travel
-    // toward/away from the lens) — the OLD angle engine could never re-enter
-    // TOP, which is why hunters saw 0 reps forever. The honest observable from
-    // below is APPARENT SHOULDER WIDTH: get low → closer to the lens → span
-    // grows; push up → farther → span shrinks. Session-adaptive lo/hi window
-    // calibrates itself inside the first rep, no fixed thresholds needed.
+    // ── FRONT-VIEW push-up machine v3 (phone flat on floor, camera up) ──────
+    // Observable: APPARENT SHOULDER WIDTH (grows toward the lens on descent,
+    // shrinks on lockout). The v2 design (session-wide ratchet min/max window
+    // + fixed 66%/34% bands) is dead — one contaminated extreme (walking past
+    // during setup, leaning in to check the screen mid-set) made a band
+    // unreachable for the REST OF THE SESSION, exactly the field report
+    // "counts 1 rep then sticks / shows UP but never counts". v3 instead:
+    //
+    //  BASELINE  — asymmetric leaky tracker of the lockout level: FAST toward
+    //              the top side (span shrinking, k=0.35 — hunter repositioning
+    //              away re-references immediately), SLOW toward the depth side
+    //              (k=0.10 — converges across ~1s of settling, no calibration
+    //              ritual, and descent frames can never poison a frozen trough).
+    //  SLEW GUARD— one EMA frame jumping >19px = the hunter RELOCATED (lean-
+    //              in/stand-up, phone bump): snap baseline, abort half-built
+    //              cycles, block descent triggers for 500 ms while EMA settles.
+    //  CYCLE     — every rep judged against ITS OWN frozen trough + peak:
+    //              descent from baseline+dz, real depth vs [max(16px, 55% of
+    //              learned ROM) .. 170% of learned ROM], >=4 frames / >=132ms
+    //              down, >=3 frames spent actually deep (spike armour), then
+    //              count only after climbing back >=62% of THAT rep's depth,
+    //              once per arming, >=450ms since descent, >=450ms apart.
+    //  VALVE     — a climb stalled 350ms while sitting at the baseline means
+    //              the cycle armed before the top was learned (setup frames);
+    //              abort cleanly, never count — the next descent self-heals.
+    //  ROM       — learned ONLY from validated reps, so contamination can
+    //              never raise the bar. Pose loss freezes the machine; a >1.5s
+    //              gap re-anchors the baseline WITHOUT erasing the count.
     private var emaSpan: Float? = null
-    private var spanLo = Float.MAX_VALUE
-    private var spanHi = 0f
+    private var baseline = 0f
+    private var repTrough = 0f
+    private var peak = 0f
+    private var ascLo = 0f
+    private var ascLoAt = 0L
+    private var romEst: Float? = null
+    private var armed = false
     private var bottomSpan = 0f
+    private var bottomAt = 0L
+    private var descFrames = 0
+    private var sustain = 0
+    private var prevV: Float? = null
+    private var slewBlockUntil = 0L
+    private var lastFrameAt = 0L
 
     private companion object {
         const val EMA_ALPHA = 0.45
         const val CONFIRM_FRAMES = 2
         const val REP_COOLDOWN_MS = 450L
         const val LIKELIHOOD_FLOOR = 0.35f
-        const val MIN_REP_MS = 350L          // faster than this = camera noise, not a rep
+        const val MIN_REP_MS = 450L          // faster than this = camera noise, not a rep
 
-        // front-span push-up latching bands (fraction of observed span window)
-        const val SPAN_EMA = 0.5f
-        const val SPAN_BOTTOM = 0.66  // this close to the lens = chest down
-        const val SPAN_TOP = 0.34     // this far = locked out
-        const val MIN_SPAN_RANGE_PX = 24f  // below this the user hasn't actually moved
+        // v3 front-span constants (mirrors the 22/22 simulation harness)
+        const val SPAN_EMA = 0.4f
+        const val BASE_DOWN = 0.35f          // baseline pull toward the top side
+        const val BASE_UP = 0.10f            // baseline pull toward the depth side
+        const val SLEW_MAX_PX = 19f          // one EMA frame beyond this = relocation
+        const val SLEW_SETTLE_MS = 500L      // no descent trigger while EMA settles
+        const val MIN_RISE_FLOOR = 16f       // px — below this it's a nod / jitter
+        const val MIN_RISE_FRAC = 0.55f      // of learned ROM
+        const val ROM_BLEND = 0.35f
+        const val ROM_OVER = 1.7f            // depth beyond 170% of ROM = lean-in
+        const val DZ_FLOOR = 5f              // px hysteresis deadzone
+        const val DZ_FRAC = 0.14f
+        const val DZ_CAP = 8f
+        const val COME_BACK = 0.62f          // climb fraction of own depth to count
+        const val BOTTOM_HOLD_MS = 90L
+        const val GAP_REANCHOR_MS = 1500L    // pose-loss recovery re-anchor
+        const val MIN_DESC_FRAMES = 4        // >= ~132ms of actual descending
+        const val MIN_DESC_MS = 132L
+        const val MIN_SUSTAIN_FRAMES = 3     // frames spent deep — spike armour
+        const val CLIMB_STALL_MS = 350L      // stale-trough recovery valve
     }
 
     // ── thresholds ───────────────────────────────────────────────────────────
@@ -138,10 +186,26 @@ class PoseRepCounter(
         candidateStreak = 0
         reachedBottom = false
         bottomAngle = 180.0
+        descentStartAt = 0L
+        lastRepAt = 0L
+        framesWithoutPose = 0
+        lastStatus = PoseStatus.WAITING
+        // v3 front-span machine
         emaSpan = null
-        spanLo = Float.MAX_VALUE
-        spanHi = 0f
+        baseline = 0f
+        repTrough = 0f
+        peak = 0f
+        ascLo = 0f
+        ascLoAt = 0L
+        romEst = null
+        armed = false
         bottomSpan = 0f
+        bottomAt = 0L
+        descFrames = 0
+        sustain = 0
+        prevV = null
+        slewBlockUntil = 0L
+        lastFrameAt = 0L
     }
 
     fun close() = detector.close()
@@ -175,7 +239,7 @@ class PoseRepCounter(
             }
         }
 
-        // ── PUSH-UP = front-span cycle (floor + front camera geometry) ──────
+        // ── PUSH-UP = front-span cycle v3 (floor + front camera geometry) ────
         if (exercise == RepExercise.PUSHUP) {
             val lS = pose.getPoseLandmark(PoseLandmark.LEFT_SHOULDER)
             val rS = pose.getPoseLandmark(PoseLandmark.RIGHT_SHOULDER)
@@ -185,12 +249,7 @@ class PoseRepCounter(
             val span = abs(lS.position.x - rS.position.x)
             val v = emaSpan?.let { it + SPAN_EMA * (span - it) } ?: span
             emaSpan = v
-            if (v < spanLo) spanLo = v
-            if (v > spanHi) spanHi = v
-            val range = spanHi - spanLo
-            if (range < MIN_SPAN_RANGE_PX) return  // window not calibrated yet — keep watching
-            val frac = ((v - spanLo) / range).coerceIn(0f, 1f).toDouble()
-            stepSpan(frac, v)
+            stepPushSpan(v)
             return
         }
 
@@ -265,51 +324,140 @@ class PoseRepCounter(
         onPhase(phase, if (phase == RepPhase.BOTTOM) 1f else depth)
     }
 
-    /** Span-cycle machine for floor/front push-ups: BOTTOM = close (span big),
-     *  TOP = far (span small). Same full-cycle discipline as [step]. */
-    private fun stepSpan(frac: Double, span: Float) {
+    /** v3 front-span machine for floor/front push-ups (see class header).
+     *  TOP → DESCENDING → BOTTOM → ASCENDING → count; each rep measured
+     *  against its OWN frozen trough and peak. Mirrors the 22/22 simulation. */
+    private fun stepPushSpan(v: Float) {
         val now = System.currentTimeMillis()
-        val wanted = when {
-            frac >= SPAN_BOTTOM -> RepPhase.BOTTOM
-            frac <= SPAN_TOP -> RepPhase.TOP
-            phase == RepPhase.BOTTOM || phase == RepPhase.ASCENDING -> RepPhase.ASCENDING
-            else -> RepPhase.DESCENDING
-        }
-        if (wanted == candidate) candidateStreak++ else { candidate = wanted; candidateStreak = 1 }
 
-        if (candidateStreak >= CONFIRM_FRAMES && wanted != phase) {
-            val previous = phase
-            phase = wanted
-            when (wanted) {
-                RepPhase.BOTTOM -> {
-                    reachedBottom = true
-                    bottomSpan = span
-                    if (previous == RepPhase.TOP || previous == RepPhase.DESCENDING) descentStartAt = now
+        // long detection loss: the hunter moved — re-anchor, keep the count
+        if (lastFrameAt != 0L && now - lastFrameAt > GAP_REANCHOR_MS) {
+            phase = RepPhase.TOP
+            armed = false
+            baseline = v
+            prevV = v
+        }
+        lastFrameAt = now
+
+        // SLEW GUARD — relocation, not muscle
+        val pv = prevV
+        if (pv != null && abs(v - pv) > SLEW_MAX_PX) {
+            baseline = v
+            phase = RepPhase.TOP
+            armed = false
+            slewBlockUntil = now + SLEW_SETTLE_MS
+            prevV = v
+            onPhase(phase, 0f)
+            return
+        }
+        prevV = v
+
+        // asymmetric baseline: the lockout reference
+        baseline = if (v < baseline) baseline + BASE_DOWN * (v - baseline)
+        else baseline + BASE_UP * (v - baseline)
+
+        val rom = romEst ?: (MIN_RISE_FLOOR / MIN_RISE_FRAC)
+        val minRise = max(MIN_RISE_FLOOR, MIN_RISE_FRAC * rom)
+        val dz = min(DZ_CAP, max(DZ_FLOOR, DZ_FRAC * rom))
+
+        if (phase == RepPhase.SEARCH) {
+            baseline = v
+            phase = RepPhase.TOP
+        }
+
+        when (phase) {
+            RepPhase.TOP -> {
+                if (v >= baseline + dz && now >= slewBlockUntil) {
+                    phase = RepPhase.DESCENDING
+                    repTrough = baseline
+                    peak = v
+                    descentStartAt = now
+                    descFrames = 1
+                    sustain = 0
                 }
-                RepPhase.TOP -> {
-                    if (reachedBottom && previous == RepPhase.ASCENDING &&
-                        now - lastRepAt > REP_COOLDOWN_MS && now - descentStartAt > MIN_REP_MS
-                    ) {
+            }
+            RepPhase.DESCENDING -> {
+                descFrames++
+                if (v > peak) peak = v
+                if (v >= repTrough + minRise) sustain++
+                if (v <= peak - dz) {
+                    // turned back up — validate the bottom
+                    val depth = peak - repTrough
+                    val tooDeep = romEst?.let { depth > ROM_OVER * it } ?: false
+                    val valid = !tooDeep &&
+                        depth >= minRise &&
+                        descFrames >= MIN_DESC_FRAMES &&
+                        now - descentStartAt >= MIN_DESC_MS &&
+                        sustain >= MIN_SUSTAIN_FRAMES
+                    if (valid) {
+                        phase = RepPhase.BOTTOM
+                        bottomAt = now
+                        armed = true
+                        bottomSpan = peak
+                    } else {
+                        phase = RepPhase.TOP  // nod / dip / lean excursion — no cycle
+                    }
+                }
+            }
+            RepPhase.BOTTOM -> {
+                if (v > peak + dz) {
+                    phase = RepPhase.DESCENDING
+                    peak = v
+                } else if (now - bottomAt >= BOTTOM_HOLD_MS) {
+                    phase = RepPhase.ASCENDING
+                    ascLo = v
+                    ascLoAt = now
+                }
+            }
+            RepPhase.ASCENDING -> {
+                if (v < ascLo - 0.5f) {
+                    ascLo = v
+                    ascLoAt = now
+                }
+                val depth = peak - repTrough
+                val climbed = peak - v
+                if (armed && depth > 0f && climbed >= COME_BACK * depth) {
+                    if (now - lastRepAt >= REP_COOLDOWN_MS && now - descentStartAt >= MIN_REP_MS) {
                         lastRepAt = now
                         reps += 1
+                        romEst = romEst?.let { it + ROM_BLEND * (depth - it) } ?: depth
                         onRep(
                             reps,
                             RepQuality(
                                 bottomDeg = bottomSpan.toDouble(),
-                                topDeg = span.toDouble(),
+                                topDeg = v.toDouble(),
                                 tempoMs = now - descentStartAt,
-                                depthScore = frac.toFloat(),
+                                depthScore = (depth / max(romEst ?: depth, 1f)).coerceIn(0f, 1f),
                                 symmetry = 1f,
                             )
                         )
                     }
-                    reachedBottom = false
-                    descentStartAt = 0L
+                    armed = false
+                    phase = RepPhase.TOP
+                } else if (armed && ascLoAt != 0L && now - ascLoAt >= CLIMB_STALL_MS && v <= baseline + dz * 2) {
+                    // stale-trough recovery valve — armed before the top was
+                    // learned; abort, the next descent self-heals. A climbing
+                    // hunter keeps refreshing ascLoAt and never trips this.
+                    armed = false
+                    phase = RepPhase.TOP
+                } else if (v >= ascLo + dz) {
+                    phase = RepPhase.DESCENDING  // dipped back — same attempt continues
                 }
-                else -> Unit
             }
+            RepPhase.SEARCH -> Unit
         }
-        onPhase(phase, frac.toFloat())
+
+        // depth hint for the reticle: 0 at lockout, 1 at valid depth
+        val depthHint = when (phase) {
+            RepPhase.DESCENDING -> ((v - repTrough) / max(minRise, 1f)).coerceIn(0f, 1f)
+            RepPhase.BOTTOM -> 1f
+            RepPhase.ASCENDING -> {
+                val depth = peak - repTrough
+                if (depth > 0f) ((peak - v) / depth).coerceIn(0f, 1f) else 0f
+            }
+            else -> 0f
+        }
+        onPhase(phase, depthHint)
     }
 
     // ── frame-quality gate: the "why is nothing counting" answers ───────────
