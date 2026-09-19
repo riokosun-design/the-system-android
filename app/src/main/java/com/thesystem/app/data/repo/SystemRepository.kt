@@ -102,6 +102,12 @@ class SystemRepository @Inject constructor(
         supabase.postgrest.rpc("complete_quest", buildJsonObject { put("p_quest_id", questId) }); Unit
     }
 
+    /** RANK screen feed — lifetime verified bests, computed server-side (mig 014). */
+    suspend fun verifiedBests(): VerifiedBestsDto? = runCatching {
+        val raw = supabase.postgrest.rpc("verified_bests").data ?: error("no response")
+        cacheJson.decodeFromString(VerifiedBestsDto.serializer(), raw)
+    }.getOrNull()
+
     /**
      * Log a physically-verified session (camera rep counts / sensor distance)
      * against a quest: writes an immutable workouts proof row and advances

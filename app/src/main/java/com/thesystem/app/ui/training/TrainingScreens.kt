@@ -63,7 +63,7 @@ data class TrainingState(
     val error: String? = null,
 ) {
     fun enrollmentOf(course: CourseDto): UserCourseDto? = myCourses.firstOrNull { it.courseId == course.id }
-    val primaryMuscle: CourseDto? get() = muscle.firstOrNull { enrollmentOf(it) != null }
+    val primaryMuscle: CourseDto? get() = muscle.firstOrNull { c -> myCourses.any { it.courseId == c.id && it.status == "ACTIVE" } }
     val activeSpecials: List<CourseDto> get() = specials.filter { enrollmentOf(it)?.status == "ACTIVE" }
 }
 
@@ -286,13 +286,7 @@ fun CourseCard(
                 course.title.uppercase(), color = PaperWhite,
                 style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
-            if (!course.description.isNullOrBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    course.description.orEmpty(), style = MaterialTheme.typography.bodySmall,
-                    color = LabelGray, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                )
-            }
+            // descriptions live exclusively in COURSE INFO — the card stays a quick scan
             Spacer(Modifier.height(Grid.S8))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 SystemChip(course.difficulty, SkyBlue)
@@ -359,8 +353,7 @@ fun PerformanceAreaSection(
         SectionTitle("PERFORMANCE DEVELOPMENT AREA", SkyBlue)
         Spacer(Modifier.height(4.dp))
         Text(
-            "Speed, agility, reflex, mobility, flexibility, endurance, stamina, grip, leg power and striking athletics. " +
-                "Max ${5} active tracks — sessions are scheduled onto muscle recovery days. Results vary with individual effort.",
+            "Speed · agility · reflex · mobility · endurance · power — rest-day slots.",
             style = MaterialTheme.typography.bodySmall, color = LabelGray,
         )
         Spacer(Modifier.height(Grid.S8))

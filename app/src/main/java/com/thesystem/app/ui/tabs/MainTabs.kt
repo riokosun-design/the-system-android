@@ -34,6 +34,7 @@ import com.thesystem.app.ui.arena.ArenaScreen
 import com.thesystem.app.ui.dashboard.DashboardScreen
 import com.thesystem.app.ui.profile.ProfileScreen
 import com.thesystem.app.ui.market.MarketScreen
+import com.thesystem.app.ui.rank.RankScreen
 
 /**
  * Strict 4-tab rail. The training catalog and the Black Room are reached from
@@ -41,6 +42,7 @@ import com.thesystem.app.ui.market.MarketScreen
  */
 enum class SystemTab(val label: String, val icon: ImageVector) {
     DASHBOARD("Status", Icons.Default.Dashboard),
+    RANK("Rank", Icons.Default.MilitaryTech),
     ARENA("Arena", Icons.Default.Whatshot),
     MARKET("Market", Icons.Default.Storefront),
     PROFILE("Vault", Icons.Default.Person),
@@ -71,6 +73,7 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
         ) { t ->
             when (t) {
                 SystemTab.DASHBOARD -> DashboardScreen(nav = nav)
+                SystemTab.RANK -> RankScreen()
                 SystemTab.ARENA -> ArenaScreen(nav = nav)
                 SystemTab.MARKET -> MarketScreen(nav = nav)
                 SystemTab.PROFILE -> ProfileScreen(profile = profile, nav = nav, onSignOut = onSignOut)

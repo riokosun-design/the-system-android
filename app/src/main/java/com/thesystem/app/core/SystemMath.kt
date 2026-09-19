@@ -62,6 +62,26 @@ object SystemMath {
         else -> HunterRank.entries.filter { !it.isPenaltyRank }.last { level >= it.minLevel }
     }
 
+    // ── HUNTER TIERS — the F → SS progression ladder (RANK screen, 0.6.0) ──
+    // Pure function of level; penalty ranks (GARBAGE/LOSER) stay a separate
+    // overlay discipline via rankFor() so degradation never erases the ladder.
+    enum class HunterTier(val letter: String, val minLevel: Int) {
+        F("F", 1), E("E", 5), D("D", 12), C("C", 22), B("B", 35), A("A", 50), S("S", 70), SS("SS", 90);
+
+        val title: String get() = "$letter-RANK"
+    }
+
+    fun tierFor(level: Int): HunterTier = HunterTier.entries.last { level >= it.minLevel }
+
+    fun nextTier(level: Int): HunterTier? = HunterTier.entries.firstOrNull { it.minLevel > level }
+
+    /** 0..1 progress from the current tier's floor to the next tier's gate. */
+    fun tierProgress(level: Int): Float {
+        val cur = tierFor(level)
+        val nxt = nextTier(level) ?: return 1f
+        return ((level - cur.minLevel).toFloat() / (nxt.minLevel - cur.minLevel)).coerceIn(0f, 1f)
+    }
+
     fun penaltyStateFor(missedDays: Int): String = when {
         missedDays <= 0 -> "CLEAR"
         missedDays == 1 -> "WARNING"

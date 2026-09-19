@@ -244,6 +244,26 @@ fun SectionTitle(text: String, color: Color = PaperWhite) {
     )
 }
 
+/** Tier tag — the F → SS ladder badge (SkyBlue); penalty ranks keep RankBadge. */
+@Composable
+fun TierBadge(tier: SystemMath.HunterTier, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(4.dp))
+            .border(1.dp, SkyBlue.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text(
+            tier.title,
+            color = SkyBlue,
+            fontSize = 10.sp,
+            fontFamily = SystemMono,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 2.sp,
+        )
+    }
+}
+
 /** Rank tag: outlined by default; penalty ranks invert to solid white/black. */
 @Composable
 fun RankBadge(rank: SystemMath.HunterRank, modifier: Modifier = Modifier) {

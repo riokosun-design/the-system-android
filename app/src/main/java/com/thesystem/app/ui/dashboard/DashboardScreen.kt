@@ -22,16 +22,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import com.thesystem.app.Routes
 import com.thesystem.app.core.SystemMath
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
+import com.thesystem.app.data.model.CourseDto
 import com.thesystem.app.data.model.QuestDto
+import com.thesystem.app.data.model.UserCourseDto
 import com.thesystem.app.service.RecoveryTracker
 import com.thesystem.app.ui.training.CourseCard
 import com.thesystem.app.ui.training.CourseInfoPanel
@@ -158,27 +163,43 @@ fun DashboardScreen(
                             }
                         }
 
-                        // 3 ── TRAINING / COURSE area
+                        // 3 ── TRAINING — ONE primary course commands this surface;
+                        //    every alternative lives in the catalog, never here.
                         item {
                             Box(Modifier.enterAnim(4)) {
                                 Column {
-                                    SectionTitle("TRAINING")
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(
-                                        if (s.primaryMuscle == null) "Pick one primary muscle course. The plan adapts to your verified performance."
-                                        else "PRIMARY COURSE: ${s.primaryMuscle?.title?.uppercase()}",
-                                        style = MaterialTheme.typography.bodySmall, color = LabelGray,
-                                    )
+                                    Row(
+                                        Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        SectionTitle("TRAINING")
+                                        GhostButton("CATALOG", {
+                                            haptics.select(); nav.navigate(Routes.TRAINING)
+                                        })
+                                    }
                                     Spacer(Modifier.height(Grid.S8))
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(Grid.S12)) {
-                                        items(s.muscle, key = { it.id }) { c ->
-                                            CourseCard(
-                                                course = c,
-                                                enrollment = s.enrollmentOf(c),
-                                                recommended = s.primaryMuscle == null && c.difficulty == "EASY",
-                                                onClick = { haptics.tick(); trainingVm.open(c) },
+                                    val primary = s.primaryMuscle
+                                    if (primary == null) {
+                                        GlowCard(modifier = Modifier.fillMaxWidth()) {
+                                            Text("NO PRIMARY COURSE", color = PaperWhite, style = MaterialTheme.typography.titleMedium)
+                                            Text(
+                                                "One muscle track · verified sessions · the catalog holds every option.",
+                                                style = MaterialTheme.typography.bodySmall, color = LabelGray,
+                                            )
+                                            Spacer(Modifier.height(Grid.S8))
+                                            NeonButton(
+                                                "CHOOSE PRIMARY COURSE",
+                                                { haptics.select(); nav.navigate(Routes.TRAINING) },
+                                                Modifier.fillMaxWidth(), color = SkyBlue,
                                             )
                                         }
+                                    } else {
+                                        PrimaryCoursePanel(
+                                            course = primary,
+                                            enrollment = s.enrollmentOf(primary),
+                                            onOpen = { haptics.select(); trainingVm.open(primary) },
+                                        )
                                     }
                                     Spacer(Modifier.height(Grid.S12))
                                     Row(
@@ -186,26 +207,28 @@ fun DashboardScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        Column {
-                                            SectionTitle("PERFORMANCE DEVELOPMENT", SkyBlue)
-                                            Text(
-                                                "Specials · max 5 active · rest-day slots",
-                                                style = MaterialTheme.typography.bodySmall, color = LabelGray,
-                                            )
-                                        }
+                                        SectionTitle("PERFORMANCE DEVELOPMENT", SkyBlue)
                                         GhostButton("ALL", {
                                             haptics.select(); nav.navigate(Routes.TRAINING)
                                         })
                                     }
                                     Spacer(Modifier.height(Grid.S8))
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(Grid.S12)) {
-                                        items(s.specials, key = { it.id }) { c ->
-                                            CourseCard(
-                                                course = c, enrollment = s.enrollmentOf(c),
-                                                recommended = false,
-                                                onClick = { haptics.tick(); trainingVm.open(c) },
-                                            )
+                                    val mySpecials = s.specials.filter { s.enrollmentOf(it)?.status == "ACTIVE" }
+                                    if (mySpecials.isNotEmpty()) {
+                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(Grid.S12)) {
+                                            items(mySpecials, key = { it.id }) { c ->
+                                                CourseCard(
+                                                    course = c, enrollment = s.enrollmentOf(c),
+                                                    recommended = false,
+                                                    onClick = { haptics.tick(); trainingVm.open(c) },
+                                                )
+                                            }
                                         }
+                                    } else {
+                                        Text(
+                                            "No active performance tracks — speed, mobility and power work live in the catalog.",
+                                            style = MaterialTheme.typography.bodySmall, color = FaintGray,
+                                        )
                                     }
                                     Spacer(Modifier.height(Grid.S12))
                                     BlackRoomDoor(
@@ -275,9 +298,11 @@ private fun SystemStatusHeader(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("SYSTEM", style = MonoLabel, color = SkyBlue)
-                Text("STATUS", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 26.sp, letterSpacing = 1.5.sp)
+                Text("STATUS", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 22.sp, letterSpacing = 1.sp)
             }
-            RankBadge(s.rank)
+            // penalty ranks keep the inverted badge; earned progress shows the tier ladder
+            if (s.rank.isPenaltyRank) RankBadge(s.rank)
+            else TierBadge(SystemMath.tierFor(p?.level ?: 1))
         }
         Spacer(Modifier.height(Grid.S12))
         GlowCard(modifier = Modifier.fillMaxWidth()) {
@@ -293,7 +318,7 @@ private fun SystemStatusHeader(
                         Text(p?.displayName ?: "Unknown Hunter", style = MaterialTheme.typography.titleLarge)
                         Spacer(Modifier.height(Grid.S4))
                         Text(
-                            "LV ${p?.level ?: 1} · ${s.rank.title} · ${SystemMath.formatXp(p?.xp ?: 0)} XP",
+                            "LV ${p?.level ?: 1} · ${if (s.rank.isPenaltyRank) s.rank.title else SystemMath.tierFor(p?.level ?: 1).title} · ${SystemMath.formatXp(p?.xp ?: 0)} XP",
                             style = MonoData, color = PaperWhite,
                         )
                         Spacer(Modifier.height(Grid.S8))
@@ -511,6 +536,69 @@ private fun FormsStrip(s: DashboardState) {
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * PRIMARY COURSE — the one muscle track the hunter chose. Art owns the top,
+ * data owns the panel: name · difficulty · duration · progress · CONTINUE.
+ * Alternatives never render here; they live in the catalog.
+ */
+@Composable
+private fun PrimaryCoursePanel(
+    course: CourseDto,
+    enrollment: UserCourseDto?,
+    onOpen: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(PanelGray)
+            .border(1.dp, LineSoft, RoundedCornerShape(12.dp))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { onOpen() },
+    ) {
+        Box(Modifier.fillMaxWidth().height(130.dp)) {
+            AsyncImage(
+                model = course.cover, contentDescription = course.title,
+                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
+            )
+            Box(
+                Modifier
+                    .align(Alignment.TopStart).padding(10.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(InkBlack.copy(alpha = 0.72f))
+                    .border(1.dp, SkyBlue, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            ) { Text("PRIMARY COURSE", style = MonoLabel, color = SkyBlue, fontSize = 8.sp) }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(LineSoft))
+        Column(Modifier.fillMaxWidth().padding(Grid.S12)) {
+            Text(
+                course.title.uppercase(), color = PaperWhite,
+                style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text("${course.difficulty} · ${course.durationMonths} MONTHS", style = MonoLabel, color = LabelGray)
+            Spacer(Modifier.height(Grid.S8))
+            val pct = enrollment?.progressPercent ?: 0.0
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f).height(3.dp).clip(RoundedCornerShape(2.dp)).background(TrackGray)) {
+                    Box(
+                        Modifier.fillMaxHeight()
+                            .fillMaxWidth((pct / 100.0).toFloat().coerceIn(0f, 1f))
+                            .background(SkyBlue),
+                    )
+                }
+                Spacer(Modifier.width(Grid.S8))
+                Text("%.0f%%".format(pct), style = MonoData, color = SkyBlue)
+            }
+            Spacer(Modifier.height(Grid.S8))
+            NeonButton("CONTINUE", onOpen, Modifier.fillMaxWidth(), color = SkyBlue)
         }
     }
 }

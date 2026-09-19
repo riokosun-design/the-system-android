@@ -54,7 +54,8 @@ data class DashboardState(
     val clearedCount: Int get() = quests.count { it.isDone }
     val allCleared: Boolean get() = quests.isNotEmpty() && clearedCount == quests.size
     fun enrollmentOf(course: CourseDto): UserCourseDto? = myCourses.firstOrNull { it.courseId == course.id }
-    val primaryMuscle: CourseDto? get() = muscle.firstOrNull { enrollmentOf(it) != null }
+    /** The ONE active muscle track — completed/dropped history never claims the slot. */
+    val primaryMuscle: CourseDto? get() = muscle.firstOrNull { c -> myCourses.any { it.courseId == c.id && it.status == "ACTIVE" } }
 }
 
 @HiltViewModel

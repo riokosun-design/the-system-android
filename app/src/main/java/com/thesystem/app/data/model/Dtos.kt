@@ -248,6 +248,16 @@ data class HunterStatsRecentDto(
     val at: String? = null,
 )
 
+/** `verified_bests()` — lifetime bests from immutable workout proofs + wars (mig 014). */
+@Serializable
+data class VerifiedBestsDto(
+    @SerialName("push_reps") val pushReps: Int = 0,
+    @SerialName("squat_reps") val squatReps: Int = 0,
+    @SerialName("run_meters") val runMeters: Int = 0,
+    val sessions: Int = 0,
+    @SerialName("battle_wins") val battleWins: Int = 0,
+)
+
 @Serializable
 data class PoolDto(
     val id: String,
