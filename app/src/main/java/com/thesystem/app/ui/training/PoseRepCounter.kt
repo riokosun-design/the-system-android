@@ -79,12 +79,30 @@ class PoseRepCounter(
     private var imgH = 1f
     private var lastStatus = PoseStatus.WAITING
 
+    // ── FRONT-VIEW push-up window (phone flat on floor, camera up) ───────────
+    // From this geometry the elbow's 2D angle barely changes (elbows travel
+    // toward/away from the lens) — the OLD angle engine could never re-enter
+    // TOP, which is why hunters saw 0 reps forever. The honest observable from
+    // below is APPARENT SHOULDER WIDTH: get low → closer to the lens → span
+    // grows; push up → farther → span shrinks. Session-adaptive lo/hi window
+    // calibrates itself inside the first rep, no fixed thresholds needed.
+    private var emaSpan: Float? = null
+    private var spanLo = Float.MAX_VALUE
+    private var spanHi = 0f
+    private var bottomSpan = 0f
+
     private companion object {
         const val EMA_ALPHA = 0.45
         const val CONFIRM_FRAMES = 2
         const val REP_COOLDOWN_MS = 450L
         const val LIKELIHOOD_FLOOR = 0.35f
         const val MIN_REP_MS = 350L          // faster than this = camera noise, not a rep
+
+        // front-span push-up latching bands (fraction of observed span window)
+        const val SPAN_EMA = 0.5f
+        const val SPAN_BOTTOM = 0.66  // this close to the lens = chest down
+        const val SPAN_TOP = 0.34     // this far = locked out
+        const val MIN_SPAN_RANGE_PX = 24f  // below this the user hasn't actually moved
     }
 
     // ── thresholds ───────────────────────────────────────────────────────────
@@ -95,9 +113,17 @@ class PoseRepCounter(
     @androidx.camera.core.ExperimentalGetImage
     fun process(imageProxy: ImageProxy) {
         val media = imageProxy.image ?: run { imageProxy.close(); return }
-        imgW = imageProxy.width.toFloat().coerceAtLeast(1f)
-        imgH = imageProxy.height.toFloat().coerceAtLeast(1f)
-        val image = InputImage.fromMediaImage(media, imageProxy.imageInfo.rotationDegrees)
+        // Landmark coordinates live in the ROTATED image space — swap buffer
+        // dims for 90/270 or every span/threshold/mesh normalization lies.
+        val rot = imageProxy.imageInfo.rotationDegrees
+        if (rot == 90 || rot == 270) {
+            imgW = imageProxy.height.toFloat().coerceAtLeast(1f)
+            imgH = imageProxy.width.toFloat().coerceAtLeast(1f)
+        } else {
+            imgW = imageProxy.width.toFloat().coerceAtLeast(1f)
+            imgH = imageProxy.height.toFloat().coerceAtLeast(1f)
+        }
+        val image = InputImage.fromMediaImage(media, rot)
         detector.process(image)
             .addOnSuccessListener { pose -> evaluate(pose) }
             .addOnCompleteListener { imageProxy.close() }
@@ -112,6 +138,10 @@ class PoseRepCounter(
         candidateStreak = 0
         reachedBottom = false
         bottomAngle = 180.0
+        emaSpan = null
+        spanLo = Float.MAX_VALUE
+        spanHi = 0f
+        bottomSpan = 0f
     }
 
     fun close() = detector.close()
@@ -145,12 +175,28 @@ class PoseRepCounter(
             }
         }
 
-        val joints = when (exercise) {
-            RepExercise.PUSHUP -> Triple(PoseLandmark.LEFT_SHOULDER, PoseLandmark.LEFT_ELBOW, PoseLandmark.LEFT_WRIST) to
-                Triple(PoseLandmark.RIGHT_SHOULDER, PoseLandmark.RIGHT_ELBOW, PoseLandmark.RIGHT_WRIST)
-            RepExercise.SQUAT -> Triple(PoseLandmark.LEFT_HIP, PoseLandmark.LEFT_KNEE, PoseLandmark.LEFT_ANKLE) to
-                Triple(PoseLandmark.RIGHT_HIP, PoseLandmark.RIGHT_KNEE, PoseLandmark.RIGHT_ANKLE)
+        // ── PUSH-UP = front-span cycle (floor + front camera geometry) ──────
+        if (exercise == RepExercise.PUSHUP) {
+            val lS = pose.getPoseLandmark(PoseLandmark.LEFT_SHOULDER)
+            val rS = pose.getPoseLandmark(PoseLandmark.RIGHT_SHOULDER)
+            if (lS == null || rS == null ||
+                lS.inFrameLikelihood < LIKELIHOOD_FLOOR || rS.inFrameLikelihood < LIKELIHOOD_FLOOR
+            ) return
+            val span = abs(lS.position.x - rS.position.x)
+            val v = emaSpan?.let { it + SPAN_EMA * (span - it) } ?: span
+            emaSpan = v
+            if (v < spanLo) spanLo = v
+            if (v > spanHi) spanHi = v
+            val range = spanHi - spanLo
+            if (range < MIN_SPAN_RANGE_PX) return  // window not calibrated yet — keep watching
+            val frac = ((v - spanLo) / range).coerceIn(0f, 1f).toDouble()
+            stepSpan(frac, v)
+            return
         }
+
+        // ── SQUAT = hip·knee·ankle angle cycle (back camera, side/full body) ─
+        val joints = Triple(PoseLandmark.LEFT_HIP, PoseLandmark.LEFT_KNEE, PoseLandmark.LEFT_ANKLE) to
+            Triple(PoseLandmark.RIGHT_HIP, PoseLandmark.RIGHT_KNEE, PoseLandmark.RIGHT_ANKLE)
         val left = angleAt(pose, joints.first.first, joints.first.second, joints.first.third)
         val right = angleAt(pose, joints.second.first, joints.second.second, joints.second.third)
         val raw = when {
@@ -219,10 +265,60 @@ class PoseRepCounter(
         onPhase(phase, if (phase == RepPhase.BOTTOM) 1f else depth)
     }
 
+    /** Span-cycle machine for floor/front push-ups: BOTTOM = close (span big),
+     *  TOP = far (span small). Same full-cycle discipline as [step]. */
+    private fun stepSpan(frac: Double, span: Float) {
+        val now = System.currentTimeMillis()
+        val wanted = when {
+            frac >= SPAN_BOTTOM -> RepPhase.BOTTOM
+            frac <= SPAN_TOP -> RepPhase.TOP
+            phase == RepPhase.BOTTOM || phase == RepPhase.ASCENDING -> RepPhase.ASCENDING
+            else -> RepPhase.DESCENDING
+        }
+        if (wanted == candidate) candidateStreak++ else { candidate = wanted; candidateStreak = 1 }
+
+        if (candidateStreak >= CONFIRM_FRAMES && wanted != phase) {
+            val previous = phase
+            phase = wanted
+            when (wanted) {
+                RepPhase.BOTTOM -> {
+                    reachedBottom = true
+                    bottomSpan = span
+                    if (previous == RepPhase.TOP || previous == RepPhase.DESCENDING) descentStartAt = now
+                }
+                RepPhase.TOP -> {
+                    if (reachedBottom && previous == RepPhase.ASCENDING &&
+                        now - lastRepAt > REP_COOLDOWN_MS && now - descentStartAt > MIN_REP_MS
+                    ) {
+                        lastRepAt = now
+                        reps += 1
+                        onRep(
+                            reps,
+                            RepQuality(
+                                bottomDeg = bottomSpan.toDouble(),
+                                topDeg = span.toDouble(),
+                                tempoMs = now - descentStartAt,
+                                depthScore = frac.toFloat(),
+                                symmetry = 1f,
+                            )
+                        )
+                    }
+                    reachedBottom = false
+                    descentStartAt = 0L
+                }
+                else -> Unit
+            }
+        }
+        onPhase(phase, frac.toFloat())
+    }
+
     // ── frame-quality gate: the "why is nothing counting" answers ───────────
     private fun visibility(pose: Pose): PoseStatus {
+        // PUSH-UP (front-span): shoulders + nose is all the engine asks for —
+        // elbows are NOT required from the floor view (the old list demanded
+        // them and then measured nothing, one of the zero-rep roots).
         val need = if (exercise == RepExercise.PUSHUP) {
-            listOf(PoseLandmark.LEFT_SHOULDER, PoseLandmark.RIGHT_SHOULDER, PoseLandmark.LEFT_ELBOW, PoseLandmark.RIGHT_ELBOW)
+            listOf(PoseLandmark.LEFT_SHOULDER, PoseLandmark.RIGHT_SHOULDER, PoseLandmark.NOSE)
         } else {
             listOf(
                 PoseLandmark.LEFT_HIP, PoseLandmark.RIGHT_HIP,
@@ -245,19 +341,11 @@ class PoseRepCounter(
         val spanX = (xs.max() - xs.min())
         val spanY = (ys.max() - ys.min())
         if (exercise == RepExercise.SQUAT && spanY < imgH * 0.35f) return PoseStatus.MOVE_BACK
-        if (exercise == RepExercise.PUSHUP && spanX < imgW * 0.22f) return PoseStatus.MOVE_BACK
+        if (exercise == RepExercise.PUSHUP && spanX < imgW * 0.20f) return PoseStatus.MOVE_BACK
 
-        // PUSH-UP: the hip line must stay roughly straight — a sagging hip is a
-        // bad camera angle (or a bad rep); we ask for a re-frame, we don't count.
-        if (exercise == RepExercise.PUSHUP) {
-            val sh = pose.getPoseLandmark(PoseLandmark.LEFT_SHOULDER)
-            val hip = pose.getPoseLandmark(PoseLandmark.LEFT_HIP)
-            val ank = pose.getPoseLandmark(PoseLandmark.LEFT_ANKLE)
-            if (sh != null && hip != null && ank != null) {
-                val bodyAngle = angleBetween(sh.position.x, sh.position.y, hip.position.x, hip.position.y, ank.position.x, ank.position.y)
-                if (bodyAngle < 130.0) return PoseStatus.BAD_ANGLE
-            }
-        }
+        // NOTE: the old "hip-line straightness" gate is gone for PUSH-UP — from
+        // a floor/front camera the shoulder·hip·ankle angle foreshortens below
+        // 130° on nearly every frame, which hard-blocked ALL counting.
         return PoseStatus.TRACKING
     }
 

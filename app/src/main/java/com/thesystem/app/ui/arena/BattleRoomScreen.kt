@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.thesystem.app.core.SystemMath
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
+import com.thesystem.app.ui.training.PoseRepCounter
 import java.util.concurrent.Executors
 import kotlin.math.PI
 import kotlin.math.sin
@@ -101,8 +102,19 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
 
     // DESIGN 2.5 — hologram mesh: ML Kit landmarks flow into the overlay canvas
     var meshPoints by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
-    val counter = remember {
-        if (spectating) null else PosePushUpCounter(onRep = vm::onRep, onLandmarks = { meshPoints = it })
+    // ONE unified engine (training/PoseRepCounter): front-span push-ups for the
+    // floor camera, hip·knee·ankle for squats — keyed to the war's exercise_type.
+    val warKind = if (s.battle?.exerciseType?.uppercase() == "SQUAT") {
+        PoseRepCounter.RepExercise.SQUAT
+    } else {
+        PoseRepCounter.RepExercise.PUSHUP
+    }
+    val counter = remember(warKind, spectating) {
+        if (spectating) null else PoseRepCounter(
+            exercise = warKind,
+            onRep = { n, _ -> vm.onRep(n) },
+            onLandmarks = { meshPoints = it },
+        )
     }
     DisposableEffect(counter) { onDispose { counter?.close() } }
 
