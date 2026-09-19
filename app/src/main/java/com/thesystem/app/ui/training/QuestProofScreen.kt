@@ -65,9 +65,11 @@ fun QuestProofScreen(
     val haptics = rememberSystemHaptics()
     val context = LocalContext.current
 
+    // FLOOR RADAR needs no permission at all — the camera gate only stands
+    // when the hunter actually picked the ML Kit channel.
     val permission = when (s.mode) {
         ProofMode.STEPS -> Manifest.permission.ACTIVITY_RECOGNITION
-        ProofMode.CAMERA -> Manifest.permission.CAMERA
+        ProofMode.CAMERA -> if (s.radar) null else Manifest.permission.CAMERA
         else -> null
     }
     var granted by remember(permission) {
@@ -78,6 +80,18 @@ fun QuestProofScreen(
         if (ok) haptics.tick() else haptics.error()
     }
     LaunchedEffect(permission) { if (permission != null && !granted) launcher.launch(permission) }
+
+    // radar + camera sessions run hands-free on the floor — never let the
+    // screen sleep mid-set (a sleeping screen also starves some OEM sensors).
+    val activity = remember(context) {
+        var ctx: Context? = context
+        while (ctx is android.content.ContextWrapper && ctx !is android.app.Activity) ctx = ctx.baseContext
+        ctx as? android.app.Activity
+    }
+    DisposableEffect(Unit) {
+        activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
 
     // ── completion handshake: SYSTEM event + recovery window ────────────────
     LaunchedEffect(s.verifiedComplete) {
@@ -109,7 +123,8 @@ fun QuestProofScreen(
                 Column(Modifier.weight(1f)) {
                     Text(s.title.uppercase(), style = MaterialTheme.typography.titleMedium, color = PaperWhite)
                     Text(
-                        "BLOCK ${s.seq.toString().padStart(2, '0')} · ${s.mode.name} PROOF",
+                        "BLOCK ${s.seq.toString().padStart(2, '0')} · " +
+                            (if (s.mode == ProofMode.CAMERA && s.radar) "RADAR" else s.mode.name) + " PROOF",
                         style = MonoLabel, color = SkyBlue,
                     )
                 }
@@ -182,6 +197,68 @@ private fun PermissionCard(mode: ProofMode, onGrant: () -> Unit) {
 
 @Composable
 private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
+    // rep flash decays on its own — no layout thrash
+    val flash by animateFloatAsState(targetValue = if (s.repFlash > 0) 1f else 0f, animationSpec = spring(), label = "flash")
+    LaunchedEffect(s.repFlash) { if (s.repFlash > 0) { delay(220); vm.clearFlash() } }
+
+    val isPushup = s.exercise == PoseRepCounter.RepExercise.PUSHUP
+    val radar = isPushup && s.radar
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        // proof-channel switch — push-ups may run camera-free on the proximity
+        // radar; squats stay ML Kit only (upright pose is its comfort zone).
+        if (isPushup) {
+            RadarModeToggle(radar = s.radar, onChange = { vm.setRadar(it) })
+            Spacer(Modifier.height(10.dp))
+        }
+
+        Box(
+            Modifier
+                .fillMaxWidth().height(360.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.Black)
+                .border(1.5.dp, SkyBlue.copy(alpha = 0.7f), RoundedCornerShape(12.dp)),
+        ) {
+            if (radar) {
+                FloorRadarPanel(
+                    count = s.count,
+                    onRep = { n, tempo ->
+                        vm.onRep(n, PoseRepCounter.RepQuality(0.0, 0.0, tempo, 1f, 1f))
+                    },
+                    modifier = Modifier.matchParentSize(),
+                )
+            } else {
+                CameraBox(s, vm, flash)
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+        ProofGauge(s.count, s.target, if (s.exercise == PoseRepCounter.RepExercise.SQUAT) "SQUATS" else "PUSH-UPS", "reps")
+        s.lastQuality?.let { q ->
+            Spacer(Modifier.height(8.dp))
+            Text(
+                if (radar) {
+                    if (q.tempoMs > 0) "DEPTH SENSOR-VERIFIED · TEMPO %.1fs".format(q.tempoMs / 1000.0)
+                    else "DEPTH SENSOR-VERIFIED"
+                } else {
+                    "FORM %.0f%% · TEMPO %.1fs · DEPTH %.0f%%".format(q.symmetry * 100, q.tempoMs / 1000.0, q.depthScore * 100)
+                },
+                style = MonoLabel, color = LabelGray,
+            )
+        }
+        if (radar) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "PHONE FLAT ON THE FLOOR · CHEST OVER THE SENSOR · FULL DESCENT = 1 REP",
+                style = MonoLabel, color = LabelGray,
+            )
+        }
+    }
+}
+
+/** ML Kit stage — lives inside the proof Box so overlays keep BoxScope. */
+@Composable
+private fun BoxScope.CameraBox(s: QuestProofState, vm: QuestProofViewModel, flash: Float) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var preview by remember { mutableStateOf<PreviewView?>(null) }
@@ -205,6 +282,14 @@ private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
     }
     DisposableEffect(counter) { onDispose { counter.close() } }
 
+    // leaving this stage (radar toggle, exit) must release the lens — a bound
+    // camera would keep the analyzer, and its counter, alive in the dark.
+    DisposableEffect(Unit) {
+        onDispose {
+            runCatching { ProcessCameraProvider.getInstance(context).get().unbindAll() }
+        }
+    }
+
     LaunchedEffect(preview) {
         val view = preview ?: return@LaunchedEffect
         val provider = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -222,65 +307,41 @@ private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
         provider.bindToLifecycle(lifecycleOwner, selector, camPreview, analysis)
     }
 
-    // rep flash decays on its own — no layout thrash
-    val flash by animateFloatAsState(targetValue = if (s.repFlash > 0) 1f else 0f, animationSpec = spring(), label = "flash")
-    LaunchedEffect(s.repFlash) { if (s.repFlash > 0) { delay(220); vm.clearFlash() } }
+    AndroidView(factory = { ctx -> PreviewView(ctx).also { preview = it } }, modifier = Modifier.matchParentSize())
+    PoseMeshOverlay(points = mesh, repFlash = flash * depth, modifier = Modifier.matchParentSize())
 
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        Box(
-            Modifier
-                .fillMaxWidth().height(360.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.Black)
-                .border(1.5.dp, SkyBlue.copy(alpha = 0.7f), RoundedCornerShape(12.dp)),
-        ) {
-            AndroidView(factory = { ctx -> PreviewView(ctx).also { preview = it } }, modifier = Modifier.matchParentSize())
-            PoseMeshOverlay(points = mesh, repFlash = flash * depth, modifier = Modifier.matchParentSize())
+    // live rep readout
+    Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
+        Text("REP", style = MonoLabel, color = SkyBlue)
+        Text(
+            "${s.count}", color = PaperWhite, fontFamily = SystemMono,
+            fontWeight = FontWeight.Bold, fontSize = 44.sp,
+        )
+    }
 
-            // live rep readout
-            Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
-                Text("REP", style = MonoLabel, color = SkyBlue)
-                Text(
-                    "${s.count}", color = PaperWhite, fontFamily = SystemMono,
-                    fontWeight = FontWeight.Bold, fontSize = 44.sp,
-                )
-            }
-
-            // status ribbon — the fix-it instruction the old build never gave
-            val (statusText, statusColor) = when (s.poseStatus) {
-                PoseRepCounter.PoseStatus.POSE_NOT_DETECTED -> "POSE NOT DETECTED" to PaperWhite
-                PoseRepCounter.PoseStatus.MOVE_BACK -> "MOVE BACK" to PaperWhite
-                PoseRepCounter.PoseStatus.FULL_BODY_NOT_VISIBLE -> "FULL BODY NOT VISIBLE" to PaperWhite
-                PoseRepCounter.PoseStatus.BAD_ANGLE -> "BAD ANGLE — STRAIGHTEN THE LINE" to PaperWhite
-                PoseRepCounter.PoseStatus.TRACKING -> when (phase) {
-                    PoseRepCounter.RepPhase.BOTTOM -> if (s.exercise == PoseRepCounter.RepExercise.SQUAT) "DEEP — DRIVE UP" else "BOTTOM — PUSH"
-                    PoseRepCounter.RepPhase.ASCENDING -> "UP"
-                    PoseRepCounter.RepPhase.DESCENDING -> "CONTROLLED DESCENT"
-                    else -> "LOCKED OUT — BEGIN"
-                } to SkyBlue
-                PoseRepCounter.PoseStatus.WAITING -> "ALIGN THE CAMERA" to LabelGray
-            }
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter).padding(12.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .border(1.dp, statusColor.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
-            ) {
-                Text(statusText, color = statusColor, fontFamily = SystemMono, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-        ProofGauge(s.count, s.target, if (s.exercise == PoseRepCounter.RepExercise.SQUAT) "SQUATS" else "PUSH-UPS", "reps")
-        s.lastQuality?.let { q ->
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "FORM %.0f%% · TEMPO %.1fs · DEPTH %.0f%%".format(q.symmetry * 100, q.tempoMs / 1000.0, q.depthScore * 100),
-                style = MonoLabel, color = LabelGray,
-            )
-        }
+    // status ribbon — the fix-it instruction the old build never gave
+    val (statusText, statusColor) = when (s.poseStatus) {
+        PoseRepCounter.PoseStatus.POSE_NOT_DETECTED -> "POSE NOT DETECTED" to PaperWhite
+        PoseRepCounter.PoseStatus.MOVE_BACK -> "MOVE BACK" to PaperWhite
+        PoseRepCounter.PoseStatus.FULL_BODY_NOT_VISIBLE -> "FULL BODY NOT VISIBLE" to PaperWhite
+        PoseRepCounter.PoseStatus.BAD_ANGLE -> "BAD ANGLE — STRAIGHTEN THE LINE" to PaperWhite
+        PoseRepCounter.PoseStatus.TRACKING -> when (phase) {
+            PoseRepCounter.RepPhase.BOTTOM -> if (s.exercise == PoseRepCounter.RepExercise.SQUAT) "DEEP — DRIVE UP" else "BOTTOM — PUSH"
+            PoseRepCounter.RepPhase.ASCENDING -> "UP"
+            PoseRepCounter.RepPhase.DESCENDING -> "CONTROLLED DESCENT"
+            else -> "LOCKED OUT — BEGIN"
+        } to SkyBlue
+        PoseRepCounter.PoseStatus.WAITING -> "ALIGN THE CAMERA" to LabelGray
+    }
+    Box(
+        Modifier
+            .align(Alignment.BottomCenter).padding(12.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color.Black.copy(alpha = 0.55f))
+            .border(1.dp, statusColor.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    ) {
+        Text(statusText, color = statusColor, fontFamily = SystemMono, fontSize = 11.sp, fontWeight = FontWeight.Bold)
     }
 }
 

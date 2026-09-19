@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -40,7 +41,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.thesystem.app.core.SystemMath
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
+import com.thesystem.app.ui.training.FloorRadarPanel
 import com.thesystem.app.ui.training.PoseRepCounter
+import com.thesystem.app.ui.training.RadarModeToggle
 import java.util.concurrent.Executors
 import kotlin.math.PI
 import kotlin.math.sin
@@ -109,6 +112,12 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
     } else {
         PoseRepCounter.RepExercise.PUSHUP
     }
+    // FLOOR RADAR war channel: ML Kit loses the pose exactly at the bottom of
+    // floor-level push-ups (field report), the binary proximity gate cannot.
+    // Default ON for push-up wars; squat wars stay camera-only. Locked once
+    // the war goes LIVE so nobody flips channels mid-count.
+    var radarMode by rememberSaveable { mutableStateOf(true) }
+    val useRadar = radarMode && warKind == PoseRepCounter.RepExercise.PUSHUP && !spectating
     val counter = remember(warKind, spectating) {
         if (spectating) null else PoseRepCounter(
             exercise = warKind,
@@ -121,17 +130,32 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
     val cameraPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { vm.onCameraPermission(it) }
-    LaunchedEffect(spectating) { if (!spectating) cameraPermission.launch(Manifest.permission.CAMERA) }
+    // radar wars need no camera at all — the permission prompt only stands
+    // when the hunter actually fights on the ML Kit channel.
+    LaunchedEffect(spectating, useRadar) { if (!spectating && !useRadar) cameraPermission.launch(Manifest.permission.CAMERA) }
 
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
+    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
-    DisposableEffect(Unit) { onDispose { analysisExecutor.shutdown() } }
-    LaunchedEffect(s.cameraGranted, s.counting) {
+    DisposableEffect(Unit) {
+        onDispose {
+            analysisExecutor.shutdown()
+            runCatching { cameraProvider?.unbindAll() }
+        }
+    }
+    LaunchedEffect(s.cameraGranted, s.counting, useRadar) {
+        // radar channel: the lens stays OFF — and a previously bound analyzer
+        // must be dropped so its counter can never double-count in the dark
+        if (useRadar) {
+            cameraProvider?.unbindAll()
+            return@LaunchedEffect
+        }
         val view = previewView ?: return@LaunchedEffect
         if (!s.cameraGranted) return@LaunchedEffect
         val provider = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             ProcessCameraProvider.getInstance(context).get()
         }
+        cameraProvider = provider
         provider.unbindAll()
         val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
         if (s.counting) {
@@ -176,7 +200,7 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                         style = MaterialTheme.typography.bodySmall, color = LabelGray,
                     )
                 }
-            } else if (!s.cameraGranted) {
+            } else if (!useRadar && !s.cameraGranted) {
                 GlowCard {
                     Text("CAMERA REQUIRED — ML Kit counts your reps on-device.", color = PaperWhite, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
@@ -192,15 +216,30 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                     }, color = TextMuted)
                 }
             } else {
+                // channel switch — push-up wars only, and only before GO LIVE
+                if (warKind == PoseRepCounter.RepExercise.PUSHUP && !s.counting && s.battle?.status != "FINISHED") {
+                    RadarModeToggle(radar = radarMode, onChange = { radarMode = it })
+                    Spacer(Modifier.height(8.dp))
+                }
                 Box(Modifier.fillMaxWidth().height(300.dp)) {
-                    AndroidView(factory = { ctx -> PreviewView(ctx).also { previewView = it } }, modifier = Modifier.fillMaxSize())
-                    if (s.counting) PoseMeshOverlay(points = meshPoints, repFlash = repPop.value, modifier = Modifier.matchParentSize())
-                    if (!s.counting && s.battle?.status != "FINISHED") {
-                        Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("PHONE ON THE FLOOR — FRONT CAMERA FACING YOU", color = PaperWhite, style = MonoLabel)
+                    if (useRadar) {
+                        FloorRadarPanel(
+                            count = s.myCount,
+                            onRep = { n, _ -> vm.onRep(n) },
+                            modifier = Modifier.fillMaxSize(),
+                            showCount = s.counting,
+                            overlayText = if (s.counting) "${s.secondsLeft}s" else null,
+                        )
+                    } else {
+                        AndroidView(factory = { ctx -> PreviewView(ctx).also { previewView = it } }, modifier = Modifier.fillMaxSize())
+                        if (s.counting) PoseMeshOverlay(points = meshPoints, repFlash = repPop.value, modifier = Modifier.matchParentSize())
+                        if (!s.counting && s.battle?.status != "FINISHED") {
+                            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("PHONE ON THE FLOOR — FRONT CAMERA FACING YOU", color = PaperWhite, style = MonoLabel)
+                            }
                         }
                     }
-                    if (s.counting) {
+                    if (s.counting && !useRadar) {
                         Text(
                             "${s.secondsLeft}s",
                             color = PaperWhite,
