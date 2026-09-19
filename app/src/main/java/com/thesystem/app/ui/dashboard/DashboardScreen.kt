@@ -121,44 +121,25 @@ fun DashboardScreen(
                         verticalArrangement = Arrangement.spacedBy(Grid.CardSpace),
                         contentPadding = PaddingValues(vertical = Grid.S16),
                     ) {
-                        // 1 ── SYSTEM / STATUS header
+                        // 1 ── SYSTEM / STATUS header (row only — snapshot owns the data)
                         item {
-                            Box(Modifier.enterAnim(0)) {
-                                SystemStatusHeader(
-                                    s = s,
-                                    burstSignal = burstSignal,
-                                    floaterSignal = floaterSignal,
-                                    floaterText = floaterText,
-                                )
-                            }
+                            Box(Modifier.enterAnim(0)) { SystemStatusHeader(s) }
                         }
                         s.profile?.let { p ->
                             if (p.missedDays > 0) item { Box(Modifier.enterAnim(1)) { PenaltyCard(s) } }
-                            item {
-                                Box(Modifier.enterAnim(2)) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(Grid.S12)) {
-                                        StreakTile(p.streakDays, Modifier.weight(1f))
-                                        AnimatedStatTile(
-                                            "Next level",
-                                            SystemMath.xpRequiredForLevel(p.level + 1) - p.xp,
-                                            ElectricBlue, Modifier.weight(1.15f),
-                                        )
-                                        StatTile(
-                                            "Missed", "${p.missedDays}",
-                                            if (p.missedDays > 0) LabelGray else TextMuted, Modifier.weight(0.85f),
-                                        )
-                                    }
-                                }
-                            }
                         }
 
-                        // 2 ── compact TODAY QUEST module → tap opens the QUEST INFO sheet
+                        // 2 ── PLAYER SNAPSHOT — level · rank · XP · three micro-stats
+                        item { Box(Modifier.enterAnim(2)) { PlayerSnapshotCard(s) } }
+
+                        // 3 ── TODAY QUEST — primary action (tap = QUEST INFO sheet, START = proof)
                         item {
                             Box(Modifier.enterAnim(3)) {
                                 TodayQuestModule(
                                     s = s,
                                     recoverySec = RecoveryTracker.remainingSec(context),
                                     onOpen = { haptics.select(); questSheetOpen = true },
+                                    onStart = { q -> haptics.slam(); nav.navigate(Routes.questProof(q)) },
                                 )
                             }
                         }
@@ -214,21 +195,39 @@ fun DashboardScreen(
                                                 style = MonoLabel, color = LabelGray,
                                             )
                                         }
-                                        GhostButton("ALL", {
+                                        GhostButton("VIEW ALL", {
                                             haptics.select(); nav.navigate(Routes.TRAINING)
                                         })
                                     }
                                     Spacer(Modifier.height(Grid.S8))
-                                    // SPECIAL TRAINING law: the FULL catalog always renders.
-                                    // Muscle hides alternatives after one primary is chosen —
-                                    // specials never do; up to five stay ACTIVE at once.
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(Grid.S12)) {
-                                        items(s.specials, key = { it.id }) { c ->
-                                            CourseCard(
-                                                course = c, enrollment = s.enrollmentOf(c),
-                                                recommended = false,
-                                                onClick = { haptics.tick(); trainingVm.open(c) },
-                                            )
+                                    // STATUS is a command center: only ACTIVE special tracks render here.
+                                    // The FULL special catalog lives one tap away behind VIEW ALL —
+                                    // up to five tracks stay active at once, selection never deletes.
+                                    val activeTracks = s.specials.filter { s.enrollmentOf(it)?.status == "ACTIVE" }
+                                    if (activeTracks.isEmpty()) {
+                                        GlowCard(
+                                            modifier = Modifier.fillMaxWidth().clickable {
+                                                haptics.select(); nav.navigate(Routes.TRAINING)
+                                            },
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    "NO ACTIVE TRACKS — up to five speed / mobility / power programs.",
+                                                    style = MaterialTheme.typography.bodySmall, color = LabelGray,
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                                Spacer(Modifier.width(Grid.S8))
+                                                Text("BROWSE", style = MonoLabel, color = SkyBlue)
+                                            }
+                                        }
+                                    } else {
+                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(Grid.S12)) {
+                                            items(activeTracks, key = { it.id }) { c ->
+                                                ActiveTrackMiniCard(
+                                                    course = c, enrollment = s.enrollmentOf(c),
+                                                    onClick = { haptics.tick(); trainingVm.open(c) },
+                                                )
+                                            }
                                         }
                                     }
                                     Spacer(Modifier.height(Grid.S12))
@@ -240,8 +239,10 @@ fun DashboardScreen(
                             }
                         }
 
-                        item { Box(Modifier.enterAnim(5)) { FormsStrip(s) } }
-                        item { Box(Modifier.enterAnim(6)) { BuffsCard(s) } }
+                        // 6 ── PROGRESS — compact verified strip, nothing invented
+                        item { Box(Modifier.enterAnim(5)) { ProgressStrip(s) } }
+                        item { Box(Modifier.enterAnim(6)) { FormsStrip(s) } }
+                        item { Box(Modifier.enterAnim(7)) { BuffsCard(s) } }
                         item { Spacer(Modifier.height(96.dp)) }
                     }
                 }
@@ -285,49 +286,129 @@ fun DashboardScreen(
     }
 }
 
-// ── 1. SYSTEM / STATUS HEADER ───────────────────────────────────────────────
+// ── 1. SYSTEM / STATUS HEADER — compact row; the ladder badge commands right ─
 
 @Composable
-private fun SystemStatusHeader(
-    s: DashboardState,
-    burstSignal: Int,
-    floaterSignal: Int,
-    floaterText: String,
-) {
+private fun SystemStatusHeader(s: DashboardState) {
     val p = s.profile
-    Column {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("SYSTEM", style = MonoLabel, color = SkyBlue)
+            Text("STATUS", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 22.sp, letterSpacing = 1.sp)
+        }
+        // penalty ranks keep the inverted badge; earned progress shows the tier ladder
+        if (s.rank.isPenaltyRank) RankBadge(s.rank)
+        else TierBadge(SystemMath.tierFor(p?.level ?: 1))
+    }
+}
+
+// ── 2. PLAYER SNAPSHOT — LV · RANK · XP · three micro-stats, one compact card ─
+
+@Composable
+private fun PlayerSnapshotCard(s: DashboardState) {
+    val p = s.profile ?: return
+    val tier = SystemMath.tierFor(p.level)
+    GlowCard(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("SYSTEM", style = MonoLabel, color = SkyBlue)
-                Text("STATUS", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 22.sp, letterSpacing = 1.sp)
+                Text(
+                    "LV ${p.level}", color = PaperWhite, fontFamily = SystemMono,
+                    fontWeight = FontWeight.Black, fontSize = 24.sp,
+                )
+                Text(
+                    if (s.rank.isPenaltyRank) s.rank.title else tier.title,
+                    style = MonoLabel, color = if (s.rank.isPenaltyRank) LabelGray else SkyBlue,
+                )
             }
-            // penalty ranks keep the inverted badge; earned progress shows the tier ladder
-            if (s.rank.isPenaltyRank) RankBadge(s.rank)
-            else TierBadge(SystemMath.tierFor(p?.level ?: 1))
+            Column(horizontalAlignment = Alignment.End) {
+                Text("${SystemMath.formatXp(p.xp)} XP", style = MonoData, color = PaperWhite)
+                Text("TOTAL", style = MonoLabel, color = FaintGray)
+            }
         }
+        Spacer(Modifier.height(Grid.S8))
+        XpProgressBar(p.xp, color = if (s.rank.isPenaltyRank) PaperWhite else SkyBlue)
         Spacer(Modifier.height(Grid.S12))
-        GlowCard(modifier = Modifier.fillMaxWidth()) {
-            Box {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    XpRing(
-                        xp = p?.xp ?: 0, level = p?.level ?: 1,
-                        modifier = Modifier.size(104.dp), color = rankColor(s.rank),
-                    )
-                    Spacer(Modifier.width(Grid.S16))
-                    Column(Modifier.weight(1f)) {
-                        Text("HUNTER @${p?.username ?: "…"}", style = MaterialTheme.typography.labelSmall)
-                        Text(p?.displayName ?: "Unknown Hunter", style = MaterialTheme.typography.titleLarge)
-                        Spacer(Modifier.height(Grid.S4))
-                        Text(
-                            "LV ${p?.level ?: 1} · ${if (s.rank.isPenaltyRank) s.rank.title else SystemMath.tierFor(p?.level ?: 1).title} · ${SystemMath.formatXp(p?.xp ?: 0)} XP",
-                            style = MonoData, color = PaperWhite,
-                        )
-                        Spacer(Modifier.height(Grid.S8))
-                        XpProgressBar(p?.xp ?: 0, color = rankColor(s.rank))
-                    }
-                }
-                XpGainFloater(floaterSignal, floaterText, Modifier.align(Alignment.TopEnd))
+        Row(Modifier.fillMaxWidth()) {
+            SnapshotStat("STREAK", "${p.streakDays}D", Modifier.weight(1f))
+            SnapshotStat(
+                "NEXT LEVEL",
+                "${SystemMath.xpRequiredForLevel(p.level + 1) - p.xp} XP",
+                Modifier.weight(1.3f),
+            )
+            SnapshotStat("MISSED", "${p.missedDays}", Modifier.weight(0.7f))
+        }
+    }
+}
+
+/**
+ * ACTIVE special track — art-less mini on the command center: name, difficulty,
+ * charge bar. Full artwork cards live in the catalog behind VIEW ALL.
+ */
+@Composable
+private fun ActiveTrackMiniCard(
+    course: CourseDto,
+    enrollment: UserCourseDto?,
+    onClick: () -> Unit,
+) {
+    val pct = enrollment?.progressPercent ?: 0.0
+    Column(
+        Modifier
+            .width(150.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(PanelGray)
+            .border(1.dp, LineSoft, RoundedCornerShape(10.dp))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { onClick() }
+            .padding(Grid.S12),
+    ) {
+        Text(
+            course.title.uppercase(), color = PaperWhite,
+            style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(course.difficulty, style = MonoLabel, color = LabelGray)
+        Spacer(Modifier.height(Grid.S8))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f).height(3.dp).clip(RoundedCornerShape(2.dp)).background(TrackGray)) {
+                Box(
+                    Modifier.fillMaxHeight()
+                        .fillMaxWidth((pct / 100.0).toFloat().coerceIn(0f, 1f))
+                        .background(SkyBlue),
+                )
             }
+            Spacer(Modifier.width(Grid.S8))
+            Text("%.0f%%".format(pct), style = MonoData, color = SkyBlue)
+        }
+    }
+}
+
+/** Bare label-over-value pair — hierarchy by weight, not by box. */
+@Composable
+private fun SnapshotStat(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(label, style = MonoLabel, color = FaintGray)
+        Spacer(Modifier.height(2.dp))
+        Text(value, color = PaperWhite, fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+    }
+}
+
+// ── 6. PROGRESS — quests today · tracks active · verified sessions ─────────
+
+@Composable
+private fun ProgressStrip(s: DashboardState) {
+    SectionTitle("PROGRESS")
+    Spacer(Modifier.height(Grid.S8))
+    GlowCard(modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth()) {
+            SnapshotStat("QUESTS TODAY", "${s.clearedCount}/${s.quests.size.coerceAtLeast(1)}", Modifier.weight(1f))
+            SnapshotStat(
+                "TRACKS ACTIVE",
+                "${s.specials.count { s.enrollmentOf(it)?.status == "ACTIVE" }}/5",
+                Modifier.weight(1f),
+            )
+            SnapshotStat("VERIFIED SESSIONS", "${s.bests?.sessions ?: 0}", Modifier.weight(1.2f))
         }
     }
 }
@@ -339,6 +420,7 @@ private fun TodayQuestModule(
     s: DashboardState,
     recoverySec: Int,
     onOpen: () -> Unit,
+    onStart: (QuestDto) -> Unit,
 ) {
     val done = s.clearedCount
     val total = s.quests.size.coerceAtLeast(1)
@@ -360,14 +442,21 @@ private fun TodayQuestModule(
             Spacer(Modifier.width(10.dp))
             Text("$done/$total", style = MonoData, color = PaperWhite)
             Spacer(Modifier.weight(1f))
-            Text("TAP FOR INFO", style = MonoLabel, color = LabelGray)
+            Text(if (s.allCleared) "CLEARED" else "IN PROGRESS", style = MonoLabel, color = LabelGray)
         }
         Spacer(Modifier.height(8.dp))
         Text(
             open?.title ?: if (s.allCleared) "ALL BLOCKS CLEARED" else "PROTOCOL COMPILING",
-            color = PaperWhite, style = MaterialTheme.typography.titleMedium,
+            color = PaperWhite, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(8.dp))
+        open?.let { q ->
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "BLOCK ${q.seq.toString().padStart(2, '0')} · ${q.difficulty} · ${q.verification}",
+                style = MonoLabel, color = LabelGray,
+            )
+        }
+        Spacer(Modifier.height(10.dp))
         // progress charge bar — the module breathes without animating everything
         Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(TrackGray)) {
             Box(
@@ -375,12 +464,34 @@ private fun TodayQuestModule(
                     .background(if (s.allCleared) PaperWhite else SkyBlue)
             )
         }
+        open?.let { q ->
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${q.progress}/${q.targetValue} ${q.targetUnit}", style = MonoData, color = PaperWhite)
+                Spacer(Modifier.weight(1f))
+                Text("+${q.xpReward} XP", style = MonoData, color = SkyBlue)
+            }
+        }
         if (recoverySec > 0) {
             Spacer(Modifier.height(8.dp))
             Text(
                 "RECOVERY WINDOW — ${RecoveryTracker.format(recoverySec)} until the next block unlocks",
                 style = MonoLabel, color = SkyBlue,
             )
+        }
+        Spacer(Modifier.height(Grid.S12))
+        Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
+            GhostButton("QUEST INFO", onOpen, Modifier.weight(1f))
+            when {
+                s.allCleared -> NeonButton("COMPLETED", {}, Modifier.weight(1.2f), color = PaperWhite, enabled = false)
+                else -> NeonButton(
+                    if (open != null && open.progress > 0) "RESUME" else "START",
+                    { open?.let(onStart) },
+                    Modifier.weight(1.2f),
+                    color = SkyBlue,
+                    enabled = open != null && !open.isLocked,
+                )
+            }
         }
     }
 }

@@ -8,6 +8,7 @@ import com.thesystem.app.data.model.FormDto
 import com.thesystem.app.data.model.QuestDto
 import com.thesystem.app.data.model.UserCourseDto
 import com.thesystem.app.data.model.UserDto
+import com.thesystem.app.data.model.VerifiedBestsDto
 import com.thesystem.app.data.repo.SystemRepository
 import com.thesystem.app.data.repo.TrainingRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,6 +31,8 @@ data class DashboardState(
     val muscle: List<CourseDto> = emptyList(),
     val specials: List<CourseDto> = emptyList(),
     val myCourses: List<UserCourseDto> = emptyList(),
+    /** verified lifetime feed for the compact PROGRESS strip (no invented stats) */
+    val bests: VerifiedBestsDto? = null,
     val error: String? = null,
     val notice: String? = null,
 ) {
@@ -78,6 +81,7 @@ class DashboardViewModel @Inject constructor(
         val muscleD = async { training.courses("MUSCLE") }
         val specialsD = async { training.courses("SPECIAL") }
         val mineD = async { training.myCourses() }
+        val bestsD = async { system.verifiedBests() }
         val profile = profileD.await()
         val wall = wallD.await()
         _state.value = DashboardState(
@@ -91,6 +95,7 @@ class DashboardViewModel @Inject constructor(
             muscle = muscleD.await(),
             specials = specialsD.await(),
             myCourses = mineD.await(),
+            bests = bestsD.await(),
             error = if (profile == null) "OFFLINE MODE — retry when back on the grid." else null,
         )
     }
