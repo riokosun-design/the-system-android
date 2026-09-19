@@ -163,16 +163,25 @@ fun MarketScreen(nav: NavHostController, vm: MarketViewModel = hiltViewModel()) 
                 }
             }
 
-            // ── digital products ─────────────────────────────────────────────
+            // ── digital products — server-configured rows only ───────────────
+            item { SectionTitle("DIGITAL PRODUCTS") }
             if (s.digital.isNotEmpty()) {
-                item { SectionTitle("DIGITAL PRODUCTS") }
                 items(s.digital, key = { it.id }) { p -> ProductCard(p) }
+            } else {
+                item {
+                    EmptyShelf(
+                        "No digital goods are configured yet. The operator publishes them " +
+                            "from the admin console — nothing appears here automatically."
+                    )
+                }
             }
 
-            // ── affiliate shelves ────────────────────────────────────────────
+            // ── affiliate shelves — configured offers only, never seeded noise ─
+            item { SectionTitle("AFFILIATE SHELVES") }
             if (s.affiliate.isNotEmpty()) {
-                item { SectionTitle("AFFILIATE SHELVES") }
                 items(s.affiliate, key = { it.id }) { p -> ProductCard(p) }
+            } else {
+                item { EmptyShelf("No offers available yet.") }
             }
 
             item {
@@ -187,11 +196,28 @@ fun MarketScreen(nav: NavHostController, vm: MarketViewModel = hiltViewModel()) 
     }
 }
 
+/** Quiet shelf used instead of fake products: the truth, beautifully empty. */
 @Composable
-private fun MarketCourseRow(c: CourseDto, enrollment: UserCourseDto?, onTap: () -> Unit) {
+private fun EmptyShelf(message: String) {
     Box(
         Modifier
-            .width(164.dp).height(196.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, LineSoft, RoundedCornerShape(12.dp))
+            .padding(horizontal = Grid.S16, vertical = Grid.S24),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(message, style = MaterialTheme.typography.bodyMedium, color = LabelGray,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
+@Composable
+private fun MarketCourseRow(c: CourseDto, enrollment: UserCourseDto?, onTap: () -> Unit) {
+    // split layout like the training cards: art block on top, info block below
+    Column(
+        Modifier
+            .width(164.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(PanelGray)
             .border(1.dp, LineSoft, RoundedCornerShape(12.dp))
@@ -199,21 +225,21 @@ private fun MarketCourseRow(c: CourseDto, enrollment: UserCourseDto?, onTap: () 
     ) {
         AsyncImage(
             model = c.cover, contentDescription = c.title,
-            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = 0.6f,
+            modifier = Modifier.fillMaxWidth().height(88.dp), contentScale = ContentScale.Crop,
         )
-        Column(
-            Modifier.fillMaxSize().background(InkBlack.copy(alpha = 0.35f)).padding(Grid.S12),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(c.title.uppercase(), color = PaperWhite, style = MaterialTheme.typography.titleMedium,
-                maxLines = 3, overflow = TextOverflow.Ellipsis)
-            Column {
-                Text(c.type, style = MonoLabel, color = SkyBlue)
-                Text(
-                    if (enrollment != null) "%.0f%% COMPLETE".format(enrollment.progressPercent) else "VIEW PROGRAM",
-                    style = MonoLabel, color = LabelGray,
-                )
-            }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(LineSoft))
+        Column(Modifier.fillMaxWidth().padding(Grid.S12)) {
+            Text(
+                c.title.uppercase(), color = PaperWhite, style = MaterialTheme.typography.titleMedium,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(c.type, style = MonoLabel, color = SkyBlue)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                if (enrollment != null) "%.0f%% COMPLETE".format(enrollment.progressPercent) else "VIEW PROGRAM",
+                style = MonoLabel, color = LabelGray,
+            )
         }
     }
 }

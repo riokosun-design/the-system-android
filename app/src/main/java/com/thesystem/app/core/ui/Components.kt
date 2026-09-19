@@ -452,6 +452,74 @@ fun RestrictionBanner(text: String, color: Color = PaperWhite) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SYSTEM BOTTOM SHEET — THE detail experience (quest info, course info,
+// hunter record). Renders above the whole content area of its caller with a
+// scrim: the screen behind stays frozen and the bottom navigation is never
+// covered by the panel itself — the sheet's bottom edge stops at the
+// caller's bounds, which is exactly where the navigation starts.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * @param title   small mono header, e.g. "QUEST INFO"
+ * @param onDismiss scrim tap / CLOSE both dismiss
+ * @param accent  hairline accent (SkyBlue on training surfaces, white elsewhere)
+ */
+@Composable
+fun SystemBottomSheet(
+    title: String,
+    onDismiss: () -> Unit,
+    accent: Color = PaperWhite,
+    maxHeight: Dp = 560.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.78f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { onDismiss() },
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        // slide + fade on first composition — premium, cheap on low-end GPUs
+        var entered by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { entered = true }
+        val offsetY by animateFloatAsState(if (entered) 0f else 1f, SystemMotion.springSoft, label = "sheetSlide")
+        val fade by animateFloatAsState(if (entered) 1f else 0f, tween(220), label = "sheetFade")
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .graphicsLayer { translationY = offsetY * 220f; alpha = fade }
+                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .background(PanelGray)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {}
+                .heightIn(max = maxHeight),
+        ) {
+            // drag handle — affordance only, dismiss via scrim or CLOSE
+            Box(Modifier.fillMaxWidth().padding(top = 10.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.width(42.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(TrackGray))
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(start = Grid.S16, end = Grid.S8, top = Grid.S8),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(title.uppercase(), style = MonoLabel, color = accent, modifier = Modifier.weight(1f))
+                GhostButton("CLOSE", onDismiss)
+            }
+            Box(Modifier.fillMaxWidth().padding(top = 4.dp).height(1.dp).background(LineSoft))
+            Column(
+                Modifier.fillMaxWidth().padding(Grid.S16).weight(1f, fill = false),
+                content = content,
+            )
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // SYSTEM TAB BAR — single-line sub-tab navigation with a hairline indicator.
 // Replaces every stock/wrapping TabRow: labels NEVER truncate, active tab is
 // marked only by a 2dp white underline.

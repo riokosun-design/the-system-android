@@ -38,6 +38,10 @@ data class ArenaState(
     val draftExercise: String = "PUSHUP",
     val draftDuration: Int = 60,
     val draftScheduledAt: String? = null,
+    // ── SECTION 2 — random matchmaking queue ─────────────────────────────────
+    val queueExercise: String = "PUSHUP",
+    val queue: RandomQueueDto? = null,       // null = not asked yet / offline
+    val queueBusy: Boolean = false,
     val notice: String? = null,
     val error: String? = null,
 )
@@ -63,7 +67,9 @@ class ArenaViewModel @Inject constructor(
         val matchesD = async { arena.scheduledMatches() }
         val challengesD = async { arena.dailyChallenges() }
         val openD = async { arena.openBattles() }
+        val queueD = async { arena.randomQueueStatus() }
         val profile = profileD.await()
+        val queue = queueD.await()
         _state.value = _state.value.copy(
             loading = false,
             myProfile = profile,
@@ -74,8 +80,11 @@ class ArenaViewModel @Inject constructor(
             matches = matchesD.await(),
             challenges = challengesD.await(),
             myBattles = openD.await(),
+            queue = queue,
             error = if (profile == null) "OFFLINE — the Arena needs the grid." else null,
         )
+        // returning to the Arena mid-search → resume the heartbeat
+        if (queue?.status == "WAITING") startQueuePolling()
     }
 
     // ── SECTION 1 — matchmaking ──────────────────────────────────────────────
@@ -163,6 +172,62 @@ class ArenaViewModel @Inject constructor(
         arena.claimBattleChallenge(kind)
             .onSuccess { _state.value = _state.value.copy(notice = "$kind challenge claimed — +120 XP, +25 VC."); refresh() }
             .onFailure { _state.value = _state.value.copy(error = friendly(it.message)) }
+    }
+
+    // ── SECTION 2 — RANDOM MATCHMAKING ───────────────────────────────────────
+    // Real queue, no bots: WAITING means exactly "no compatible hunter is
+    // queued right now". Polling status doubles as the heartbeat.
+    private var queuePoll: kotlinx.coroutines.Job? = null
+
+    fun setQueueExercise(kind: String) {
+        if (_state.value.queue?.status == "WAITING") return  // never retune mid-search
+        _state.value = _state.value.copy(queueExercise = kind)
+    }
+
+    fun findRandomOpponent() {
+        if (_state.value.queueBusy) return
+        _state.value = _state.value.copy(queueBusy = true)
+        viewModelScope.launch {
+            val q = arena.randomQueueEnter(_state.value.queueExercise, 60)
+            _state.value = _state.value.copy(queue = q, queueBusy = false)
+            if (q?.status == "WAITING") startQueuePolling()
+        }
+    }
+
+    fun cancelRandomSearch() {
+        queuePoll?.cancel(); queuePoll = null
+        viewModelScope.launch {
+            arena.randomQueueLeave()
+            _state.value = _state.value.copy(queue = RandomQueueDto(status = "IDLE"))
+        }
+    }
+
+    /** A matched hunter declines the war — both sides return to IDLE cleanly. */
+    fun declineRandomMatch() = cancelRandomSearch()
+
+    private fun startQueuePolling() {
+        queuePoll?.cancel()
+        queuePoll = viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(2500)
+                val q = arena.randomQueueStatus() ?: continue
+                val prev = _state.value.queue?.status
+                _state.value = _state.value.copy(queue = q)
+                if (q.status == "MATCHED") {
+                    queuePoll = null
+                    if (prev != "MATCHED") {
+                        _state.value = _state.value.copy(notice = "Opponent found — ${q.opponentName ?: "a hunter"} is waiting.")
+                    }
+                    return@launch
+                }
+                if (q.status != "WAITING") { queuePoll = null; return@launch }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        queuePoll?.cancel()
+        super.onCleared()
     }
 
     fun consumeNotice() { _state.value = _state.value.copy(notice = null, error = null) }

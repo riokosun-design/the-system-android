@@ -268,4 +268,26 @@ class ArenaRepository @Inject constructor(private val supabase: SupabaseClient) 
     suspend fun claimBattleChallenge(kind: String): Result<Unit> = runCatching {
         supabase.postgrest.rpc("claim_battle_challenge", buildJsonObject { put("p_kind", kind) }); Unit
     }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // v0.5.0 — SECTION 2 RANDOM MATCHMAKING (migration 013, live)
+    // Server-authoritative queue; it pairs real hunters and NEVER fabricates
+    // an opponent. Status polling doubles as the queue heartbeat.
+    // ═════════════════════════════════════════════════════════════════════════
+
+    private suspend fun queueRpc(name: String, body: JsonObject): RandomQueueDto? = runCatching {
+        val raw = supabase.postgrest.rpc(name, body).data ?: return@runCatching null
+        statsJson.decodeFromString(RandomQueueDto.serializer(), raw)
+    }.getOrNull()
+
+    suspend fun randomQueueEnter(exercise: String, durationSec: Int = 60): RandomQueueDto? =
+        queueRpc("random_queue_enter", buildJsonObject {
+            put("p_exercise", exercise); put("p_duration_sec", durationSec)
+        })
+
+    suspend fun randomQueueStatus(): RandomQueueDto? =
+        queueRpc("random_queue_status", buildJsonObject {})
+
+    suspend fun randomQueueLeave(): RandomQueueDto? =
+        queueRpc("random_queue_leave", buildJsonObject {})
 }

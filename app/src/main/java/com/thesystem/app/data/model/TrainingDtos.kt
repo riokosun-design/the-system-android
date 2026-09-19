@@ -216,3 +216,18 @@ data class BattleChallengeDto(
     val claimed: Boolean = false,
     val exercise: String = "PUSH-UP BATTLES",
 )
+
+/**
+ * `random_queue_enter/status/leave()` — Arena section 2, RANDOM MATCHMAKING.
+ * The server pairs two REAL waiting hunters atomically; it never invents an
+ * opponent, so WAITING just means "no compatible hunter is queued right now".
+ */
+@Serializable
+data class RandomQueueDto(
+    val status: String = "IDLE",               // IDLE | WAITING | MATCHED
+    @SerialName("battle_id") val battleId: String? = null,
+    @SerialName("opponent_name") val opponentName: String? = null,
+    val exercise: String? = null,
+    @SerialName("duration_sec") val durationSec: Int? = null,
+    @SerialName("queued_sec") val queuedSec: Int? = null,
+)

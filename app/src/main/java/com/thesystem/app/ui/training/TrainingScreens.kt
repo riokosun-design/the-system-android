@@ -6,7 +6,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -21,7 +20,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -122,7 +120,7 @@ class TrainingViewModel @Inject constructor(
     }
 }
 
-/** COURSE → WEEK → DAY → QUEST rows for the info panel. */
+/** COURSE → WEEK → DAY → QUEST rows — rendered inside the shared detail sheet. */
 @Composable
 fun CourseInfoPanel(
     course: CourseDto,
@@ -133,23 +131,8 @@ fun CourseInfoPanel(
     onDismiss: () -> Unit,
 ) {
     val (sessionMin, sessionMax) = course.sessionRange
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.78f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss() },
-        contentAlignment = Alignment.BottomCenter,
-    ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                .background(PanelGray)
-                .border(1.dp, SkyBlue.copy(alpha = 0.45f), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-                .padding(Grid.S16)
-                .heightIn(max = 560.dp),
-        ) {
+    SystemBottomSheet(title = "COURSE INFO", onDismiss = onDismiss, accent = SkyBlue, maxHeight = 600.dp) {
+        Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AsyncImage(
                     model = course.cover, contentDescription = course.title,
@@ -158,14 +141,15 @@ fun CourseInfoPanel(
                 )
                 Spacer(Modifier.width(Grid.S12))
                 Column(Modifier.weight(1f)) {
-                    Text(course.title, style = MaterialTheme.typography.titleMedium, color = PaperWhite)
+                    Text(
+                        course.title, style = MaterialTheme.typography.titleMedium, color = PaperWhite,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    )
                     Text(
                         "${course.type} · ${course.difficulty}",
                         style = MonoLabel, color = SkyBlue,
                     )
                 }
-                Text("CLOSE", style = MonoLabel, color = LabelGray,
-                    modifier = Modifier.clickable { onDismiss() }.padding(6.dp))
             }
             Spacer(Modifier.height(Grid.S12))
 
@@ -248,6 +232,9 @@ private fun InfoRow(label: String, value: String) {
 }
 
 // ── COURSE CARD ─────────────────────────────────────────────────────────────
+// SPLIT LAYOUT: artwork owns the top block, text owns a solid panel below.
+// The two never share a pixel, so no description can ever drown in the art,
+// nothing clips into the image, and long titles wrap on plain black.
 
 @Composable
 fun CourseCard(
@@ -261,10 +248,9 @@ fun CourseCard(
     LaunchedEffect(Unit) { visible = true }
     val alpha by animateFloatAsState(if (visible) 1f else 0f, spring(), label = "cardIn")
 
-    Box(
+    Column(
         modifier
             .width(178.dp)
-            .height(232.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(PanelGray)
             .border(
@@ -274,58 +260,58 @@ fun CourseCard(
             )
             .clickable { onClick() },
     ) {
-        AsyncImage(
-            model = course.cover, contentDescription = course.title,
-            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = 0.55f * alpha + 0.25f,
-        )
-        Column(
-            Modifier
-                .fillMaxSize()
-                .background(InkBlack.copy(alpha = 0.35f))
-                .padding(Grid.S12),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column {
-                if (recommended) {
-                    Box(
-                        Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(SkyBlue.copy(alpha = 0.18f))
-                            .border(1.dp, SkyBlue, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) { Text("RECOMMENDED", style = MonoLabel, color = SkyBlue, fontSize = 8.sp) }
-                }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    course.title.uppercase(), color = PaperWhite,
-                    style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                )
+        // artwork block — pure image, zero text
+        Box(Modifier.fillMaxWidth().height(104.dp)) {
+            AsyncImage(
+                model = course.cover, contentDescription = course.title,
+                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = alpha,
+            )
+            if (recommended) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(InkBlack.copy(alpha = 0.72f))
+                        .border(1.dp, SkyBlue, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                ) { Text("RECOMMENDED", style = MonoLabel, color = SkyBlue, fontSize = 8.sp) }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(LineSoft))
+
+        // information block — solid panel; every field readable, always
+        Column(Modifier.fillMaxWidth().padding(Grid.S12)) {
+            Text(
+                course.title.uppercase(), color = PaperWhite,
+                style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            if (!course.description.isNullOrBlank()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     course.description.orEmpty(), style = MaterialTheme.typography.bodySmall,
-                    color = LabelGray, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    color = LabelGray, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 )
             }
-            Column {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SystemChip(course.difficulty, SkyBlue)
-                    SystemChip("${course.durationMonths}M")
-                }
-                Spacer(Modifier.height(6.dp))
-                val done = enrollment != null
-                Text(
-                    if (done) "IN PROGRESS · %.0f%%".format(enrollment!!.progressPercent) else "TAP FOR INFO",
-                    style = MonoLabel, color = if (done) SkyBlue else LabelGray,
-                )
-                if (done) {
-                    Spacer(Modifier.height(4.dp))
-                    Box(Modifier.fillMaxWidth().height(2.dp).clip(RoundedCornerShape(1.dp)).background(TrackGray)) {
-                        Box(
-                            Modifier.fillMaxHeight()
-                                .fillMaxWidth((enrollment.progressPercent / 100.0).toFloat().coerceIn(0f, 1f))
-                                .background(SkyBlue)
-                        )
-                    }
+            Spacer(Modifier.height(Grid.S8))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SystemChip(course.difficulty, SkyBlue)
+                SystemChip("${course.durationMonths}M")
+            }
+            Spacer(Modifier.height(Grid.S8))
+            val done = enrollment != null
+            Text(
+                if (done) "IN PROGRESS · %.0f%%".format(enrollment!!.progressPercent) else "TAP FOR INFO",
+                style = MonoLabel, color = if (done) SkyBlue else LabelGray,
+            )
+            if (done) {
+                Spacer(Modifier.height(4.dp))
+                Box(Modifier.fillMaxWidth().height(2.dp).clip(RoundedCornerShape(1.dp)).background(TrackGray)) {
+                    Box(
+                        Modifier.fillMaxHeight()
+                            .fillMaxWidth((enrollment.progressPercent / 100.0).toFloat().coerceIn(0f, 1f))
+                            .background(SkyBlue)
+                    )
                 }
             }
         }

@@ -1,13 +1,8 @@
 package com.thesystem.app.ui.dashboard
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -66,7 +61,7 @@ fun DashboardScreen(
     val haptics = rememberSystemHaptics()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    var questHudOpen by remember { mutableStateOf(false) }
+    var questSheetOpen by remember { mutableStateOf(false) }
 
     // returning from a verified proof session re-pulls quest progress
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -152,19 +147,13 @@ fun DashboardScreen(
                             }
                         }
 
-                        // 2 ── compact TODAY QUEST module → tap expands the HUD
+                        // 2 ── compact TODAY QUEST module → tap opens the QUEST INFO sheet
                         item {
                             Box(Modifier.enterAnim(3)) {
                                 TodayQuestModule(
                                     s = s,
-                                    expanded = questHudOpen,
-                                    onToggle = { haptics.select(); questHudOpen = !questHudOpen },
                                     recoverySec = RecoveryTracker.remainingSec(context),
-                                    onLog = { q ->
-                                        haptics.tick()
-                                        nav.navigate(Routes.questProof(q))
-                                    },
-                                    onOpenTraining = { nav.navigate(Routes.TRAINING) },
+                                    onOpen = { haptics.select(); questSheetOpen = true },
                                 )
                             }
                         }
@@ -239,6 +228,24 @@ fun DashboardScreen(
             levelUpSignal.takeIf { it > 0 }?.let { LevelUpBanner(levelUpSignal, level = previousLevel) }
             snack.let { androidx.compose.material3.SnackbarHost(it, Modifier.align(Alignment.BottomCenter)) }
 
+            // QUEST INFO — deliberate detail sheet, the page behind stays frozen
+            if (questSheetOpen) {
+                QuestDetailSheet(
+                    s = s,
+                    recoverySec = RecoveryTracker.remainingSec(context),
+                    onLog = { q ->
+                        haptics.tick()
+                        questSheetOpen = false
+                        nav.navigate(Routes.questProof(q))
+                    },
+                    onOpenTraining = {
+                        questSheetOpen = false
+                        nav.navigate(Routes.TRAINING)
+                    },
+                    onDismiss = { questSheetOpen = false },
+                )
+            }
+
             // course info panel opened from the training rail
             t.openCourse?.let { c ->
                 CourseInfoPanel(
@@ -299,16 +306,13 @@ private fun SystemStatusHeader(
     }
 }
 
-// ── 2. TODAY QUEST MODULE → QUEST INFO HUD ──────────────────────────────────
+// ── 2. TODAY QUEST MODULE (compact) → QUEST INFO detail sheet ───────────────
 
 @Composable
 private fun TodayQuestModule(
     s: DashboardState,
-    expanded: Boolean,
-    onToggle: () -> Unit,
     recoverySec: Int,
-    onLog: (QuestDto) -> Unit,
-    onOpenTraining: () -> Unit,
+    onOpen: () -> Unit,
 ) {
     val done = s.clearedCount
     val total = s.quests.size.coerceAtLeast(1)
@@ -321,8 +325,8 @@ private fun TodayQuestModule(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(SkyBlue.copy(alpha = 0.06f))
-            .border(1.dp, SkyBlue.copy(alpha = if (expanded) 0.8f else 0.45f), RoundedCornerShape(12.dp))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onToggle() }
+            .border(1.dp, SkyBlue.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onOpen() }
             .padding(Grid.S16),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -330,7 +334,7 @@ private fun TodayQuestModule(
             Spacer(Modifier.width(10.dp))
             Text("$done/$total", style = MonoData, color = PaperWhite)
             Spacer(Modifier.weight(1f))
-            Text(if (expanded) "TAP TO COLLAPSE" else "TAP FOR INFO", style = MonoLabel, color = LabelGray)
+            Text("TAP FOR INFO", style = MonoLabel, color = LabelGray)
         }
         Spacer(Modifier.height(8.dp))
         Text(
@@ -352,68 +356,71 @@ private fun TodayQuestModule(
                 style = MonoLabel, color = SkyBlue,
             )
         }
-
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically(tween(260)) + fadeIn(tween(200)),
-            exit = shrinkVertically(tween(200)) + fadeOut(tween(140)),
-        ) {
-            QuestInfoHud(s = s, recoverySec = recoverySec, onLog = onLog, onOpenTraining = onOpenTraining)
-        }
     }
 }
 
-/** The cinematic QUEST INFO panel: goals 0/N, XP, duration, difficulty, penalty. */
+/**
+ * QUEST INFO — a dedicated detail sheet (never an inline expansion). The
+ * Status page behind stays frozen; the sheet carries every block with its
+ * live 0/N goal, XP, duration, difficulty, verification, the reset clock and
+ * the penalty warning, plus the START / RESUME actions.
+ */
 @Composable
-private fun QuestInfoHud(
+private fun QuestDetailSheet(
     s: DashboardState,
     recoverySec: Int,
     onLog: (QuestDto) -> Unit,
     onOpenTraining: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    val nowMs = remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) { delay(1000); nowMs.value = System.currentTimeMillis() }
-    }
-    val midnight = remember {
-        java.util.Calendar.getInstance().apply {
-            set(java.util.Calendar.HOUR_OF_DAY, 23); set(java.util.Calendar.MINUTE, 59)
-            set(java.util.Calendar.SECOND, 59); set(java.util.Calendar.MILLISECOND, 999)
-        }.timeInMillis
-    }
-    val remain = (midnight - nowMs.value).coerceAtLeast(0L)
-    val resetText = "%02d:%02d:%02d".format(remain / 3_600_000, (remain % 3_600_000) / 60_000, (remain % 60_000) / 1000)
+    SystemBottomSheet(title = "QUEST INFO", onDismiss = onDismiss, accent = SkyBlue, maxHeight = 620.dp) {
+        val nowMs = remember { mutableLongStateOf(System.currentTimeMillis()) }
+        LaunchedEffect(Unit) {
+            while (true) { delay(1000); nowMs.longValue = System.currentTimeMillis() }
+        }
+        val midnight = remember {
+            java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 23); set(java.util.Calendar.MINUTE, 59)
+                set(java.util.Calendar.SECOND, 59); set(java.util.Calendar.MILLISECOND, 999)
+            }.timeInMillis
+        }
+        val remain = (midnight - nowMs.longValue).coerceAtLeast(0L)
+        val resetText = "%02d:%02d:%02d".format(remain / 3_600_000, (remain % 3_600_000) / 60_000, (remain % 60_000) / 1000)
+        val context = LocalContext.current
 
-    Column(Modifier.padding(top = Grid.S12)) {
-        NeonDivider(SkyBlue.copy(alpha = 0.35f))
-        Spacer(Modifier.height(Grid.S12))
-        s.quests.sortedBy { it.seq }.forEach { q ->
-            QuestBlockRow(
-                q = q,
-                blocked = q.isLocked || (recoverySec > 0 && !q.isDone && q.seq > RecoveryTracker.afterSeq(LocalContext.current)),
-                onLog = { onLog(q) },
-            )
-            Spacer(Modifier.height(10.dp))
+        LazyColumn(
+            Modifier.weight(1f, fill = false),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(s.quests.sortedBy { it.seq }, key = { it.id }) { q ->
+                QuestBlockRow(
+                    q = q,
+                    blocked = q.isLocked || (recoverySec > 0 && !q.isDone && q.seq > RecoveryTracker.afterSeq(context)),
+                    onLog = { onLog(q) },
+                )
+            }
+            if (s.quests.isEmpty()) {
+                item { EmptyState("The System is compiling today's protocol… close this sheet and pull to refresh.") }
+            }
+            item {
+                NeonDivider(SkyBlue.copy(alpha = 0.25f))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "⚠ Failure before reset incurs the protocol penalty.",
+                        style = MaterialTheme.typography.labelSmall, color = LabelGray, modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("RESET $resetText", color = SkyBlue, fontFamily = SystemMono, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(10.dp))
+                GhostButton("TRAINING CATALOG", onOpenTraining, Modifier.fillMaxWidth())
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Career sessions live in the catalog — they never block today's protocol.",
+                    style = MaterialTheme.typography.bodySmall, color = FaintGray,
+                )
+            }
         }
-        if (s.quests.isEmpty()) {
-            EmptyState("The System is compiling today's protocol… pull to refresh.")
-        }
-        NeonDivider(SkyBlue.copy(alpha = 0.25f))
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "⚠ Failure before reset incurs the protocol penalty.",
-                style = MaterialTheme.typography.labelSmall, color = LabelGray, modifier = Modifier.weight(1f),
-            )
-            Text("RESET $resetText", color = SkyBlue, fontFamily = SystemMono, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(10.dp))
-        GhostButton("TRAINING CATALOG", onOpenTraining, Modifier.fillMaxWidth())
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Career sessions live in the catalog — they never block today's protocol.",
-            style = MaterialTheme.typography.bodySmall, color = FaintGray,
-        )
     }
 }
 
