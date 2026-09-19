@@ -18,3 +18,4 @@ DEPLOYED_LIVE.md
 !debug.keystore
 keystore/*.base64.txt
 .kotlin/
+artwork-src/

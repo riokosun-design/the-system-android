@@ -1,11 +1,15 @@
 package com.thesystem.app.ui.rank
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -18,7 +22,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -27,6 +36,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.thesystem.app.R
 import com.thesystem.app.core.SystemMath
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
@@ -37,6 +47,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlin.math.floor
+import kotlin.math.sin
+import kotlin.random.Random
 import javax.inject.Inject
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -77,109 +90,214 @@ fun RankScreen(vm: RankViewModel = hiltViewModel()) {
     val tier = SystemMath.tierFor(level)
     val penaltyRank = s.profile?.rank?.value?.takeIf { it.isPenaltyRank }
 
+    // ── RANK REVEAL — one staged timeline, then calm forever ────────────────
+    //   0.00–0.30  the original artwork fades in and starts its slow drift
+    //   0.25–0.65  rising motes join
+    //   0.05–0.45  the emblem forms (scale + alpha + glow)
+    //   0.35–0.65  the F→SS ladder lands
+    //   0.50–0.95  next-gate + verified record surface
+    val reveal = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { reveal.animateTo(1f, tween(1600, easing = FastOutSlowInEasing)) }
+    fun stage(a: Float, b: Float): Float = ((reveal.value - a) / (b - a)).coerceIn(0f, 1f)
+
+    // the artwork never sits still — a 26s Ken Burns drift, infinitely mirrored
+    val drift by rememberInfiniteTransition(label = "rankBg").animateFloat(
+        0f, 1f,
+        infiniteRepeatable(tween(26000, easing = LinearEasing), RepeatMode.Reverse),
+        label = "d",
+    )
+
     SystemBackground {
-        LazyColumn(
-            Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin),
-            verticalArrangement = Arrangement.spacedBy(Grid.CardSpace),
-            contentPadding = PaddingValues(vertical = Grid.S16),
-        ) {
-            // header
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("SYSTEM", style = MonoLabel, color = SkyBlue)
-                        Text("RANK", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 22.sp, letterSpacing = 1.sp)
-                    }
-                    penaltyRank?.let { Text(it.title, style = MonoLabel, color = LabelGray) }
-                }
-            }
+        Box(Modifier.fillMaxSize()) {
+            // LAYER 0 — original cinematic art (bundled, zero network, zero video)
+            Image(
+                painter = painterResource(id = R.drawable.rank_bg),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alpha = 0.40f * stage(0f, 0.30f),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = 1.14f; scaleY = 1.14f
+                        translationX = (drift - 0.5f) * 18.dp.toPx()
+                        translationY = (0.5f - drift) * 12.dp.toPx()
+                    },
+            )
+            // readability scrim — dark above, deeper at the data rows
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(
+                        0f to InkBlack.copy(alpha = 0.66f),
+                        0.45f to InkBlack.copy(alpha = 0.52f),
+                        1f to InkBlack.copy(alpha = 0.90f),
+                    ),
+                ),
+            )
+            // LAYER 2 — energy motes, rising slowly until the end of time
+            ParticleField(alpha = stage(0.25f, 0.65f))
 
-            // central emblem
-            item {
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    TierEmblem(tier)
-                    Spacer(Modifier.height(Grid.S12))
-                    Text(tier.title, color = SkyBlue, fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 2.sp)
-                    Text("LEVEL $level", style = MonoLabel, color = LabelGray)
-                    if (penaltyRank != null) {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "DEGRADED: ${penaltyRank.title} — skipped days decay XP, never the ladder.",
-                            style = MaterialTheme.typography.bodySmall, color = LabelGray, textAlign = TextAlign.Center,
-                        )
-                    }
-                }
-            }
-
-            // the ladder — every tier visible, the current one commands
-            item { LadderStrip(current = tier) }
-
-            // next gate
-            item {
-                val next = SystemMath.nextTier(level)
-                GlowCard(modifier = Modifier.fillMaxWidth()) {
-                    if (next == null) {
-                        Text("APEX REACHED", color = PaperWhite, style = MaterialTheme.typography.titleMedium)
-                        Text("SS-RANK — the ladder ends here. The protocol does not.", style = MaterialTheme.typography.bodySmall, color = LabelGray)
-                    } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("NEXT RANK", style = MonoLabel, color = LabelGray)
-                            Spacer(Modifier.weight(1f))
-                            Text("${next.title} · LV ${next.minLevel}", color = PaperWhite, fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            // LAYER 3 — the ladder interface itself
+            LazyColumn(
+                Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin),
+                verticalArrangement = Arrangement.spacedBy(Grid.CardSpace),
+                contentPadding = PaddingValues(vertical = Grid.S16),
+            ) {
+                // header
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("SYSTEM", style = MonoLabel, color = SkyBlue)
+                            Text("RANK", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 22.sp, letterSpacing = 1.sp)
                         }
-                        Spacer(Modifier.height(Grid.S8))
-                        val frac by androidx.compose.animation.core.animateFloatAsState(
-                            SystemMath.tierProgress(level), tween(700), label = "tierCharge",
-                        )
-                        Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(TrackGray)) {
-                            Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(SkyBlue))
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Text("${next.minLevel - level} LEVELS TO GO", style = MonoLabel, color = SkyBlue)
+                        penaltyRank?.let { Text(it.title, style = MonoLabel, color = LabelGray) }
                     }
                 }
-            }
 
-            // verified record — proof-only feed
-            item {
-                Column {
-                    SectionTitle("VERIFIED PERFORMANCE")
-                    Spacer(Modifier.height(Grid.S8))
-                    val b = s.bests
-                    when {
-                        s.loading -> Text("READING THE RECORD…", style = MonoLabel, color = LabelGray)
-                        b == null || b.sessions == 0 -> EmptyState(
-                            "No verified sessions yet — clear today's protocol and your record starts here."
-                        )
-                        else -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(Grid.S8)) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
-                                    StatTile("PUSH-UP", "${b.pushReps} REPS", PaperWhite, Modifier.weight(1f))
-                                    StatTile("SQUAT", "${b.squatReps} REPS", PaperWhite, Modifier.weight(1f))
-                                }
-                                Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
-                                    StatTile("RUN", "%.2f KM".format(b.runMeters / 1000.0), PaperWhite, Modifier.weight(1f))
-                                    StatTile("WARS WON", "${b.battleWins}", SkyBlue, Modifier.weight(1f))
-                                }
-                            }
-                            Spacer(Modifier.height(Grid.S8))
+                // central emblem — forms during the reveal
+                item {
+                    val p = stage(0.05f, 0.45f)
+                    Column(
+                        Modifier.fillMaxWidth().stageIn(p),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        TierEmblem(tier, glow = p)
+                        Spacer(Modifier.height(Grid.S12))
+                        Text(tier.title, color = SkyBlue, fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 2.sp)
+                        Text("LEVEL $level", style = MonoLabel, color = LabelGray)
+                        if (penaltyRank != null) {
+                            Spacer(Modifier.height(6.dp))
                             Text(
-                                "${b.sessions} verified sessions · camera · radar · step sensor. Manual logs never touch this record.",
-                                style = MaterialTheme.typography.bodySmall, color = FaintGray,
+                                "DEGRADED: ${penaltyRank.title} — skipped days decay XP, never the ladder.",
+                                style = MaterialTheme.typography.bodySmall, color = LabelGray, textAlign = TextAlign.Center,
                             )
                         }
                     }
                 }
-            }
 
-            item { Spacer(Modifier.height(72.dp)) }
+                // the ladder — every tier visible, the current one commands
+                item { Box(Modifier.stageIn(stage(0.35f, 0.65f))) { LadderStrip(current = tier) } }
+
+                // next gate
+                item {
+                    Box(Modifier.stageIn(stage(0.50f, 0.80f))) {
+                        val next = SystemMath.nextTier(level)
+                        GlowCard(modifier = Modifier.fillMaxWidth()) {
+                            if (next == null) {
+                                Text("APEX REACHED", color = PaperWhite, style = MaterialTheme.typography.titleMedium)
+                                Text("SS-RANK — the ladder ends here. The protocol does not.", style = MaterialTheme.typography.bodySmall, color = LabelGray)
+                            } else {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("NEXT RANK", style = MonoLabel, color = LabelGray)
+                                    Spacer(Modifier.weight(1f))
+                                    Text("${next.title} · LV ${next.minLevel}", color = PaperWhite, fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                Spacer(Modifier.height(Grid.S8))
+                                val frac by androidx.compose.animation.core.animateFloatAsState(
+                                    SystemMath.tierProgress(level), tween(700), label = "tierCharge",
+                                )
+                                Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(TrackGray)) {
+                                    Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(SkyBlue))
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                Text("${next.minLevel - level} LEVELS TO GO", style = MonoLabel, color = SkyBlue)
+                            }
+                        }
+                    }
+                }
+
+                // verified record — proof-only feed
+                item {
+                    Box(Modifier.stageIn(stage(0.65f, 0.95f))) {
+                        Column {
+                            SectionTitle("VERIFIED PERFORMANCE")
+                            Spacer(Modifier.height(Grid.S8))
+                            val b = s.bests
+                            when {
+                                s.loading -> Text("READING THE RECORD…", style = MonoLabel, color = LabelGray)
+                                b == null || b.sessions == 0 -> EmptyState(
+                                    "No verified sessions yet — clear today's protocol and your record starts here."
+                                )
+                                else -> {
+                                    Column(verticalArrangement = Arrangement.spacedBy(Grid.S8)) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
+                                            StatTile("PUSH-UP · VERIFIED", "${b.pushReps} REPS", PaperWhite, Modifier.weight(1f))
+                                            StatTile("SQUAT · VERIFIED", "${b.squatReps} REPS", PaperWhite, Modifier.weight(1f))
+                                        }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
+                                            StatTile("RUN · VERIFIED", "%.2f KM".format(b.runMeters / 1000.0), PaperWhite, Modifier.weight(1f))
+                                            StatTile("WARS WON", "${b.battleWins}", SkyBlue, Modifier.weight(1f))
+                                        }
+                                    }
+                                    Spacer(Modifier.height(Grid.S8))
+                                    Text(
+                                        "${b.sessions} verified sessions · camera · radar · step sensor. Manual logs never touch this record.",
+                                        style = MaterialTheme.typography.bodySmall, color = FaintGray,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item { Spacer(Modifier.height(72.dp)) }
+            }
         }
     }
 }
 
-/** Central tier emblem — diamond HUD frame, pulse ring, the letter commands. */
+/** Staged entrance: fade + small rise, driven by the reveal timeline. */
+private fun Modifier.stageIn(p: Float): Modifier = graphicsLayer {
+    alpha = p
+    translationY = (1f - p) * 24.dp.toPx()
+}
+
+/** One energy mote for the particle layer. */
+private class Mote(
+    val x: Float, val y: Float, val speed: Float, val size: Float,
+    val sway: Float, val blue: Boolean, val baseAlpha: Float,
+)
+
+/**
+ * Rising energy motes — cheap: 26 circles, one 15s clock, seeded once.
+ * Blue is the accent, white the dust; the field dims itself via [alpha].
+ */
 @Composable
-private fun TierEmblem(tier: SystemMath.HunterTier) {
+private fun ParticleField(alpha: Float) {
+    if (alpha <= 0.01f) return
+    val t by rememberInfiniteTransition(label = "motes").animateFloat(
+        0f, 1f, infiniteRepeatable(tween(15000, easing = LinearEasing)), label = "t",
+    )
+    val motes = remember {
+        val rnd = Random(7)
+        List(26) {
+            Mote(
+                x = rnd.nextFloat(),
+                y = rnd.nextFloat(),
+                speed = 0.03f + rnd.nextFloat() * 0.07f,
+                size = 1.2f + rnd.nextFloat() * 2.4f,
+                sway = 0.6f + rnd.nextFloat() * 1.6f,
+                blue = rnd.nextFloat() < 0.35f,
+                baseAlpha = 0.10f + rnd.nextFloat() * 0.22f,
+            )
+        }
+    }
+    Canvas(Modifier.fillMaxSize()) {
+        motes.forEach { m ->
+            val yRaw = m.y - t * m.speed * 4f          // slow endless rise
+            val yy = yRaw - floor(yRaw)
+            val xx = m.x + sin(t * m.sway * 6.2832f) * 0.015f
+            drawCircle(
+                color = (if (m.blue) SkyBlue else PaperWhite).copy(alpha = alpha * m.baseAlpha),
+                radius = m.size.dp.toPx(),
+                center = Offset(xx * size.width, yy * size.height),
+            )
+        }
+    }
+}
+
+/** Central tier emblem — diamond HUD frame, pulse ring, blue energy core. */
+@Composable
+private fun TierEmblem(tier: SystemMath.HunterTier, glow: Float = 1f) {
     val pulse by rememberInfiniteTransition(label = "rankPulse").animateFloat(
         initialValue = 0f, targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(1800, easing = LinearEasing)),
@@ -189,6 +307,16 @@ private fun TierEmblem(tier: SystemMath.HunterTier) {
         Canvas(Modifier.fillMaxSize()) {
             val c = center
             val r = size.minDimension / 2f
+            // energy core — builds during the reveal, breathes after
+            drawCircle(
+                brush = Brush.radialGradient(
+                    0f to SkyBlue.copy(alpha = 0.20f * glow),
+                    0.6f to SkyBlue.copy(alpha = 0.05f * glow),
+                    1f to SkyBlue.copy(alpha = 0f),
+                    center = c, radius = r * 0.95f,
+                ),
+                radius = r * 0.95f, center = c,
+            )
             // outer pulse ring
             drawCircle(SkyBlue.copy(alpha = (1f - pulse) * 0.25f), radius = r * (0.72f + 0.28f * pulse), center = c, style = Stroke(1.5.dp.toPx()))
             // diamond frame

@@ -207,28 +207,29 @@ fun DashboardScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        SectionTitle("PERFORMANCE DEVELOPMENT", SkyBlue)
+                                        Column {
+                                            SectionTitle("PERFORMANCE DEVELOPMENT", SkyBlue)
+                                            Text(
+                                                "ACTIVE ${s.specials.count { s.enrollmentOf(it)?.status == "ACTIVE" }}/5",
+                                                style = MonoLabel, color = LabelGray,
+                                            )
+                                        }
                                         GhostButton("ALL", {
                                             haptics.select(); nav.navigate(Routes.TRAINING)
                                         })
                                     }
                                     Spacer(Modifier.height(Grid.S8))
-                                    val mySpecials = s.specials.filter { s.enrollmentOf(it)?.status == "ACTIVE" }
-                                    if (mySpecials.isNotEmpty()) {
-                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(Grid.S12)) {
-                                            items(mySpecials, key = { it.id }) { c ->
-                                                CourseCard(
-                                                    course = c, enrollment = s.enrollmentOf(c),
-                                                    recommended = false,
-                                                    onClick = { haptics.tick(); trainingVm.open(c) },
-                                                )
-                                            }
+                                    // SPECIAL TRAINING law: the FULL catalog always renders.
+                                    // Muscle hides alternatives after one primary is chosen —
+                                    // specials never do; up to five stay ACTIVE at once.
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(Grid.S12)) {
+                                        items(s.specials, key = { it.id }) { c ->
+                                            CourseCard(
+                                                course = c, enrollment = s.enrollmentOf(c),
+                                                recommended = false,
+                                                onClick = { haptics.tick(); trainingVm.open(c) },
+                                            )
                                         }
-                                    } else {
-                                        Text(
-                                            "No active performance tracks — speed, mobility and power work live in the catalog.",
-                                            style = MaterialTheme.typography.bodySmall, color = FaintGray,
-                                        )
                                     }
                                     Spacer(Modifier.height(Grid.S12))
                                     BlackRoomDoor(
@@ -562,10 +563,10 @@ private fun PrimaryCoursePanel(
                 indication = null,
             ) { onOpen() },
     ) {
-        Box(Modifier.fillMaxWidth().height(130.dp)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f).background(InkBlack)) {
             AsyncImage(
                 model = course.cover, contentDescription = course.title,
-                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
             )
             Box(
                 Modifier

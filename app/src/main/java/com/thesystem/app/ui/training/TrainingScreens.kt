@@ -260,11 +260,12 @@ fun CourseCard(
             )
             .clickable { onClick() },
     ) {
-        // artwork block — pure image, zero text
-        Box(Modifier.fillMaxWidth().height(104.dp)) {
+        // artwork block — FULL art, never decapitated: fixed aspect, Fit on
+        // pure black so any source ratio lands letterboxed and intentional
+        Box(Modifier.fillMaxWidth().aspectRatio(1.25f).background(InkBlack)) {
             AsyncImage(
                 model = course.cover, contentDescription = course.title,
-                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = alpha,
+                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit, alpha = alpha,
             )
             if (recommended) {
                 Box(
@@ -293,17 +294,23 @@ fun CourseCard(
                 SystemChip("${course.durationMonths}M")
             }
             Spacer(Modifier.height(Grid.S8))
-            val done = enrollment != null
+            // status discipline: ACTIVE shows its charge, finished shows the word,
+            // everything available simply invites inspection — catalog never hides
+            val status = enrollment?.status
             Text(
-                if (done) "IN PROGRESS · %.0f%%".format(enrollment!!.progressPercent) else "TAP FOR INFO",
-                style = MonoLabel, color = if (done) SkyBlue else LabelGray,
+                when (status) {
+                    "ACTIVE" -> "ACTIVE · %.0f%%".format(enrollment!!.progressPercent)
+                    "COMPLETED" -> "COMPLETED"
+                    else -> "TAP FOR INFO"
+                },
+                style = MonoLabel, color = if (status == "ACTIVE") SkyBlue else LabelGray,
             )
-            if (done) {
+            if (status == "ACTIVE") {
                 Spacer(Modifier.height(4.dp))
                 Box(Modifier.fillMaxWidth().height(2.dp).clip(RoundedCornerShape(1.dp)).background(TrackGray)) {
                     Box(
                         Modifier.fillMaxHeight()
-                            .fillMaxWidth((enrollment.progressPercent / 100.0).toFloat().coerceIn(0f, 1f))
+                            .fillMaxWidth((enrollment!!.progressPercent / 100.0).toFloat().coerceIn(0f, 1f))
                             .background(SkyBlue)
                     )
                 }
