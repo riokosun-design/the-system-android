@@ -65,11 +65,9 @@ fun QuestProofScreen(
     val haptics = rememberSystemHaptics()
     val context = LocalContext.current
 
-    // FLOOR RADAR needs no permission at all — the camera gate only stands
-    // when the hunter actually picked the ML Kit channel.
     val permission = when (s.mode) {
         ProofMode.STEPS -> Manifest.permission.ACTIVITY_RECOGNITION
-        ProofMode.CAMERA -> if (s.radar) null else Manifest.permission.CAMERA
+        ProofMode.CAMERA -> Manifest.permission.CAMERA
         else -> null
     }
     var granted by remember(permission) {
@@ -123,8 +121,7 @@ fun QuestProofScreen(
                 Column(Modifier.weight(1f)) {
                     Text(s.title.uppercase(), style = MaterialTheme.typography.titleMedium, color = PaperWhite)
                     Text(
-                        "BLOCK ${s.seq.toString().padStart(2, '0')} · " +
-                            (if (s.mode == ProofMode.CAMERA && s.radar) "RADAR" else s.mode.name) + " PROOF",
+                        "BLOCK ${s.seq.toString().padStart(2, '0')} · ${s.mode.name} PROOF",
                         style = MonoLabel, color = SkyBlue,
                     )
                 }
@@ -201,17 +198,7 @@ private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
     val flash by animateFloatAsState(targetValue = if (s.repFlash > 0) 1f else 0f, animationSpec = spring(), label = "flash")
     LaunchedEffect(s.repFlash) { if (s.repFlash > 0) { delay(220); vm.clearFlash() } }
 
-    val isPushup = s.exercise == PoseRepCounter.RepExercise.PUSHUP
-    val radar = isPushup && s.radar
-
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        // proof-channel switch — push-ups may run camera-free on the proximity
-        // radar; squats stay ML Kit only (upright pose is its comfort zone).
-        if (isPushup) {
-            RadarModeToggle(radar = s.radar, onChange = { vm.setRadar(it) })
-            Spacer(Modifier.height(10.dp))
-        }
-
         Box(
             Modifier
                 .fillMaxWidth().height(360.dp)
@@ -219,17 +206,7 @@ private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
                 .background(Color.Black)
                 .border(1.5.dp, SkyBlue.copy(alpha = 0.7f), RoundedCornerShape(12.dp)),
         ) {
-            if (radar) {
-                FloorRadarPanel(
-                    count = s.count,
-                    onRep = { n, tempo ->
-                        vm.onRep(n, PoseRepCounter.RepQuality(0.0, 0.0, tempo, 1f, 1f))
-                    },
-                    modifier = Modifier.matchParentSize(),
-                )
-            } else {
-                CameraBox(s, vm, flash)
-            }
+            CameraBox(s, vm, flash)
         }
 
         Spacer(Modifier.height(14.dp))
@@ -237,19 +214,7 @@ private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
         s.lastQuality?.let { q ->
             Spacer(Modifier.height(8.dp))
             Text(
-                if (radar) {
-                    if (q.tempoMs > 0) "DEPTH SENSOR-VERIFIED · TEMPO %.1fs".format(q.tempoMs / 1000.0)
-                    else "DEPTH SENSOR-VERIFIED"
-                } else {
-                    "FORM %.0f%% · TEMPO %.1fs · DEPTH %.0f%%".format(q.symmetry * 100, q.tempoMs / 1000.0, q.depthScore * 100)
-                },
-                style = MonoLabel, color = LabelGray,
-            )
-        }
-        if (radar) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "PHONE FLAT ON THE FLOOR · CHEST OVER THE SENSOR · FULL DESCENT = 1 REP",
+                "FORM %.0f%% · TEMPO %.1fs · DEPTH %.0f%%".format(q.symmetry * 100, q.tempoMs / 1000.0, q.depthScore * 100),
                 style = MonoLabel, color = LabelGray,
             )
         }

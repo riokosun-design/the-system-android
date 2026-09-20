@@ -47,8 +47,6 @@ data class QuestProofState(
     val meters: Int = 0,
     val activeSec: Int = 0,
     val poseStatus: PoseRepCounter.PoseStatus = PoseRepCounter.PoseStatus.WAITING,
-    /** push-up proof channel: true = proximity FLOOR RADAR, false = ML Kit camera */
-    val radar: Boolean = false,
     val repFlash: Float = 0f,
     val lastQuality: PoseRepCounter.RepQuality? = null,
     val submitting: Boolean = false,
@@ -91,10 +89,6 @@ class QuestProofViewModel @Inject constructor(
             mode = ProofMode.of(rawMode),
             exercise = if (exerciseRaw.uppercase().contains("SQUAT")) PoseRepCounter.RepExercise.SQUAT
             else PoseRepCounter.RepExercise.PUSHUP,
-            // FLOOR RADAR is the default push-up channel: the proximity sensor
-            // cannot lose the hunter at the bottom of a rep the way ML Kit does
-            // at floor level. Squats stay camera-only (upright pose = reliable).
-            radar = ProofMode.of(rawMode) == ProofMode.CAMERA && !exerciseRaw.uppercase().contains("SQUAT"),
             target = targetArg,
             unit = unitArg,
             restSec = restArg,
@@ -106,11 +100,6 @@ class QuestProofViewModel @Inject constructor(
     private var startedAt = System.currentTimeMillis()
 
     // ── camera channel (push-up / squat) ─────────────────────────────────────
-    /** Proof-channel switch for push-ups: FLOOR RADAR (proximity) vs AI CAMERA (ML Kit). */
-    fun setRadar(on: Boolean) {
-        _state.value = _state.value.copy(radar = on)
-    }
-
     fun onRep(count: Int, quality: PoseRepCounter.RepQuality) {
         _state.value = _state.value.copy(count = count, lastQuality = quality, repFlash = 1f)
         maybeAutoSubmit(count)
