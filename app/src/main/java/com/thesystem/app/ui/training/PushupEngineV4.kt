@@ -143,8 +143,8 @@ class PushupEngineV4(
         const val LIKELIHOOD = 0.42f
         const val VIS_MARGINAL = 0.55f
 
-        const val EMA_TH = 0.5
-        const val EMA_Y = 0.5
+        const val EMA_TH = 0.5     // Double math — elbow theta lives in Double
+        const val EMA_Y = 0.5f     // Float math — shoulder coords live in Float
 
         const val TOP_HOLD_MS = 450L         // READY arming hold (§5 ~500 ms)
         const val REARM_HOLD_MS = 300L       // cumulative stable-top re-lock (grace 250)
