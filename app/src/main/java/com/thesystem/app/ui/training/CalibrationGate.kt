@@ -341,7 +341,8 @@ class CalibrationGate(
         )
     }
 
-    private fun bestElbow(fr: LandmarkFrame): Double? {
+    private fun bestElbow(fr: LandmarkFrame?): Double? {
+        if (fr == null) return null
         fun arm(sh: Int, el: Int, wr: Int): Pair<Float, Double>? {
             if (fr.score[el] < LIKELIHOOD || fr.score[wr] < LIKELIHOOD) return null
             val vis = minOf(fr.score[sh], fr.score[el], fr.score[wr])
