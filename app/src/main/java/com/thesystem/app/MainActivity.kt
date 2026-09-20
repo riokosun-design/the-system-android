@@ -98,6 +98,9 @@ object Routes {
     const val ADMIN = "admin"
     const val PROTOCOL = "protocol"
     const val ARENA_ADD = "arenaAdd"
+    const val ASSISTANT = "assistant"
+    const val ROUTINE = "routine"
+    const val AI_BENCHMARK = "aiBenchmark"
     /** Verified proof session: every field is server content, not a client guess. */
     const val QUEST_PROOF =
         "quest/{questId}/{mode}/{exercise}/{target}/{seq}/{unit}/{rest}/{xp}/{title}"
@@ -184,5 +187,8 @@ fun AppNavHost(profile: RootState.Ready, onSignOut: () -> Unit) {
             com.thesystem.app.ui.training.BlackRoomScreen(onBack = { nav.popBackStack() })
         }
         composable(Routes.QUEST_PROOF) { QuestProofScreen(onExit = { nav.popBackStack() }) }
+        composable(Routes.ASSISTANT) { com.thesystem.app.ui.assistant.AssistantScreen(onBack = { nav.popBackStack() }) }
+        composable(Routes.ROUTINE) { com.thesystem.app.ui.assistant.RoutineScreen(onBack = { nav.popBackStack() }) }
+        composable(Routes.AI_BENCHMARK) { com.thesystem.app.ui.assistant.AiBenchmarkScreen(onBack = { nav.popBackStack() }) }
     }
 }

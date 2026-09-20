@@ -76,7 +76,13 @@ data class QuestProofState(
 class QuestProofViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val system: SystemRepository,
+    orchestrator: com.thesystem.app.ai.AIOrchestrator,
 ) : ViewModel() {
+
+    init {
+        // §4 AI ENGINE: vision owns the device now — any loaded LLM sheds load.
+        orchestrator.visionActiveHint(true)
+    }
 
     private val questId: Long = (savedStateHandle.get<String>("questId") ?: "0").toLong()
     private val rawMode: String = savedStateHandle.get<String>("mode") ?: "CAMERA"

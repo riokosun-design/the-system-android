@@ -249,4 +249,66 @@ class SystemRepository @Inject constructor(
             Json.parseToJsonElement(raw).jsonObject
         }.getOrNull()
     }
+
+    // ═══ AI ENGINE (016): notes · routine · quest adoption ═══════════════════
+
+    /** Assistant memory — ONLY notes the hunter explicitly saved (spec §15). */
+    suspend fun aiNotes(): List<AiNoteDto> = uid?.let { me ->
+        runCatching {
+            supabase.from("ai_notes").select {
+                filter { eq("user_id", me) }; order("created_at", Order.DESCENDING); limit(20)
+            }.decodeList<AiNoteDto>()
+        }.getOrDefault(emptyList())
+    } ?: emptyList()
+
+    suspend fun saveAiNote(note: String): Result<Unit> = runCatching {
+        val me = uid ?: error("Not signed in")
+        supabase.from("ai_notes").insert(buildJsonObject {
+            put("user_id", me); put("note", note.trim().take(500))
+        })
+        Unit
+    }
+
+    suspend fun deleteAiNote(id: Long): Result<Unit> = runCatching {
+        supabase.from("ai_notes").delete { filter { eq("id", id) } }
+        Unit
+    }
+
+    /** Today's routine row (mig 016) — DRAFT or CONFIRMED, never auto-overwritten. */
+    suspend fun routineToday(): RoutineDto? = uid?.let { me ->
+        runCatching {
+            supabase.from("daily_routines").select {
+                filter { eq("user_id", me); eq("routine_date", LocalDate.now().toString()) }
+            }.decodeList<RoutineDto>().firstOrNull()
+        }.getOrNull()
+    }
+
+    suspend fun saveRoutine(items: JsonArray, status: String): Result<Unit> = runCatching {
+        val me = uid ?: error("Not signed in")
+        supabase.from("daily_routines").upsert(buildJsonObject {
+            put("user_id", me)
+            put("routine_date", LocalDate.now().toString())
+            put("items", items)
+            put("status", status)
+        })
+        Unit
+    }
+
+    /**
+     * AI proposes; THE SERVER decides (mig 016): whitelist, clamps, one/day,
+     * no dupes — then the row lands in daily_quests and the EXISTING verified
+     * proof flow (log_quest_proof → complete_quest) owns it from there.
+     */
+    suspend fun adoptAiQuest(p: com.thesystem.app.ai.QuestProposal): Result<QuestDto> = runCatching {
+        val raw = supabase.postgrest.rpc("adopt_ai_quest", buildJsonObject {
+            put("p_title", p.title)
+            put("p_exercise_kind", p.exercise)
+            put("p_target_value", p.target)
+            put("p_target_unit", p.targetUnit)
+            put("p_est_duration_sec", p.durationMinutes * 60)
+            put("p_difficulty", p.difficulty.uppercase().ifBlank { "EASY" })
+            put("p_verification", "")
+        }).data ?: error("no response")
+        cacheJson.decodeFromString(QuestDto.serializer(), raw)
+    }
 }

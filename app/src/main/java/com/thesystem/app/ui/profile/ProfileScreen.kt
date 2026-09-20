@@ -54,6 +54,7 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
             item { Box(Modifier.enterAnim(0)) { ProfileHeader(me, onOpenChat = { haptics.tick(); nav.navigate(Routes.CHAT) }, onSignOut = { haptics.select(); onSignOut() }) } }
             if (me.isAdmin) {
                 item { GhostButton("ADMIN CONTROL PANEL", { nav.navigate(Routes.ADMIN) }, Modifier.fillMaxWidth()) }
+                item { GhostButton("AI BENCHMARK", { nav.navigate(Routes.AI_BENCHMARK) }, Modifier.fillMaxWidth()) }
             }
             item { Box(Modifier.enterAnim(1)) { BodyStatsCard(me, vm) } }
             item { Box(Modifier.enterAnim(2)) { FormsCard(s, me) } }

@@ -140,11 +140,17 @@ fun DashboardScreen(
                                     recoverySec = RecoveryTracker.remainingSec(context),
                                     onOpen = { haptics.select(); questSheetOpen = true },
                                     onStart = { q -> haptics.slam(); nav.navigate(Routes.questProof(q)) },
+                                    vm = vm,
                                 )
                             }
                         }
 
-                        // 3 ── TRAINING — ONE primary course commands this surface;
+                        // 3.5 ── SYSTEM AI — assistant + routine doorways (HUD-native, §26)
+                        item {
+                            Box(Modifier.enterAnim(4)) { SystemAiModule(nav) }
+                        }
+
+                        // 4 ── TRAINING — ONE primary course commands this surface;
                         //    every alternative lives in the catalog, never here.
                         item {
                             Box(Modifier.enterAnim(4)) {
@@ -302,6 +308,46 @@ private fun SystemStatusHeader(s: DashboardState) {
     }
 }
 
+// ── 2.5 SYSTEM AI MODULE — doorways to ASSISTANT (§12) and ROUTINE (§14) ────
+
+@Composable
+private fun SystemAiModule(nav: NavHostController) {
+    GlowCard(modifier = Modifier.fillMaxWidth()) {
+        Text("SYSTEM AI", style = MonoLabel, color = LabelGray)
+        Spacer(Modifier.height(Grid.S8))
+        Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(TrackGray)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { nav.navigate(com.thesystem.app.Routes.ASSISTANT) }
+                    .padding(12.dp),
+            ) {
+                Text("SYSTEM ASSISTANT", color = PaperWhite, style = MonoData)
+                Text("ask · explain · plan", color = FaintGray, style = MonoLabel)
+            }
+            Column(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(TrackGray)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { nav.navigate(com.thesystem.app.Routes.ROUTINE) }
+                    .padding(12.dp),
+            ) {
+                Text("SYSTEM ROUTINE", color = PaperWhite, style = MonoData)
+                Text("today, ordered", color = FaintGray, style = MonoLabel)
+            }
+        }
+    }
+}
+
 // ── 2. PLAYER SNAPSHOT — LV · RANK · XP · three micro-stats, one compact card ─
 
 @Composable
@@ -421,6 +467,7 @@ private fun TodayQuestModule(
     recoverySec: Int,
     onOpen: () -> Unit,
     onStart: (QuestDto) -> Unit,
+    vm: DashboardViewModel,
 ) {
     val done = s.clearedCount
     val total = s.quests.size.coerceAtLeast(1)
@@ -491,6 +538,49 @@ private fun TodayQuestModule(
                     color = SkyBlue,
                     enabled = open != null && !open.isLocked,
                 )
+            }
+        }
+
+        // ── AI ENGINE (spec §8): propose a bonus block — server law on adopt ──
+        Spacer(Modifier.height(Grid.S8))
+        GhostButton(
+            if (s.aiQuestBusy) "AI THINKING…" else "AI PROPOSE — BONUS BLOCK",
+            { vm.aiProposeQuest() },
+            Modifier.fillMaxWidth(),
+            enabled = !s.aiQuestBusy,
+        )
+        s.aiQuestNote?.let {
+            Spacer(Modifier.height(6.dp))
+            Text(it, style = MonoLabel, color = LabelGray)
+        }
+        s.aiQuest?.let { p ->
+            Spacer(Modifier.height(8.dp))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, SkyBlue.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("PROPOSED", color = SkyBlue, style = MonoLabel)
+                    Spacer(Modifier.weight(1f))
+                    Text("BY ${s.aiQuestBrain}", color = FaintGray, style = MonoLabel)
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(p.title, color = PaperWhite, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                Text(
+                    "${p.exercise} × ${p.target} ${p.targetUnit} · ${p.difficulty.uppercase()} · ~${p.durationMinutes}m",
+                    style = MonoData, color = LabelGray,
+                )
+                if (p.reason.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(p.reason, style = MonoLabel, color = FaintGray, maxLines = 2)
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
+                    GhostButton("DISMISS", { vm.dismissAiQuest() }, Modifier.weight(1f), enabled = !s.aiQuestBusy)
+                    NeonButton("ADOPT", { vm.acceptAiQuest() }, Modifier.weight(1.2f), color = SkyBlue, enabled = !s.aiQuestBusy)
+                }
             }
         }
     }

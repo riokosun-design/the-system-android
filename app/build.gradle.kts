@@ -112,6 +112,7 @@ dependencies {
     implementation(libs.lifecycle.service)
     implementation(libs.mlkit.pose)
     implementation(libs.tensorflow.lite)
+    implementation(libs.mediapipe.tasks.genai) // on-device LLM runtime (AI engine §6) — models download on demand, never bundled
     implementation(libs.androidx.profileinstaller)
     implementation(libs.camera.core)
     implementation(libs.camera.camera2)

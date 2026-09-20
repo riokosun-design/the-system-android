@@ -33,6 +33,11 @@ data class DashboardState(
     val myCourses: List<UserCourseDto> = emptyList(),
     /** verified lifetime feed for the compact PROGRESS strip (no invented stats) */
     val bests: VerifiedBestsDto? = null,
+    // ── AI ENGINE: proposed bonus quest (adoption goes through the server RPC)
+    val aiQuest: com.thesystem.app.ai.QuestProposal? = null,
+    val aiQuestBrain: String = "",
+    val aiQuestBusy: Boolean = false,
+    val aiQuestNote: String? = null,
     val error: String? = null,
     val notice: String? = null,
 ) {
@@ -65,6 +70,8 @@ data class DashboardState(
 class DashboardViewModel @Inject constructor(
     private val system: SystemRepository,
     private val training: TrainingRepository,
+    private val orchestrator: com.thesystem.app.ai.AIOrchestrator,
+    private val contextEngine: com.thesystem.app.ai.ContextEngine,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(DashboardState())
@@ -131,4 +138,53 @@ class DashboardViewModel @Inject constructor(
     }
 
     fun clearNotice() { _state.value = _state.value.copy(notice = null, error = null) }
+
+    // ── AI ENGINE (spec §8): propose → validate → hunter accepts → server decides ──
+
+    fun aiProposeQuest() = viewModelScope.launch {
+        if (_state.value.aiQuestBusy) return@launch
+        _state.value = _state.value.copy(aiQuestBusy = true, aiQuestNote = null)
+        val snap = contextEngine.snapshot(
+            setOf(
+                com.thesystem.app.ai.ContextEngine.Need.PROFILE,
+                com.thesystem.app.ai.ContextEngine.Need.QUESTS,
+                com.thesystem.app.ai.ContextEngine.Need.PERFORMANCE,
+            ),
+        )
+        val out = orchestrator.proposeQuest(snap)
+        _state.value = _state.value.copy(
+            aiQuestBusy = false,
+            aiQuest = out.value,
+            aiQuestBrain = when (out.brain) {
+                com.thesystem.app.ai.AIOrchestrator.Brain.LOCAL_LLM -> "LOCAL LLM"
+                com.thesystem.app.ai.AIOrchestrator.Brain.DETERMINISTIC -> "RULES"
+                com.thesystem.app.ai.AIOrchestrator.Brain.DISABLED -> "OFF"
+            },
+            aiQuestNote = if (out.value == null) "NO PROPOSAL — ${out.note.ifBlank { "off-grid" }}" else null,
+        )
+    }
+
+    fun acceptAiQuest() = viewModelScope.launch {
+        val p = _state.value.aiQuest ?: return@launch
+        if (_state.value.aiQuestBusy) return@launch
+        _state.value = _state.value.copy(aiQuestBusy = true)
+        system.adoptAiQuest(p)
+            .onSuccess {
+                _state.value = _state.value.copy(aiQuestBusy = false, aiQuest = null, aiQuestNote = "AI QUEST ADOPTED — protocol block added")
+                delay(500); refresh()
+            }
+            .onFailure { e ->
+                val msg = when {
+                    e.message?.contains("ai_quest_limit") == true -> "AI bonus already adopted today."
+                    e.message?.contains("ai_quest_dup") == true -> "That exercise already runs today."
+                    e.message?.contains("ai_quest_kind") == true -> "Kind refused by the server."
+                    else -> "Adoption failed: ${e.message?.take(60)}"
+                }
+                _state.value = _state.value.copy(aiQuestBusy = false, aiQuestNote = msg)
+            }
+    }
+
+    fun dismissAiQuest() {
+        _state.value = _state.value.copy(aiQuest = null, aiQuestNote = null)
+    }
 }

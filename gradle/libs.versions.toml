@@ -17,6 +17,7 @@ coil = "3.0.4"
 datastore = "1.1.1"
 mlkitPose = "17.0.0"
 tensorflowLite = "2.17.0"   # 2.17.1 never shipped — 2.17.0 is the final org.tensorflow release
+mediapipeGenai = "0.10.35"
 profileinstaller = "1.4.1"
 splashscreen = "1.0.1"
 camerax = "1.3.4"
@@ -58,6 +59,7 @@ coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version
 androidx-datastore = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 mlkit-pose = { module = "com.google.mlkit:pose-detection", version.ref = "mlkitPose" }
 tensorflow-lite = { module = "org.tensorflow:tensorflow-lite", version.ref = "tensorflowLite" }
+mediapipe-tasks-genai = { module = "com.google.mediapipe:tasks-genai", version.ref = "mediapipeGenai" }
 camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
 camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
 camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }

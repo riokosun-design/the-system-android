@@ -2,6 +2,7 @@ package com.thesystem.app.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 
 // Every DTO maps 1:1 to a table/view in supabase/migrations. snake_case ↔ camelCase via @SerialName.
@@ -384,4 +385,26 @@ data class HunterInteractionRow(
     @SerialName("post_id") val postId: String,
     @SerialName("user_id") val userId: String,
     val type: String, // mana_boost | transmit | challenge
+)
+
+// ── AI ENGINE (migration 016): assistant notes · daily routine ───────────────
+
+/** Explicitly-saved assistant memory. Chat logs are NEVER stored — only these. */
+@Serializable
+data class AiNoteDto(
+    val id: Long = 0,
+    @SerialName("user_id") val userId: String = "",
+    val note: String,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+/** One daily routine per hunter per day; items are RoutineItem JSON (ai pkg). */
+@Serializable
+data class RoutineDto(
+    @SerialName("user_id") val userId: String = "",
+    @SerialName("routine_date") val routineDate: String = "",
+    val items: JsonArray = JsonArray(emptyList()),
+    val status: String = "DRAFT",            // DRAFT | CONFIRMED
+    val source: String = "AI",               // AI | MANUAL
+    @SerialName("updated_at") val updatedAt: String? = null,
 )

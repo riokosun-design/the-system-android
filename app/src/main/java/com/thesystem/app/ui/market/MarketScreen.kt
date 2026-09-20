@@ -53,6 +53,11 @@ data class MarketState(
     val products: List<ProductDto> = emptyList(),
     val courses: List<CourseDto> = emptyList(),
     val myCourses: List<UserCourseDto> = emptyList(),
+    // ── AI ENGINE (spec §9): daily nutrition plan, REAL products only
+    val nutritionPlan: com.thesystem.app.ai.NutritionPlan? = null,
+    val nutritionBrain: String = "",
+    val nutritionBusy: Boolean = false,
+    val nutritionNote: String? = null,
     val error: String? = null,
 ) {
     fun enrollmentOf(c: CourseDto): UserCourseDto? = myCourses.firstOrNull { it.courseId == c.id }
@@ -66,6 +71,8 @@ class MarketViewModel @Inject constructor(
     private val system: SystemRepository,
     private val commerce: CommerceRepository,
     private val training: TrainingRepository,
+    private val orchestrator: com.thesystem.app.ai.AIOrchestrator,
+    private val contextEngine: com.thesystem.app.ai.ContextEngine,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MarketState())
@@ -84,6 +91,41 @@ class MarketViewModel @Inject constructor(
             courses = training.courses("MUSCLE") + training.courses("SPECIAL") + training.courses("FORBIDDEN"),
             myCourses = training.myCourses(),
         )
+    }
+
+    // ── AI ENGINE (spec §9): plan → validate vs REAL inventory → hunter reviews ──
+    // NEVER purchases: confirmation is an acknowledgement, settlement stays manual UPI.
+    fun planNutrition(budgetInr: Double) = viewModelScope.launch {
+        if (_state.value.nutritionBusy) return@launch
+        _state.value = _state.value.copy(nutritionBusy = true, nutritionNote = null)
+        val snap = contextEngine.snapshot(
+            setOf(
+                com.thesystem.app.ai.ContextEngine.Need.PROFILE,
+                com.thesystem.app.ai.ContextEngine.Need.QUESTS,
+                com.thesystem.app.ai.ContextEngine.Need.MARKET,
+            ),
+        )
+        val out = orchestrator.planNutrition(snap, budgetInr)
+        _state.value = _state.value.copy(
+            nutritionBusy = false,
+            nutritionPlan = out.value,
+            nutritionBrain = when (out.brain) {
+                com.thesystem.app.ai.AIOrchestrator.Brain.LOCAL_LLM -> "LOCAL LLM"
+                com.thesystem.app.ai.AIOrchestrator.Brain.DETERMINISTIC -> "RULES"
+                com.thesystem.app.ai.AIOrchestrator.Brain.DISABLED -> "OFF"
+            },
+            nutritionNote = if (out.value == null) "NO PLAN — ${out.note.ifBlank { "off-grid" }}" else null,
+        )
+    }
+
+    fun confirmNutrition() {
+        _state.value = _state.value.copy(
+            nutritionNote = "PLAN CONFIRMED — add-ons stay manual; nothing was purchased.",
+        )
+    }
+
+    fun dismissNutrition() {
+        _state.value = _state.value.copy(nutritionPlan = null, nutritionNote = null)
     }
 }
 
@@ -119,6 +161,11 @@ fun MarketScreen(nav: NavHostController, vm: MarketViewModel = hiltViewModel()) 
                         style = MaterialTheme.typography.bodySmall, color = LabelGray,
                     )
                 }
+            }
+
+            // ── DAILY FUEL — AI nutrition planner (§9/§10: real inventory only) ──
+            item {
+                NutritionPlannerCard(s, vm)
             }
 
             // ── courses for sale / enrollment ────────────────────────────────
@@ -260,6 +307,112 @@ private fun ProductCard(p: ProductDto) {
             }
             Text("₹%.0f".format(p.priceInr), color = PaperWhite, fontFamily = SystemMono,
                 fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
+    }
+}
+
+// ── DAILY FUEL — NutritionPlanner UI (spec §9): plan · review · confirm ──────
+// Laws: products/prices are backend truth; no invented items; no auto-purchase;
+// minors get conservative floors (enforced in AIValidator + DeterministicAI).
+
+@Composable
+private fun NutritionPlannerCard(s: MarketState, vm: MarketViewModel) {
+    val haptics = rememberSystemHaptics()
+    var budgetText by remember { mutableStateOf("500") }
+    val plan = s.nutritionPlan
+
+    GlowCard(modifier = Modifier.fillMaxWidth()) {
+        SectionTitle("DAILY FUEL — NUTRITION PLANNER", PaperWhite)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "A day plan built from YOUR goal and training. Market add-ons come from the real shelves only — you review, you confirm, nothing is ever auto-purchased.",
+            style = MaterialTheme.typography.bodySmall, color = LabelGray,
+        )
+        Spacer(Modifier.height(Grid.S8))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.OutlinedTextField(
+                value = budgetText,
+                onValueChange = { budgetText = it.filter { c -> c.isDigit() }.take(5) },
+                modifier = Modifier.weight(1f),
+                label = { Text("DAILY BUDGET ₹", color = FaintGray, fontSize = 9.sp, fontFamily = SystemMono) },
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                ),
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = PaperWhite, unfocusedBorderColor = LineSoft,
+                    focusedTextColor = PaperWhite, unfocusedTextColor = PaperWhite,
+                    cursorColor = PaperWhite,
+                    focusedContainerColor = PanelGray, unfocusedContainerColor = PanelGray,
+                ),
+                shape = RoundedCornerShape(10.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            NeonButton(
+                if (s.nutritionBusy) "PLANNING…" else "PLAN",
+                onClick = {
+                    haptics.select()
+                    vm.planNutrition(budgetText.toDoubleOrNull() ?: 500.0)
+                },
+                enabled = !s.nutritionBusy,
+            )
+        }
+
+        s.nutritionNote?.let {
+            Spacer(Modifier.height(6.dp))
+            Text(it, style = MonoLabel, color = LabelGray)
+        }
+
+        plan?.let { p ->
+            Spacer(Modifier.height(Grid.S12))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${p.calorieTarget} KCAL TARGET", style = MonoData, color = PaperWhite)
+                Spacer(Modifier.weight(1f))
+                Text("BY ${s.nutritionBrain}", style = MonoLabel, color = FaintGray)
+            }
+            Spacer(Modifier.height(8.dp))
+            p.slots.forEach { slot ->
+                Text("▸ $slot", style = MonoLabel, color = LabelGray, modifier = Modifier.padding(vertical = 2.dp))
+            }
+            Spacer(Modifier.height(8.dp))
+            Text("MARKET MATCHES", style = MonoLabel, color = FaintGray)
+            Spacer(Modifier.height(4.dp))
+            if (p.marketRefs.isEmpty()) {
+                Text(
+                    "No real shelf products matched today's plan — clean empty state, nothing invented.",
+                    style = MonoLabel, color = FaintGray,
+                )
+            } else {
+                p.marketRefs.forEach { ref ->
+                    val prod = s.products.firstOrNull { it.id == ref }
+                    if (prod != null) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(prod.name, color = PaperWhite, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(prod.category, style = MonoLabel, color = FaintGray)
+                            }
+                            Text("₹${prod.priceInr.toInt()}", style = MonoData, color = PaperWhite)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "ADD-ON TOTAL ₹${p.budgetInr.toInt()} — purchase remains YOUR action on the shelves.",
+                    style = MonoLabel, color = LabelGray,
+                )
+            }
+            if (p.reason.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(p.reason, style = MonoLabel, color = FaintGray)
+            }
+            Spacer(Modifier.height(Grid.S8))
+            Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
+                GhostButton("DISMISS", { vm.dismissNutrition() }, Modifier.weight(1f))
+                NeonButton("CONFIRM PLAN", { haptics.success(); vm.confirmNutrition() }, Modifier.weight(1.3f))
+            }
         }
     }
 }
