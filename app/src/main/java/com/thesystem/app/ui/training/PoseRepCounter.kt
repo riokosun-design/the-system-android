@@ -55,6 +55,14 @@ class PoseRepCounter(
         val tempoMs: Long,
         val depthScore: Float,   // 0..1 — how deep the rep actually went
         val symmetry: Float,     // 0..1 — left/right agreement
+        /** engine v4+: decaying cheat accumulator at commit (−1 = not reported). */
+        val cheatScore: Float = -1f,
+        /** engine lineage that judged this rep ("v3-mlkit" lineage default). */
+        val engineVersion: String = "v3-mlkit",
+        /** body-line deviation at the deepest frame, torsos (−1 = not measured). */
+        val lineDev: Float = -1f,
+        /** max shoulder drop witnessed, torsos (−1 = not measured). */
+        val shoulderDropTorsos: Float = -1f,
     )
 
     private val detector = PoseDetection.getClient(

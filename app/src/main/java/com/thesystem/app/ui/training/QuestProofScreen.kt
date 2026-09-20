@@ -40,7 +40,12 @@ import com.thesystem.app.service.QuestNotifier
 import com.thesystem.app.service.StepCounterService
 import com.thesystem.app.service.StepTracking
 import com.thesystem.app.ui.arena.PoseMeshOverlay
+import com.thesystem.app.ui.training.estimate.PoseEstimatorRouter
+import com.thesystem.app.ui.training.tcn.FeatureHarvester
+import com.thesystem.app.ui.training.tcn.TcnShadowScorer
 import kotlinx.coroutines.delay
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.util.concurrent.Executors
 
 /**
@@ -79,6 +84,9 @@ fun QuestProofScreen(
         if (ok) haptics.tick() else haptics.error()
     }
     LaunchedEffect(permission) { if (permission != null && !granted) launcher.launch(permission) }
+
+    // Phase 2/3/4 session config: harvest consent + server engine knobs (§13)
+    LaunchedEffect(Unit) { vm.loadSession() }
 
     // proof sessions run hands-free with the phone propped — never let the
     // screen sleep mid-set (a sleeping screen also starves some OEM sensors).
@@ -195,9 +203,14 @@ private fun PermissionCard(mode: ProofMode, onGrant: () -> Unit) {
 
 @Composable
 private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
+    val context = LocalContext.current
     // rep flash decays on its own — no layout thrash
     val flash by animateFloatAsState(targetValue = if (s.repFlash > 0) 1f else 0f, animationSpec = spring(), label = "flash")
     LaunchedEffect(s.repFlash) { if (s.repFlash > 0) { delay(220); vm.clearFlash() } }
+
+    // Phase 2 corpus ask — persisted decline, never naggy, never video (§11)
+    val harvestPrefs = remember(context) { context.getSharedPreferences("harvest_prefs", Context.MODE_PRIVATE) }
+    var harvestDeclined by remember { mutableStateOf(harvestPrefs.getBoolean("declined", false)) }
 
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Box(
@@ -211,6 +224,17 @@ private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
             // v4, CV-BATTLE-ARCHITECTURE); squats keep the proven angle machine.
             if (s.exercise == PoseRepCounter.RepExercise.SQUAT) CameraBox(s, vm, flash)
             else PushupV4Box(s, vm, flash)
+        }
+
+        if (s.exercise == PoseRepCounter.RepExercise.PUSHUP && s.harvestConsent == false && !harvestDeclined) {
+            Spacer(Modifier.height(10.dp))
+            HarvestConsentCard(
+                onEnable = { vm.acceptHarvest() },
+                onLater = {
+                    harvestDeclined = true
+                    harvestPrefs.edit().putBoolean("declined", true).apply()
+                },
+            )
         }
 
         Spacer(Modifier.height(14.dp))
@@ -342,24 +366,61 @@ private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, fl
         onDispose { witness.stop() }
     }
 
+    // PHASE 1 pose ownership: MoveNet Thunder primary, ML Kit failover, ROI
+    // lock, live parity probe riding with the harvest corpus (Phase 2).
+    val router = remember { PoseEstimatorRouter(context) }
+    DisposableEffect(router) { onDispose { router.close() } }
+
+    // PHASE 3 shadow TCN — scores sequences, rules ALWAYS decide (§20)
+    val scorer = remember { TcnShadowScorer.create(context) }
+    DisposableEffect(scorer) { onDispose { scorer.close() } }
+    var lastParity by remember { mutableStateOf<Float?>(null) }
+    LaunchedEffect(s.harvestConsent) {
+        router.parityEnabled = s.harvestConsent == true
+    }
+    DisposableEffect(Unit) {
+        router.onParity = { d, _ -> lastParity = d }
+        onDispose { router.onParity = null; vm.flushHarvest() }
+    }
+
     var profile by remember { mutableStateOf<CalibProfile?>(null) }
     val gate = remember {
         CalibrationGate(
             witness = witness,
+            estimator = router,
             onProfile = { p -> profile = p; vm.onCalibrated(p); haptics.success() },
             onLandmarks = { mesh = it },
         )
     }
     val engine = remember(profile) {
-        profile?.let {
+        profile?.let { p ->
             PushupEngineV4(
-                profile = it,
+                profile = p,
                 strictness = PushupEngineV4.Strictness.STANDARD,
                 witness = witness,
+                estimator = router,
+                engineVersion = "v4.1",
                 onRep = { n, q -> haptics.success(); vm.onRep(n, q) },
                 onPhase = { _, d -> depth = d },
                 onLandmarks = { pts -> mesh = pts },
                 onStatus = { st -> vm.onEngineStatus(st) },
+                onFrame12 = { v -> scorer.push(v) },
+                onDecision = { verdict ->
+                    val top = scorer.topClass
+                    vm.harvester.onDecision(
+                        verdict, "QUEST_PUSH", "v4.1-${router.activeSource}", scorer.snapshot(),
+                        buildJsonObject {
+                            put("engine", "v4.1")
+                            put("estimator", router.activeSource)
+                            if (top != null) {
+                                put("shadow_class", top.first)
+                                put("shadow_conf", top.second)
+                            }
+                            lastParity?.let { put("parity_mean_dist", it) }
+                            put("view_quality", p.viewQuality)
+                        },
+                    )
+                },
             )
         }
     }
@@ -527,6 +588,27 @@ private fun TimerProofStage(s: QuestProofState, vm: QuestProofViewModel) {
             else "The server records the elapsed seconds as your evidence.",
             style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center,
         )
+    }
+}
+
+/**
+ * Phase 2 opt-in card (§11): the hunter's feature DATA — never video — trains
+ * the counter that failed them on the floor. Explicit consent, server-stored.
+ */
+@Composable
+private fun HarvestConsentCard(onEnable: () -> Unit, onLater: () -> Unit) {
+    GlowCard {
+        Text("HELP BUILD THE ENGINE", style = MonoLabel, color = SkyBlue)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Opt in to share anonymous motion features from your proofs (joint angles + rep verdicts — NEVER images or video) so the counter learns every body and phone. This is how the TCN earns its stripes.",
+            style = MaterialTheme.typography.bodySmall, color = LabelGray,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            NeonButton("ENABLE", onEnable, Modifier.weight(1f), color = SkyBlue)
+            GhostButton("NOT NOW", onLater, Modifier.weight(1f))
+        }
     }
 }
 

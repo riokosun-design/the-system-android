@@ -12,7 +12,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
+import com.thesystem.app.ui.training.PoseRepCounter
 
 /** Ephemeral lobby taunt line (broadcast only, never persisted). */
 data class TauntLine(val fromMe: Boolean, val text: String, val at: Long)
@@ -32,6 +36,12 @@ data class BattleRoomState(
     val myReady: Boolean = false,
     val taunts: List<TauntLine> = emptyList(),
     val error: String? = null,
+    /** server behavior knobs (get_engine_config) — liveness requirement etc. */
+    val engineConfig: JsonObject? = null,
+    /** §8 referee line shown post-battle ("INTEGRITY: YOU CLEAN · RIVAL …"). */
+    val integrity: String? = null,
+    /** device-session key minted — rep events are being signed (§8). */
+    val signerReady: Boolean = false,
 ) {
     /** Tug-of-war position in −1f (opponent dominating) .. +1f (you dominating). */
     val tug: Float get() {
@@ -60,6 +70,8 @@ class BattleRoomViewModel @Inject constructor(
 
     private var channel: RealtimeChannel? = null
     private var timerStarted = false
+    private var signer: RepEventSigner? = null
+    private var flushStarted = false
 
     init {
         viewModelScope.launch {
@@ -70,7 +82,39 @@ class BattleRoomViewModel @Inject constructor(
                 durationSec = battle?.durationSec ?: 60,
                 secondsLeft = battle?.durationSec ?: 60,
             )
-            if (battle != null && me != null) wireRealtime(me)
+            if (battle != null && me != null) {
+                wireRealtime(me)
+                val spectating = me != battle.playerA && me != battle.playerB
+                if (!spectating) {
+                    // §8: mint the device-session key + server behavior knobs (§13)
+                    launch {
+                        val nonce = system.mintBattleNonce(battleId)
+                        if (nonce != null) {
+                            signer = RepEventSigner(battleId, me, nonce)
+                            _state.value = _state.value.copy(signerReady = true)
+                            startFlushLoop()
+                        }
+                    }
+                }
+                launch {
+                    val cfg = system.engineConfig()
+                    if (cfg != null) _state.value = _state.value.copy(engineConfig = cfg)
+                }
+            }
+        }
+    }
+
+    /** §8 outbox — batches signed rep events to the verifying RPC every 3 s. */
+    private fun startFlushLoop() {
+        if (flushStarted) return
+        flushStarted = true
+        viewModelScope.launch {
+            while (true) {
+                delay(3000)
+                val s = signer ?: continue
+                val batch = s.drain() ?: continue
+                runCatching { system.submitRepEvents(battleId, batch) }
+            }
         }
     }
 
@@ -161,10 +205,21 @@ class BattleRoomViewModel @Inject constructor(
         }
     }
 
-    fun onRep(count: Int) {
+    fun onRep(count: Int, q: PoseRepCounter.RepQuality) {
         _state.value = _state.value.copy(myCount = count)
         val me = _state.value.myId ?: return
         viewModelScope.launch { runCatching { channel?.let { arena.sendScore(it, me, count) } } }
+        // §8 signed evidence — the trajectory IS the testimony (no video ever)
+        signer?.onRep(
+            tDeviceMs = System.currentTimeMillis(),
+            thetaMin = q.bottomDeg,
+            lineDev = q.lineDev,
+            shoulderDrop = q.shoulderDropTorsos,
+            tempoMs = q.tempoMs,
+            confidence = q.depthScore,
+            cheatScore = q.cheatScore.coerceAtLeast(0f),
+            engineVersion = q.engineVersion,
+        )
     }
 
     /** Only player A commits the result; B's screen follows via Realtime. */
@@ -178,6 +233,17 @@ class BattleRoomViewModel @Inject constructor(
         if (amA) {
             viewModelScope.launch {
                 arena.finishBattle(battleId, scoreA, scoreB)
+                    .onSuccess {
+                        // final event drain + the referee's verdict (§8)
+                        val me = s.myId
+                        signer?.drain(64)?.let { rest ->
+                            runCatching { system.submitRepEvents(battleId, rest) }
+                        }
+                        val verdict = runCatching { system.battlePlausibility(battleId) }.getOrNull()
+                        if (verdict != null && me != null) {
+                            _state.value = _state.value.copy(integrity = verdictLine(me, verdict))
+                        }
+                    }
                     .onFailure { _state.value = _state.value.copy(error = it.message) }
             }
         }
@@ -188,7 +254,16 @@ class BattleRoomViewModel @Inject constructor(
         _state.value = _state.value.copy(
             finished = true, counting = false, battle = b,
             iWon = b.winner == me,
+            integrity = b.plausibility?.let { verdictLine(me, it) } ?: _state.value.integrity,
         )
+    }
+
+    private fun verdictLine(me: String?, v: JsonObject): String? {
+        me ?: return null
+        val mine = (v[me] as? JsonObject)?.get("verdict")?.jsonPrimitive?.contentOrNull
+        val rivalId = v.keys.firstOrNull { it != me }
+        val rival = rivalId?.let { (v[it] as? JsonObject)?.get("verdict")?.jsonPrimitive?.contentOrNull }
+        return "INTEGRITY: YOU ${mine ?: "NO_EVIDENCE"} · RIVAL ${rival ?: "NO_EVIDENCE"}"
     }
 
     override fun onCleared() {

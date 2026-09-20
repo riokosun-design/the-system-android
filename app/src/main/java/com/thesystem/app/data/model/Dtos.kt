@@ -2,6 +2,7 @@ package com.thesystem.app.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 // Every DTO maps 1:1 to a table/view in supabase/migrations. snake_case ↔ camelCase via @SerialName.
 
@@ -222,6 +223,8 @@ data class BattleDto(
     @SerialName("player_b_ready") val playerBReady: Boolean = false,
     val host: String? = null,
     val winner: String? = null,
+    /** §8 referee verdicts per player (server-written by battle_plausibility). */
+    @SerialName("plausibility") val plausibility: JsonObject? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("started_at") val startedAt: String? = null,
 )

@@ -16,19 +16,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.pose.Pose
-import com.google.mlkit.vision.pose.PoseDetection
-import com.google.mlkit.vision.pose.PoseLandmark
-import com.google.mlkit.vision.pose.defaults.PoseDetectorOptions
 import com.thesystem.app.core.sensors.ImuStabilityWitness
 import com.thesystem.app.core.theme.*
+import com.thesystem.app.ui.training.estimate.LandmarkFrame
+import com.thesystem.app.ui.training.estimate.PoseEstimator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
@@ -43,9 +39,10 @@ import kotlin.math.sqrt
  *              torso length, shoulder baseline
  *
  * Output: a [CalibProfile] the PushupEngineV4 counts against. GREEN = clean
- * side view (ranked battles require it); YELLOW = three-quarter view
- * (quests may proceed with reduced strictness); the gate simply refuses to
- * lock while a stage is RED.
+ * side view (ranked battles require it); YELLOW = three-quarter view (quests
+ * may proceed with reduced strictness); the gate simply refuses to lock while
+ * a stage is RED. Perception comes from the shared [PoseEstimator] (Phase 1 —
+ * MoveNet primary, ML Kit failover); geometry is identical for both sources.
  */
 data class CalibProfile(
     val thetaTop: Double,       // adaptive lockout threshold (deg)
@@ -55,6 +52,7 @@ data class CalibProfile(
     val viewQuality: Float,     // 1.0 = side · 0.7 = three-quarter
     val level: CalibLevel,
     val lumaMean: Int,
+    val estimatorSource: String = "unknown",
 )
 
 enum class CalibLevel { GREEN, YELLOW }
@@ -74,15 +72,11 @@ data class GateUi(
 
 class CalibrationGate(
     private val witness: ImuStabilityWitness,
+    private val estimator: PoseEstimator,
     private val onProfile: (CalibProfile) -> Unit,
     private val onLandmarks: (List<Pair<Float, Float>>) -> Unit = {},
+    private val onLuma: ((Int) -> Unit)? = null,   // flash-liveness tap (Phase 4)
 ) {
-
-    private val detector = PoseDetection.getClient(
-        PoseDetectorOptions.Builder()
-            .setDetectorMode(PoseDetectorOptions.STREAM_MODE)
-            .build()
-    )
 
     private val _ui = MutableStateFlow(GateUi())
     val ui: StateFlow<GateUi> = _ui
@@ -105,22 +99,22 @@ class CalibrationGate(
     private var viewQuality = 1f
 
     // LIGHT evidence
-    private var lumaMean = 0
+    var lumaMean = 0
+        private set
     private var lumaClean = true
 
     // TOP_LOCK samples
     private val thetaSamples = ArrayList<Double>(64)
     private val torsoSamples = ArrayList<Float>(64)
     private val shoulderYSamples = ArrayList<Float>(64)
+    private var estimatorSource = "unknown"
 
     @androidx.camera.core.ExperimentalGetImage
     fun process(imageProxy: ImageProxy) {
-        if (stage == GateStage.LOCKED) { imageProxy.close(); return }
         val now = System.currentTimeMillis()
         val dt = if (lastFrameAt == 0L) 33L else (now - lastFrameAt).coerceIn(1L, 200L)
         lastFrameAt = now
 
-        val media = imageProxy.image ?: run { imageProxy.close(); return }
         val rot = imageProxy.imageInfo.rotationDegrees
         if (rot == 90 || rot == 270) {
             imgW = imageProxy.height.toFloat().coerceAtLeast(1f)
@@ -131,20 +125,19 @@ class CalibrationGate(
         }
         // frame-quality probe on the Y plane BEFORE pose (LIGHT stage needs it)
         probeLuma(imageProxy)
-
-        val image = InputImage.fromMediaImage(media, rot)
-        detector.process(image)
-            .addOnSuccessListener { pose -> advance(pose, dt, now) }
-            .addOnFailureListener { advance(null, dt, now) }
-            .addOnCompleteListener { imageProxy.close() }
+        val frame = estimator.estimate(imageProxy, rot, imgW, imgH)
+        imageProxy.close()
+        if (frame != null) estimatorSource = frame.source
+        advance(frame, dt, now)
     }
 
-    fun close() = detector.close()
+    fun close() = Unit   // estimator belongs to the screen's router — never closed here
 
     // ── stage machine ────────────────────────────────────────────────────────
-    private fun advance(pose: Pose?, dt: Long, now: Long) {
-        val marks = pose?.allPoseLandmarks.orEmpty()
-        onLandmarks(marks.map { (it.position.x / imgW) to (it.position.y / imgH) })
+    private fun advance(fr: LandmarkFrame?, dt: Long, now: Long) {
+        if (fr != null) {
+            onLandmarks((0 until 33).map { (fr.x(it) / imgW) to (fr.y(it) / imgH) })
+        }
 
         fun hold(ok: Boolean, needMs: Long, failReason: String, graceMs: Long = 260L): Boolean {
             if (ok) {
@@ -166,19 +159,18 @@ class CalibrationGate(
             }
 
             GateStage.PERSON -> {
-                val ok = personOk(pose)
-                if (hold(ok, 1200, personReason(pose))) {
+                val ok = personOk(fr)
+                if (hold(ok, 1200, personReason(fr))) {
                     enter(GateStage.VIEW, "TURN SIDEWAYS — SHOULDER LINE TOWARD THE PHONE")
                 }
             }
 
             GateStage.VIEW -> {
-                val core = coreMarks(pose)
+                val core = coreMarks(fr)
                 if (core != null) {
                     val torso = dist(core.shMidX, core.shMidY, core.hipMidX, core.hipMidY).coerceAtLeast(1f)
-                    // Side view ⇒ the two shoulders project onto each other, so the
-                    // shoulder SPAN collapses vs the torso. Front view ⇒ span ≈ wide.
-                    // span/torso ≤ 0.45 = side · ≤ 0.75 = three-quarter · else front.
+                    // Side view ⇒ shoulders project onto each other (span collapses
+                    // vs the torso); front view ⇒ span ≈ wide. ≤0.45 side · ≤0.75 ¾
                     val ratio = abs(core.lShX - core.rShX) / torso
                     ratioEma = ratioEma?.let { it + 0.25f * (ratio - it) } ?: ratio
                 }
@@ -186,7 +178,6 @@ class CalibrationGate(
                 when {
                     r <= 0.45f -> { viewQuality = 1f; enter(GateStage.LIGHT, "CHECKING LIGHT") }
                     r <= 0.75f -> {
-                        // three-quarter: passable for quests, never for ranked
                         viewQuality = 0.7f
                         if (hold(true, 300, "")) enter(GateStage.LIGHT, "CHECKING LIGHT")
                         reason = "ANGLE ACCEPTED — TURN MORE SIDEWAYS FOR FULL STRICTNESS"
@@ -206,10 +197,10 @@ class CalibrationGate(
             }
 
             GateStage.TOP_LOCK -> {
-                val core = coreMarks(pose)
+                val core = coreMarks(fr)
                 var ok = false
                 if (core != null && witness.stable) {
-                    val theta = bestElbow(core)
+                    val theta = bestElbow(fr)
                     val line = lineDev(core)
                     if (theta != null && theta >= 150.0 && line <= 0.14) {
                         ok = true
@@ -232,12 +223,17 @@ class CalibrationGate(
             GateStage.LOCKED -> Unit
         }
 
+        if (stage == GateStage.LOCKED) {
+            _ui.value = _ui.value.copy(locked = true, profileLevel = profile?.level)
+            onLuma?.invoke(lumaMean)
+            return
+        }
         _ui.value = GateUi(
             stage = stage,
             stageIndex = stage.ordinal.coerceAtMost(4),
             reason = reason,
             holdFrac = (holdMs.toFloat() / stageNeedMs(stage)).coerceIn(0f, 1f),
-            locked = stage == GateStage.LOCKED,
+            locked = false,
             profileLevel = profile?.level,
         )
     }
@@ -273,6 +269,7 @@ class CalibrationGate(
             viewQuality = viewQuality,
             level = level,
             lumaMean = lumaMean,
+            estimatorSource = estimatorSource,
         )
         profile = p
         stage = GateStage.LOCKED
@@ -305,6 +302,7 @@ class CalibrationGate(
         val var0 = (sumSq / n - mean.toLong() * mean).coerceAtLeast(0)
         lumaMean = mean
         lumaClean = sqrt(var0.toDouble()) >= 12.0
+        onLuma?.invoke(mean)
     }
 
     private fun lightReason(): String = when {
@@ -314,73 +312,56 @@ class CalibrationGate(
         else -> "CHECKING LIGHT"
     }
 
-    // ── pose geometry ────────────────────────────────────────────────────────
+    // ── pose geometry on canonical landmarks ─────────────────────────────────
     private class Core(
         val shMidX: Float, val shMidY: Float, val hipMidX: Float, val hipMidY: Float,
         val ankMidX: Float, val ankMidY: Float,
         val lShX: Float, val rShX: Float,
-        val lSh: PoseLandmark, val rSh: PoseLandmark,
-        val lEl: PoseLandmark?, val rEl: PoseLandmark?,
-        val lWr: PoseLandmark?, val rWr: PoseLandmark?,
-        val lHip: PoseLandmark, val rHip: PoseLandmark,
-        val lAnk: PoseLandmark, val rAnk: PoseLandmark,
     )
 
-    private fun lm(pose: Pose, id: Int): PoseLandmark? =
-        pose.getPoseLandmark(id)?.takeIf { it.inFrameLikelihood >= LIKELIHOOD }
+    private fun lm(fr: LandmarkFrame, j: Int) =
+        if (fr.score[j] >= LIKELIHOOD) fr.x(j) to fr.y(j) else null
 
-    private fun coreMarks(pose: Pose?): Core? {
-        pose ?: return null
-        val lSh = lm(pose, PoseLandmark.LEFT_SHOULDER) ?: return null
-        val rSh = lm(pose, PoseLandmark.RIGHT_SHOULDER) ?: return null
-        val lHip = lm(pose, PoseLandmark.LEFT_HIP) ?: return null
-        val rHip = lm(pose, PoseLandmark.RIGHT_HIP) ?: return null
-        val lAnk = lm(pose, PoseLandmark.LEFT_ANKLE) ?: return null
-        val rAnk = lm(pose, PoseLandmark.RIGHT_ANKLE) ?: return null
+    private fun coreMarks(fr: LandmarkFrame?): Core? {
+        fr ?: return null
+        val lSh = lm(fr, LandmarkFrame.L_SHOULDER) ?: return null
+        val rSh = lm(fr, LandmarkFrame.R_SHOULDER) ?: return null
+        val lHip = lm(fr, LandmarkFrame.L_HIP) ?: return null
+        val rHip = lm(fr, LandmarkFrame.R_HIP) ?: return null
+        val lAnk = lm(fr, LandmarkFrame.L_ANKLE) ?: return null
+        val rAnk = lm(fr, LandmarkFrame.R_ANKLE) ?: return null
         return Core(
-            shMidX = (lSh.position.x + rSh.position.x) / 2f,
-            shMidY = (lSh.position.y + rSh.position.y) / 2f,
-            hipMidX = (lHip.position.x + rHip.position.x) / 2f,
-            hipMidY = (lHip.position.y + rHip.position.y) / 2f,
-            ankMidX = (lAnk.position.x + rAnk.position.x) / 2f,
-            ankMidY = (lAnk.position.y + rAnk.position.y) / 2f,
-            lShX = lSh.position.x, rShX = rSh.position.x,
-            lSh = lSh, rSh = rSh,
-            lEl = lm(pose, PoseLandmark.LEFT_ELBOW),
-            rEl = lm(pose, PoseLandmark.RIGHT_ELBOW),
-            lWr = lm(pose, PoseLandmark.LEFT_WRIST),
-            rWr = lm(pose, PoseLandmark.RIGHT_WRIST),
-            lHip = lHip, rHip = rHip, lAnk = lAnk, rAnk = rAnk,
+            shMidX = (lSh.first + rSh.first) / 2f,
+            shMidY = (lSh.second + rSh.second) / 2f,
+            hipMidX = (lHip.first + rHip.first) / 2f,
+            hipMidY = (lHip.second + rHip.second) / 2f,
+            ankMidX = (lAnk.first + rAnk.first) / 2f,
+            ankMidY = (lAnk.second + rAnk.second) / 2f,
+            lShX = lSh.first, rShX = rSh.first,
         )
     }
 
-    private fun bestElbow(core: Core): Double? {
-        val left = if (core.lEl != null && core.lWr != null) {
-            Triple(core.lSh, core.lEl, core.lWr)
-        } else null
-        val right = if (core.rEl != null && core.rWr != null) {
-            Triple(core.rSh, core.rEl, core.rWr)
-        } else null
-        // the better-witnessed arm wins (side view: the near arm)
-        val pick = when {
-            left != null && right != null -> {
-                val lv = minOf(left.first.inFrameLikelihood, left.second.inFrameLikelihood, left.third.inFrameLikelihood)
-                val rv = minOf(right.first.inFrameLikelihood, right.second.inFrameLikelihood, right.third.inFrameLikelihood)
-                if (lv >= rv) left else right
-            }
-            left != null -> left
-            right != null -> right
-            else -> return null
+    private fun bestElbow(fr: LandmarkFrame): Double? {
+        fun arm(sh: Int, el: Int, wr: Int): Pair<Float, Double>? {
+            if (fr.score[el] < LIKELIHOOD || fr.score[wr] < LIKELIHOOD) return null
+            val vis = minOf(fr.score[sh], fr.score[el], fr.score[wr])
+            val ang = angle(
+                fr.x(sh), fr.y(sh), fr.x(el), fr.y(el), fr.x(wr), fr.y(wr),
+            )
+            return vis to ang
         }
-        return angleBetween(
-            pick.first.position.x, pick.first.position.y,
-            pick.second.position.x, pick.second.position.y,
-            pick.third.position.x, pick.third.position.y,
-        )
+        val left = arm(LandmarkFrame.L_SHOULDER, LandmarkFrame.L_ELBOW, LandmarkFrame.L_WRIST)
+        val right = arm(LandmarkFrame.R_SHOULDER, LandmarkFrame.R_ELBOW, LandmarkFrame.R_WRIST)
+        // the better-witnessed arm wins (side view: the near arm)
+        return when {
+            left != null && right != null -> if (left.first >= right.first) left.second else right.second
+            left != null -> left.second
+            right != null -> right.second
+            else -> null
+        }
     }
 
     private fun lineDev(core: Core): Float {
-        // perpendicular distance of hip-mid from the shoulder→ankle line, in torsos
         val ax = core.shMidX; val ay = core.shMidY
         val bx = core.ankMidX; val by = core.ankMidY
         val dx = bx - ax; val dy = by - ay
@@ -390,26 +371,26 @@ class CalibrationGate(
         return perp / torso
     }
 
-    private fun personOk(pose: Pose?): Boolean {
-        val core = coreMarks(pose) ?: return false
+    private fun personOk(fr: LandmarkFrame?): Boolean {
+        val core = coreMarks(fr) ?: return false
         val xs = listOf(core.lShX, core.rShX, core.hipMidX, core.ankMidX)
         val ys = listOf(core.shMidY, core.hipMidY, core.ankMidY)
         val spanX = xs.max() - xs.min()
         val spanY = ys.max() - ys.min()
-        if (spanX < imgW * 0.38f) return false                       // body too small / too far
-        if (spanY < imgH * 0.08f) return false                       // plank barely occupies frame
+        if (spanX < imgW * 0.38f) return false
+        if (spanY < imgH * 0.08f) return false
         val clipped = xs.any { it <= imgW * 0.03f || it >= imgW * 0.97f } ||
             ys.any { it <= imgH * 0.03f || it >= imgH * 0.97f }
         return !clipped
     }
 
-    private fun personReason(pose: Pose?): String {
-        if (pose == null) return "NO BODY DETECTED — STEP INTO FRAME"
+    private fun personReason(fr: LandmarkFrame?): String {
+        if (fr == null) return "NO BODY DETECTED — STEP INTO FRAME"
         val m = listOf(
-            PoseLandmark.LEFT_SHOULDER, PoseLandmark.RIGHT_SHOULDER,
-            PoseLandmark.LEFT_HIP, PoseLandmark.RIGHT_HIP,
-            PoseLandmark.LEFT_ANKLE, PoseLandmark.RIGHT_ANKLE,
-        ).count { (pose.getPoseLandmark(it)?.inFrameLikelihood ?: 0f) >= LIKELIHOOD }
+            LandmarkFrame.L_SHOULDER, LandmarkFrame.R_SHOULDER,
+            LandmarkFrame.L_HIP, LandmarkFrame.R_HIP,
+            LandmarkFrame.L_ANKLE, LandmarkFrame.R_ANKLE,
+        ).count { fr.score[it] >= LIKELIHOOD }
         return if (m < 6) "FULL BODY NOT VISIBLE — FEET TO SHOULDERS" else "MOVE BACK — FIT THE WHOLE BODY"
     }
 
@@ -418,7 +399,7 @@ class CalibrationGate(
         return sqrt(dx * dx + dy * dy)
     }
 
-    private fun angleBetween(ax: Float, ay: Float, bx: Float, by: Float, cx: Float, cy: Float): Double {
+    private fun angle(ax: Float, ay: Float, bx: Float, by: Float, cx: Float, cy: Float): Double {
         val bax = ax - bx; val bay = ay - by
         val bcx = cx - bx; val bcy = cy - by
         val dot = bax * bcx + bay * bcy

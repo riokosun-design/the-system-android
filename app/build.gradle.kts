@@ -20,8 +20,8 @@ android {
         applicationId = "com.thesystem.app"
         minSdk = 26 // low-end / older Android first
         targetSdk = 35
-        versionCode = 17
-        versionName = "0.8.0"
+        versionCode = 18
+        versionName = "0.9.0"
 
         buildConfigField("String", "SUPABASE_URL", "\"${backendProp("SUPABASE_URL", "https://YOUR_PROJECT_REF.supabase.co")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${backendProp("SUPABASE_ANON_KEY", "YOUR_PUBLIC_ANON_KEY")}\"")
@@ -111,6 +111,7 @@ dependencies {
     implementation(libs.androidx.datastore)
     implementation(libs.lifecycle.service)
     implementation(libs.mlkit.pose)
+    implementation(libs.tensorflow.lite)
     implementation(libs.androidx.profileinstaller)
     implementation(libs.camera.core)
     implementation(libs.camera.camera2)

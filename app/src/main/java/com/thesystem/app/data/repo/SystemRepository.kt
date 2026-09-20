@@ -14,7 +14,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.time.LocalDate
 import javax.inject.Inject
@@ -184,4 +190,63 @@ class SystemRepository @Inject constructor(
 
     /** Sequential protocol bookkeeping lives server-side; the client only mirrors it. */
     suspend fun dailyQuestsStatus(): List<QuestDto> = dailyQuests()
+
+    // ═══ PHASE 0–4: engine config · harvest consent · feature corpus · battle integrity ═══
+
+    /** Server-side behavior knobs (§13): tcn bias, liveness requirement, depth floors. */
+    suspend fun engineConfig(): JsonObject? = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.postgrest.rpc("get_engine_config").data ?: return@runCatching null
+            Json.parseToJsonElement(raw).jsonObject
+        }.getOrNull()
+    }
+
+    suspend fun harvestConsent(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.postgrest.rpc("harvest_consent").data ?: return@runCatching false
+            Json.parseToJsonElement(raw).jsonPrimitive.boolean
+        }.getOrDefault(false)
+    }
+
+    suspend fun setHarvestConsent(consent: Boolean): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("set_harvest_consent", buildJsonObject { put("p_consent", consent) })
+        Unit
+    }
+
+    /** Phase 2 corpus rows — 12-dim feature windows + verdicts. NEVER pixels. */
+    suspend fun uploadFeatureSequences(rows: List<JsonObject>): Int = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.from("rep_feature_sequences").insert(rows)
+            rows.size
+        }.getOrDefault(0)
+    }
+
+    /** §8 device-session key base for this battle (idempotent per player). */
+    suspend fun mintBattleNonce(battleId: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.postgrest.rpc("mint_battle_nonce", buildJsonObject { put("p_battle", battleId) }).data
+                ?: return@runCatching null
+            Json.parseToJsonElement(raw).jsonPrimitive.content
+        }.getOrNull()
+    }
+
+    /** §8 hash-chained, HMAC-signed rep events — server verifies + plausibility-flags. */
+    suspend fun submitRepEvents(battleId: String, events: JsonArray): JsonObject? = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.postgrest.rpc("submit_rep_events", buildJsonObject {
+                put("p_battle", battleId)
+                put("p_events", events)
+            }).data ?: return@runCatching null
+            Json.parseToJsonElement(raw).jsonObject
+        }.getOrNull()
+    }
+
+    /** §8 referee verdict: CLEAN / SUSPICIOUS_* / INVALID / NO_EVIDENCE per player. */
+    suspend fun battlePlausibility(battleId: String): JsonObject? = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.postgrest.rpc("battle_plausibility", buildJsonObject { put("p_battle", battleId) }).data
+                ?: return@runCatching null
+            Json.parseToJsonElement(raw).jsonObject
+        }.getOrNull()
+    }
 }

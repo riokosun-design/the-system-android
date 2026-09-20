@@ -44,10 +44,15 @@ import com.thesystem.app.core.ui.*
 import com.thesystem.app.ui.training.CalibLevel
 import com.thesystem.app.ui.training.CalibProfile
 import com.thesystem.app.ui.training.CalibrationGate
+import com.thesystem.app.ui.training.FlashLivenessController
+import com.thesystem.app.ui.training.FlashStrobeOverlay
 import com.thesystem.app.ui.training.GateOverlay
 import com.thesystem.app.ui.training.GateUi
 import com.thesystem.app.ui.training.PoseRepCounter
 import com.thesystem.app.ui.training.PushupEngineV4
+import com.thesystem.app.ui.training.estimate.PoseEstimatorRouter
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.Executors
 import kotlin.math.PI
 import kotlin.math.sin
@@ -123,13 +128,33 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
         witness?.start()
         onDispose { witness?.stop() }
     }
+
+    // PHASE 1 pose ownership (router: MoveNet primary / ML Kit failover) +
+    // PHASE 4 flash liveness — ranked wars demand a LIVE human, not a screen.
+    val router = remember(spectating) { if (spectating) null else PoseEstimatorRouter(context) }
+    DisposableEffect(router) { onDispose { router?.close() } }
+    val flash = remember(warKind, spectating) {
+        if (spectating || warKind != PoseRepCounter.RepExercise.PUSHUP) null else FlashLivenessController()
+    }
+    val flashUi = flash?.ui?.collectAsStateWithLifecycle()?.value ?: FlashLivenessController.Ui()
+    val flashPassed = flashUi.phase == FlashLivenessController.Phase.PASSED
+
     var v4Profile by remember { mutableStateOf<CalibProfile?>(null) }
+    // challenge fires automatically the moment the envelope locks GREEN
+    LaunchedEffect(v4Profile?.level) {
+        val f = flash
+        if (v4Profile?.level == CalibLevel.GREEN && f != null &&
+            f.ui.value.phase == FlashLivenessController.Phase.IDLE
+        ) f.start(System.currentTimeMillis())
+    }
     val gate = remember(warKind, spectating) {
         if (spectating || warKind != PoseRepCounter.RepExercise.PUSHUP) null
         else CalibrationGate(
             witness = witness!!,
+            estimator = router!!,
             onProfile = { p -> v4Profile = p },
             onLandmarks = { meshPoints = it },
+            onLuma = { m -> flash?.onLuma(m.toFloat()) },
         )
     }
     val counter: Any? = remember(warKind, spectating, v4Profile) {
@@ -140,13 +165,15 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                     profile = p,
                     strictness = PushupEngineV4.Strictness.STRICT,
                     witness = witness!!,
-                    onRep = { n, _ -> vm.onRep(n) },
+                    estimator = router!!,
+                    engineVersion = "v4.1",
+                    onRep = { n, q -> vm.onRep(n, q) },
                     onLandmarks = { meshPoints = it },
                 )
             }
             else -> PoseRepCounter(
                 exercise = warKind,
-                onRep = { n, _ -> vm.onRep(n) },
+                onRep = { n, q -> vm.onRep(n, q) },
                 onLandmarks = { meshPoints = it },
             )
         }
@@ -263,6 +290,10 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                     if (s.counting || (gate != null && v4Profile == null)) {
                         PoseMeshOverlay(points = meshPoints, repFlash = repPop.value, modifier = Modifier.matchParentSize())
                     }
+                    if (flash != null && v4Profile != null) {
+                        // PHASE 4 strobe — the screen is the light source
+                        FlashStrobeOverlay(flashUi)
+                    }
                     if (gate != null && v4Profile == null && s.battle?.status != "FINISHED") {
                         // the gate IS the referee's front door
                         GateOverlay(gateUi, ranked = true)
@@ -300,6 +331,24 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                         }
                     }
                 }
+                // PHASE 4 verdict line — live human required before READY arms
+                if (flash != null && v4Profile != null && s.battle?.status == "LOBBY") {
+                    Spacer(Modifier.height(8.dp))
+                    when (flashUi.phase) {
+                        FlashLivenessController.Phase.PASSED ->
+                            Text("LIVE HUMAN CONFIRMED", style = MonoLabel, color = SkyBlue)
+                        FlashLivenessController.Phase.RUNNING ->
+                            Text("FLASH CHALLENGE RUNNING — HOLD STILL", style = MonoLabel, color = LabelGray)
+                        FlashLivenessController.Phase.FAILED -> {
+                            Text(flashUi.reason, style = MonoLabel, color = LabelGray)
+                            Spacer(Modifier.height(6.dp))
+                            GhostButton("RETRY FLASH CHECK", {
+                                flash.start(System.currentTimeMillis())
+                            }, Modifier.fillMaxWidth())
+                        }
+                        FlashLivenessController.Phase.IDLE -> Unit
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 TugOfWarBar(s.tug, Modifier.fillMaxWidth().height(54.dp))
                 Spacer(Modifier.height(10.dp))
@@ -321,13 +370,21 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                         style = MaterialTheme.typography.titleLarge,
                     )
                     Text("Final: ${s.battle?.scoreA} — ${s.battle?.scoreB}", style = MaterialTheme.typography.bodyMedium)
+                    s.integrity?.let {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            it, style = MonoLabel,
+                            color = if (it.contains("SUSPICIOUS") || it.contains("INVALID")) LabelGray else PaperWhite,
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
                     NeonButton("LEAVE THE ARENA", onExit, Modifier.fillMaxWidth())
                 }
                 s.battle?.status == "LOBBY" -> LobbyCard(
                     s, vm, haptics, onExit,
                     gateRequired = warKind == PoseRepCounter.RepExercise.PUSHUP,
-                    gateReady = v4Profile?.level == CalibLevel.GREEN,
+                    gateReady = v4Profile?.level == CalibLevel.GREEN &&
+                        (s.engineConfig?.get("flash_liveness_required")?.jsonPrimitive?.booleanOrNull != true || flashPassed),
                 )
                 s.battle?.status == "CANCELLED" -> GlowCard {
                     Text("BATTLE CANCELLED", style = MaterialTheme.typography.titleLarge, color = PaperWhite)

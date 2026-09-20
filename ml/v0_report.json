@@ -1,0 +1,38 @@
+{
+  "model": "pushup_tcn_synth_v0",
+  "params": 89607,
+  "val_acc": 0.7485,
+  "per_class": {
+    "VALID_PUSHUP": {
+      "precision": 0.7779,
+      "recall": 0.7184
+    },
+    "INVALID_DEPTH": {
+      "precision": 0.4915,
+      "recall": 0.8505
+    },
+    "INVALID_FORM": {
+      "precision": 0.7909,
+      "recall": 0.4283
+    },
+    "PARTIAL_REP": {
+      "precision": 0.6551,
+      "recall": 0.8845
+    },
+    "CHEAT_MOVEMENT": {
+      "precision": 0.8326,
+      "recall": 0.6237
+    },
+    "CAMERA_MOVEMENT": {
+      "precision": 1.0,
+      "recall": 0.9959
+    },
+    "UNKNOWN": {
+      "precision": 0.9272,
+      "recall": 0.8061
+    }
+  },
+  "shadow_rules_agreement_synthetic": 0.7416,
+  "note": "BOOTSTRAP-SYNTHETIC v0 \u2014 promotion requires real-corpus retrain + \u226597% agreement (\u00a720)",
+  "train_seconds": 114.9
+}

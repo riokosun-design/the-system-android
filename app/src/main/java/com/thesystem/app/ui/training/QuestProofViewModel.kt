@@ -5,10 +5,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thesystem.app.data.repo.SystemRepository
 import com.thesystem.app.service.RecoveryTracker
+import com.thesystem.app.ui.training.tcn.FeatureHarvester
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
 
 /**
@@ -50,6 +54,9 @@ data class QuestProofState(
     /** PHASE 0 envelope — gate verdict line + live engine v4 status (push-ups). */
     val calibNote: String? = null,
     val engineStatus: PushupEngineV4.EngineStatus? = null,
+    /** Phase 2 corpus: null = loading, false = not consented (card may offer). */
+    val harvestConsent: Boolean? = null,
+    val engineConfig: JsonObject? = null,
     val repFlash: Float = 0f,
     val lastQuality: PoseRepCounter.RepQuality? = null,
     val submitting: Boolean = false,
@@ -101,6 +108,30 @@ class QuestProofViewModel @Inject constructor(
     val state: StateFlow<QuestProofState> = _state
 
     private var startedAt = System.currentTimeMillis()
+
+    /** Phase 2 corpus channel — decisions become training data ONLY with consent. */
+    val harvester = FeatureHarvester(system, viewModelScope)
+
+    fun loadSession() = viewModelScope.launch {
+        val consent = system.harvestConsent()
+        val cfg = system.engineConfig()
+        _state.value = _state.value.copy(harvestConsent = consent, engineConfig = cfg)
+        applyHarvestGate()
+    }
+
+    fun acceptHarvest() = viewModelScope.launch {
+        system.setHarvestConsent(true)
+        _state.value = _state.value.copy(harvestConsent = true)
+        applyHarvestGate()
+    }
+
+    private fun applyHarvestGate() {
+        val s = _state.value
+        harvester.enabled = s.harvestConsent == true &&
+            s.engineConfig?.get("harvest_enabled")?.jsonPrimitive?.booleanOrNull != false
+    }
+
+    fun flushHarvest() = harvester.flush()
 
     // ── camera channel (push-up / squat) ─────────────────────────────────────
     fun onRep(count: Int, quality: PoseRepCounter.RepQuality) {
