@@ -225,10 +225,5 @@ object DeterministicAI {
         )
     }
 
-    private data class Quad(val a: Int, val b: String, val c: Int, val d: String) {
-        operator fun component1() = a
-        operator fun component2() = b
-        operator fun component3() = c
-        operator fun component4() = d
-    }
+    private data class Quad(val a: Int, val b: String, val c: Int, val d: String)
 }

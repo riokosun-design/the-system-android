@@ -69,7 +69,7 @@ class ContextEngine @Inject constructor(
                 if (catalog.any { c -> c.type == "MUSCLE" && mine.any { it.courseId == c.id && it.status == "ACTIVE" } }) 1 else 0,
             products = productsD?.await()?.sortedBy { it.priceInr }?.take(productCap).orEmpty(),
             notes = notesD?.await()?.map { it.note }?.take(5).orEmpty(),
-            routineCountToday = routineD?.await()?.items?.size() ?: 0,
+            routineCountToday = routineD?.await()?.items?.size ?: 0,
             recoveryRemainingSec = RecoveryTracker.remainingSec(app),
         )
     }

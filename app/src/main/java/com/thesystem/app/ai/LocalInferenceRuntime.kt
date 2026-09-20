@@ -1,7 +1,7 @@
 package com.thesystem.app.ai
 
 import android.content.Context
-import com.google.mediapipe.tasks.genai.LlmInference
+import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
