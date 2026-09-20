@@ -46,8 +46,9 @@ import java.util.concurrent.Executors
 /**
  * VERIFIED PROOF SESSION — LOG never trusts a tap.
  *
- *  CAMERA : ML Kit pose state machine (push-up / squat), live skeleton overlay,
- *           explicit POSE NOT DETECTED / MOVE BACK / FULL BODY NOT VISIBLE.
+ *  CAMERA : push-ups pass through the PHASE 0 envelope (calibration gate +
+ *           engine v4 side-view machine, IMU witness); squats use the ML Kit
+ *           angle state machine; live skeleton overlay throughout.
  *  STEPS  : foreground HEALTH service keeps counting through music, app switch
  *           and lock screen, then syncs the meters back here.
  *  TIMER  : running clock for holds; the server receives the elapsed seconds.
@@ -79,7 +80,7 @@ fun QuestProofScreen(
     }
     LaunchedEffect(permission) { if (permission != null && !granted) launcher.launch(permission) }
 
-    // radar + camera sessions run hands-free on the floor — never let the
+    // proof sessions run hands-free with the phone propped — never let the
     // screen sleep mid-set (a sleeping screen also starves some OEM sensors).
     val activity = remember(context) {
         var ctx: Context? = context
@@ -206,11 +207,18 @@ private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
                 .background(Color.Black)
                 .border(1.5.dp, SkyBlue.copy(alpha = 0.7f), RoundedCornerShape(12.dp)),
         ) {
-            CameraBox(s, vm, flash)
+            // PHASE 0: push-ups count inside the enforced envelope (gate + engine
+            // v4, CV-BATTLE-ARCHITECTURE); squats keep the proven angle machine.
+            if (s.exercise == PoseRepCounter.RepExercise.SQUAT) CameraBox(s, vm, flash)
+            else PushupV4Box(s, vm, flash)
         }
 
         Spacer(Modifier.height(14.dp))
         ProofGauge(s.count, s.target, if (s.exercise == PoseRepCounter.RepExercise.SQUAT) "SQUATS" else "PUSH-UPS", "reps")
+        s.calibNote?.let {
+            Spacer(Modifier.height(6.dp))
+            Text(it, style = MonoLabel, color = SkyBlue)
+        }
         s.lastQuality?.let { q ->
             Spacer(Modifier.height(8.dp))
             Text(
@@ -297,6 +305,122 @@ private fun BoxScope.CameraBox(s: QuestProofState, vm: QuestProofViewModel, flas
             else -> "LOCKED OUT — BEGIN"
         } to SkyBlue
         PoseRepCounter.PoseStatus.WAITING -> "ALIGN THE CAMERA" to LabelGray
+    }
+    Box(
+        Modifier
+            .align(Alignment.BottomCenter).padding(12.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color.Black.copy(alpha = 0.55f))
+            .border(1.dp, statusColor.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    ) {
+        Text(statusText, color = statusColor, fontFamily = SystemMono, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+/**
+ * PHASE 0 PUSH-UP STAGE — the envelope, enforced. Frames route through the
+ * CalibrationGate until a profile locks, then into engine v4. The hunter is
+ * coached into a side view instead of being silently miscounted from the floor.
+ * Front camera so the coaching HUD stays visible; IMU vetoes any bump.
+ */
+@Composable
+private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, flash: Float) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var preview by remember { mutableStateOf<PreviewView?>(null) }
+    var mesh by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
+    var depth by remember { mutableFloatStateOf(0f) }
+    val haptics = rememberSystemHaptics()
+
+    val executor = remember { Executors.newSingleThreadExecutor() }
+    DisposableEffect(Unit) { onDispose { executor.shutdown() } }
+
+    val witness = remember { com.thesystem.app.core.sensors.ImuStabilityWitness(context) }
+    DisposableEffect(witness) {
+        witness.start()
+        onDispose { witness.stop() }
+    }
+
+    var profile by remember { mutableStateOf<CalibProfile?>(null) }
+    val gate = remember {
+        CalibrationGate(
+            witness = witness,
+            onProfile = { p -> profile = p; vm.onCalibrated(p); haptics.success() },
+            onLandmarks = { mesh = it },
+        )
+    }
+    val engine = remember(profile) {
+        profile?.let {
+            PushupEngineV4(
+                profile = it,
+                strictness = PushupEngineV4.Strictness.STANDARD,
+                witness = witness,
+                onRep = { n, q -> haptics.success(); vm.onRep(n, q) },
+                onPhase = { _, d -> depth = d },
+                onLandmarks = { pts -> mesh = pts },
+                onStatus = { st -> vm.onEngineStatus(st) },
+            )
+        }
+    }
+    DisposableEffect(gate, engine) { onDispose { gate.close(); engine?.close() } }
+    DisposableEffect(Unit) {
+        onDispose { runCatching { ProcessCameraProvider.getInstance(context).get().unbindAll() } }
+    }
+
+    val gateUi by gate.ui.collectAsStateWithLifecycle()
+    val engineState = rememberUpdatedState(engine)
+
+    LaunchedEffect(preview) {
+        val view = preview ?: return@LaunchedEffect
+        val provider = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            ProcessCameraProvider.getInstance(context).get()
+        }
+        provider.unbindAll()
+        val camPreview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
+        val analysis = ImageAnalysis.Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+            .also {
+                it.setAnalyzer(executor) { proxy ->
+                    // gate until the envelope locks; engine afterwards (gate idles in LOCKED)
+                    engineState.value?.process(proxy) ?: gate.process(proxy)
+                }
+            }
+        // side view works with either lens; front keeps the coaching HUD visible
+        provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, camPreview, analysis)
+    }
+
+    AndroidView(factory = { ctx -> PreviewView(ctx).also { preview = it } }, modifier = Modifier.matchParentSize())
+    PoseMeshOverlay(points = mesh, repFlash = flash * depth, modifier = Modifier.matchParentSize())
+
+    if (profile == null) {
+        GateOverlay(gateUi, ranked = false)
+        return
+    }
+
+    Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
+        Text("REP", style = MonoLabel, color = SkyBlue)
+        Text(
+            "${s.count}", color = PaperWhite, fontFamily = SystemMono,
+            fontWeight = FontWeight.Bold, fontSize = 44.sp,
+        )
+    }
+
+    val (statusText, statusColor) = when (s.engineStatus) {
+        PushupEngineV4.EngineStatus.SEARCHING -> "FIND THE TOP — ARMS LOCKED, BODY STRAIGHT" to LabelGray
+        PushupEngineV4.EngineStatus.READY -> "ARMED — CONTROLLED REPS ONLY" to SkyBlue
+        PushupEngineV4.EngineStatus.DESCENDING -> "CONTROLLED DESCENT" to SkyBlue
+        PushupEngineV4.EngineStatus.ASCENDING -> "DRIVE UP" to SkyBlue
+        PushupEngineV4.EngineStatus.VERIFYING -> "VERIFYING REP — HOLD POSITION" to PaperWhite
+        PushupEngineV4.EngineStatus.REJECT_DEPTH -> "NO COUNT — CHEST DIDN'T DROP" to PaperWhite
+        PushupEngineV4.EngineStatus.REJECT_FORM -> "NO COUNT — BODY LINE BROKEN" to PaperWhite
+        PushupEngineV4.EngineStatus.REJECT_TEMPO -> "NO COUNT — IMPOSSIBLE TEMPO" to PaperWhite
+        PushupEngineV4.EngineStatus.REJECT_POSE -> "REP LOST — STAY IN FRAME" to PaperWhite
+        PushupEngineV4.EngineStatus.CAMERA_MOVED -> "CAMERA MOVED — RE-LOCKING" to PaperWhite
+        PushupEngineV4.EngineStatus.SETTLE -> "HOLD THE TOP — RE-ANCHORING" to PaperWhite
+        PushupEngineV4.EngineStatus.DISPUTED -> "ANTI-CHEAT HOLD — CLEAN REPS ONLY" to PaperWhite
+        null -> "ENVELOPE LOCKED" to SkyBlue
     }
     Box(
         Modifier

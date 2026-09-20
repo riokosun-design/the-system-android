@@ -38,9 +38,16 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.thesystem.app.core.SystemMath
+import com.thesystem.app.core.sensors.ImuStabilityWitness
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
+import com.thesystem.app.ui.training.CalibLevel
+import com.thesystem.app.ui.training.CalibProfile
+import com.thesystem.app.ui.training.CalibrationGate
+import com.thesystem.app.ui.training.GateOverlay
+import com.thesystem.app.ui.training.GateUi
 import com.thesystem.app.ui.training.PoseRepCounter
+import com.thesystem.app.ui.training.PushupEngineV4
 import java.util.concurrent.Executors
 import kotlin.math.PI
 import kotlin.math.sin
@@ -102,21 +109,57 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
 
     // DESIGN 2.5 — hologram mesh: ML Kit landmarks flow into the overlay canvas
     var meshPoints by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
-    // ONE unified engine (training/PoseRepCounter): front-span push-ups for the
-    // floor camera, hip·knee·ankle for squats — keyed to the war's exercise_type.
+    // Push-up wars are RANKED — they run inside the PHASE 0 envelope
+    // (CV-BATTLE-ARCHITECTURE): the calibration gate must lock before READY can
+    // be armed (GREEN required), then engine v4 STRICT judges. Squat wars keep
+    // the proven angle machine.
     val warKind = if (s.battle?.exerciseType?.uppercase() == "SQUAT") {
         PoseRepCounter.RepExercise.SQUAT
     } else {
         PoseRepCounter.RepExercise.PUSHUP
     }
-    val counter = remember(warKind, spectating) {
-        if (spectating) null else PoseRepCounter(
-            exercise = warKind,
-            onRep = { n, _ -> vm.onRep(n) },
+    val witness = remember(spectating) { if (spectating) null else ImuStabilityWitness(context) }
+    DisposableEffect(witness) {
+        witness?.start()
+        onDispose { witness?.stop() }
+    }
+    var v4Profile by remember { mutableStateOf<CalibProfile?>(null) }
+    val gate = remember(warKind, spectating) {
+        if (spectating || warKind != PoseRepCounter.RepExercise.PUSHUP) null
+        else CalibrationGate(
+            witness = witness!!,
+            onProfile = { p -> v4Profile = p },
             onLandmarks = { meshPoints = it },
         )
     }
-    DisposableEffect(counter) { onDispose { counter?.close() } }
+    val counter: Any? = remember(warKind, spectating, v4Profile) {
+        when {
+            spectating -> null
+            warKind == PoseRepCounter.RepExercise.PUSHUP -> v4Profile?.let { p ->
+                PushupEngineV4(
+                    profile = p,
+                    strictness = PushupEngineV4.Strictness.STRICT,
+                    witness = witness!!,
+                    onRep = { n, _ -> vm.onRep(n) },
+                    onLandmarks = { meshPoints = it },
+                )
+            }
+            else -> PoseRepCounter(
+                exercise = warKind,
+                onRep = { n, _ -> vm.onRep(n) },
+                onLandmarks = { meshPoints = it },
+            )
+        }
+    }
+    DisposableEffect(counter, gate) {
+        onDispose {
+            gate?.close()
+            when (counter) {
+                is PushupEngineV4 -> counter.close()
+                is PoseRepCounter -> counter.close()
+            }
+        }
+    }
 
     val cameraPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -132,7 +175,13 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
             runCatching { cameraProvider?.unbindAll() }
         }
     }
-    LaunchedEffect(s.cameraGranted, s.counting) {
+    // one analyzer, always attached: frames route through the gate (lobby time
+    // IS calibration time) until the envelope locks, then into the war's engine
+    // — but only while the clock runs. Engineers count nothing before LIVE.
+    val gateState = rememberUpdatedState(gate)
+    val counterState = rememberUpdatedState(counter)
+    val countingState = rememberUpdatedState(s.counting)
+    LaunchedEffect(s.cameraGranted, previewView != null) {
         val view = previewView ?: return@LaunchedEffect
         if (!s.cameraGranted) return@LaunchedEffect
         val provider = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -141,15 +190,22 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
         cameraProvider = provider
         provider.unbindAll()
         val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
-        if (s.counting) {
-            val analysis = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
-                .also { it.setAnalyzer(analysisExecutor) { proxy -> counter?.process(proxy) } }
-            provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, preview, analysis)
-        } else {
-            provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, preview)
-        }
+        val analysis = ImageAnalysis.Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+            .also {
+                it.setAnalyzer(analysisExecutor) { proxy ->
+                    val g = gateState.value
+                    val c = counterState.value
+                    when {
+                        c is PushupEngineV4 && countingState.value -> c.process(proxy)
+                        g != null && c == null -> g.process(proxy)
+                        c is PoseRepCounter && countingState.value -> c.process(proxy)
+                        else -> proxy.close()
+                    }
+                }
+            }
+        provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, preview, analysis)
     }
 
     SystemBackground(wallpaperAlpha = 0.08f) {
@@ -161,7 +217,8 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
             )
             Text(
                 if (spectating) "Watching live. Your camera stays off — this is not your war."
-                else "${s.durationSec} SECONDS · Winner +${SystemMath.BATTLE_WIN_XP} XP · Loser +${SystemMath.BATTLE_LOSS_XP} XP. No mercy.",
+                else "${s.durationSec} SECONDS · Winner +${SystemMath.BATTLE_WIN_XP} XP · Loser +${SystemMath.BATTLE_LOSS_XP} XP. No mercy." +
+                    if (warKind == PoseRepCounter.RepExercise.PUSHUP) " SIDE-VIEW VERIFIED — THE GATE GUARDS THIS WAR." else "",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.height(10.dp))
@@ -199,12 +256,23 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                     }, color = TextMuted)
                 }
             } else {
+                val gateUi = gate?.ui?.collectAsStateWithLifecycle()?.value ?: GateUi()
                 Box(Modifier.fillMaxWidth().height(300.dp)) {
                     AndroidView(factory = { ctx -> PreviewView(ctx).also { previewView = it } }, modifier = Modifier.fillMaxSize())
-                    if (s.counting) PoseMeshOverlay(points = meshPoints, repFlash = repPop.value, modifier = Modifier.matchParentSize())
-                    if (!s.counting && s.battle?.status != "FINISHED") {
+                    // mesh rides the gate stream while calibrating, the engine while at war
+                    if (s.counting || (gate != null && v4Profile == null)) {
+                        PoseMeshOverlay(points = meshPoints, repFlash = repPop.value, modifier = Modifier.matchParentSize())
+                    }
+                    if (gate != null && v4Profile == null && s.battle?.status != "FINISHED") {
+                        // the gate IS the referee's front door
+                        GateOverlay(gateUi, ranked = true)
+                    } else if (!s.counting && s.battle?.status != "FINISHED") {
                         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("PHONE ON THE FLOOR — FRONT CAMERA FACING YOU", color = PaperWhite, style = MonoLabel)
+                            Text(
+                                if (gate != null && s.battle?.status == "LOBBY") "ENVELOPE LOCKED — ARM READY BELOW"
+                                else "PHONE ON THE FLOOR — FRONT CAMERA FACING YOU",
+                                color = PaperWhite, style = MonoLabel,
+                            )
                         }
                     }
                     if (s.counting) {
@@ -256,7 +324,11 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                     Spacer(Modifier.height(8.dp))
                     NeonButton("LEAVE THE ARENA", onExit, Modifier.fillMaxWidth())
                 }
-                s.battle?.status == "LOBBY" -> LobbyCard(s, vm, haptics, onExit)
+                s.battle?.status == "LOBBY" -> LobbyCard(
+                    s, vm, haptics, onExit,
+                    gateRequired = warKind == PoseRepCounter.RepExercise.PUSHUP,
+                    gateReady = v4Profile?.level == CalibLevel.GREEN,
+                )
                 s.battle?.status == "CANCELLED" -> GlowCard {
                     Text("BATTLE CANCELLED", style = MaterialTheme.typography.titleLarge, color = PaperWhite)
                     Text("The lobby was dismissed. Any prediction stakes are refunded.", style = MaterialTheme.typography.bodyMedium)
@@ -310,7 +382,14 @@ private val LOBBY_PRESETS = listOf(
 )
 
 @Composable
-private fun LobbyCard(s: BattleRoomState, vm: BattleRoomViewModel, haptics: SystemHaptics, onExit: () -> Unit) {
+private fun LobbyCard(
+    s: BattleRoomState,
+    vm: BattleRoomViewModel,
+    haptics: SystemHaptics,
+    onExit: () -> Unit,
+    gateRequired: Boolean = false,
+    gateReady: Boolean = false,
+) {
     val b = s.battle
     val opponentReady = s.opponentReadyOf(b, s.myId)
     val amHost = b?.host == null || b.host == s.myId // older rows: player A hosts
@@ -366,11 +445,23 @@ private fun LobbyCard(s: BattleRoomState, vm: BattleRoomViewModel, haptics: Syst
         Spacer(Modifier.height(10.dp))
 
         NeonButton(
-            if (s.myReady) "STAND DOWN" else if (s.cameraGranted) "READY" else "GRANT CAMERA TO READY",
+            when {
+                s.myReady -> "STAND DOWN"
+                !s.cameraGranted -> "GRANT CAMERA TO READY"
+                gateRequired && !gateReady -> "PASS THE GATE TO READY"
+                else -> "READY"
+            },
             { haptics.select(); vm.toggleReady() },
             Modifier.fillMaxWidth().height(52.dp),
-            enabled = s.cameraGranted || s.myReady,
+            enabled = s.myReady || (s.cameraGranted && (!gateRequired || gateReady)),
         )
+        if (gateRequired && !gateReady && !s.myReady) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "RANKED LAW: no side-view GREEN, no war. The gate above decides when you fight.",
+                style = MaterialTheme.typography.bodySmall, color = LabelGray,
+            )
+        }
         Spacer(Modifier.height(8.dp))
         GhostButton(if (amHost) "CANCEL — RIVAL NEVER SHOWED" else "LEAVE LOBBY", {
             haptics.select()

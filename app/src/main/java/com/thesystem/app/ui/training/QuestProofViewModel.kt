@@ -47,6 +47,9 @@ data class QuestProofState(
     val meters: Int = 0,
     val activeSec: Int = 0,
     val poseStatus: PoseRepCounter.PoseStatus = PoseRepCounter.PoseStatus.WAITING,
+    /** PHASE 0 envelope — gate verdict line + live engine v4 status (push-ups). */
+    val calibNote: String? = null,
+    val engineStatus: PushupEngineV4.EngineStatus? = null,
     val repFlash: Float = 0f,
     val lastQuality: PoseRepCounter.RepQuality? = null,
     val submitting: Boolean = false,
@@ -107,6 +110,21 @@ class QuestProofViewModel @Inject constructor(
 
     fun onPoseStatus(status: PoseRepCounter.PoseStatus) {
         _state.value = _state.value.copy(poseStatus = status)
+    }
+
+    // ── PHASE 0 gate + engine v4 (push-up channel) ───────────────────────────
+    fun onCalibrated(profile: CalibProfile) {
+        _state.value = _state.value.copy(
+            calibNote = if (profile.level == CalibLevel.GREEN) {
+                "ENVELOPE GREEN · SIDE VIEW LOCKED"
+            } else {
+                "ENVELOPE YELLOW · THREE-QUARTER — REDUCED STRICTNESS"
+            },
+        )
+    }
+
+    fun onEngineStatus(status: PushupEngineV4.EngineStatus) {
+        _state.value = _state.value.copy(engineStatus = status)
     }
 
     fun clearFlash() { _state.value = _state.value.copy(repFlash = 0f) }
