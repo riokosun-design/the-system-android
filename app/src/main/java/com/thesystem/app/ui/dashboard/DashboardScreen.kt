@@ -96,6 +96,7 @@ fun DashboardScreen(
     LaunchedEffect(s.notice, s.error) {
         s.error?.let { haptics.error(); snack.showSnackbar(it); vm.clearNotice(); return@LaunchedEffect }
         s.notice?.let { msg ->
+            haptics.success()
             floaterText = msg.substringBefore(" —")
             fireFloater()
             snack.showSnackbar(msg)
@@ -474,6 +475,7 @@ private fun TodayQuestModule(
     val frac = (done.toFloat() / total).coerceIn(0f, 1f)
     val charge by animateFloatAsState(frac, tween(600), label = "questCharge")
     val open = s.openQuest
+    val haptics = rememberSystemHaptics()
 
     Column(
         Modifier
@@ -545,7 +547,7 @@ private fun TodayQuestModule(
         Spacer(Modifier.height(Grid.S8))
         GhostButton(
             if (s.aiQuestBusy) "AI THINKING…" else "AI PROPOSE — BONUS BLOCK",
-            { vm.aiProposeQuest() },
+            { haptics.tick(); vm.aiProposeQuest() },
             Modifier.fillMaxWidth(),
             enabled = !s.aiQuestBusy,
         )
@@ -578,8 +580,8 @@ private fun TodayQuestModule(
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
-                    GhostButton("DISMISS", { vm.dismissAiQuest() }, Modifier.weight(1f), enabled = !s.aiQuestBusy)
-                    NeonButton("ADOPT", { vm.acceptAiQuest() }, Modifier.weight(1.2f), color = SkyBlue, enabled = !s.aiQuestBusy)
+                    GhostButton("DISMISS", { haptics.tick(); vm.dismissAiQuest() }, Modifier.weight(1f), enabled = !s.aiQuestBusy)
+                    NeonButton("ADOPT", { haptics.slam(); vm.acceptAiQuest() }, Modifier.weight(1.2f), color = SkyBlue, enabled = !s.aiQuestBusy)
                 }
             }
         }

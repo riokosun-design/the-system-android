@@ -29,6 +29,7 @@ fun AiBenchmarkScreen(
     vm: AiBenchmarkViewModel = hiltViewModel(),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
+    val haptics = rememberSystemHaptics()
 
     SystemBackground {
         Column(
@@ -42,7 +43,7 @@ fun AiBenchmarkScreen(
                 FloatingIconButton(Icons.Default.ArrowBack, "back", onClick = onBack)
                 Spacer(Modifier.width(12.dp))
                 Text("AI BENCHMARK", color = PaperWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, modifier = Modifier.weight(1f))
-                FloatingIconButton(Icons.Default.Refresh, "refresh") { vm.refresh() }
+                FloatingIconButton(Icons.Default.Refresh, "refresh") { haptics.select(); vm.refresh() }
             }
 
             s.report?.let { r ->

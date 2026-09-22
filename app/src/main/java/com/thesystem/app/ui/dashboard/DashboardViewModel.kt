@@ -170,7 +170,7 @@ class DashboardViewModel @Inject constructor(
         _state.value = _state.value.copy(aiQuestBusy = true)
         system.adoptAiQuest(p)
             .onSuccess {
-                _state.value = _state.value.copy(aiQuestBusy = false, aiQuest = null, aiQuestNote = "AI QUEST ADOPTED — protocol block added")
+                _state.value = _state.value.copy(aiQuestBusy = false, aiQuest = null, aiQuestNote = null, notice = "AI QUEST ADOPTED — protocol block added")
                 delay(500); refresh()
             }
             .onFailure { e ->

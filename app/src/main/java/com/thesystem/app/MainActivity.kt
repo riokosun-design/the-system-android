@@ -36,6 +36,21 @@ import com.thesystem.app.ui.splash.DynamicSplash
 import com.thesystem.app.ui.splash.SplashVariant
 import com.thesystem.app.ui.tabs.MainTabs
 import com.thesystem.app.core.theme.SystemTheme
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Alignment
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.thesystem.app.core.theme.FaintGray
+import com.thesystem.app.core.theme.MonoLabel
+import com.thesystem.app.core.theme.PaperWhite
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -148,12 +163,26 @@ class MainActivity : ComponentActivity() {
                 // ROUND 7: cinematic launch flow — unregistered vessels walk the full
                 // intake → awakening → contract → evaluation → auth gate ritual.
                 // Signed-in hunters get the shuffled brand splash and go straight in.
-                val splashVariants = remember { SplashVariant.entries.shuffled() }
+                val splashVariants = remember { com.thesystem.app.ui.splash.HONEST_SPLASH_ROTATION.shuffled() }
                 when (val s = state) {
                     RootState.Booting -> DynamicSplash(variants = splashVariants)
                     RootState.NeedsOnboarding -> AwakeningFlowScreen(onDone = { vm.resolve() })
                     is RootState.Ready -> AppNavHost(profile = s, onSignOut = { vm.signOut() })
-                    is RootState.Error -> DynamicSplash(variants = splashVariants) // offline tolerance: keep brand screen; retry taps re-resolve
+                    is RootState.Error -> {
+                        // offline tolerance: brand screen stays alive; the tap re-resolves
+                        val err = s
+                        Box(Modifier.fillMaxSize().clickable { vm.resolve() }) {
+                            DynamicSplash(variants = splashVariants)
+                            Column(
+                                Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text(err.message.take(120), color = FaintGray, style = MonoLabel, textAlign = TextAlign.Center)
+                                Spacer(Modifier.height(6.dp))
+                                Text("SIGNAL LOST — TAP TO RE-SYNC", color = PaperWhite, style = MonoLabel)
+                            }
+                        }
+                    }
                 }
             }
         }

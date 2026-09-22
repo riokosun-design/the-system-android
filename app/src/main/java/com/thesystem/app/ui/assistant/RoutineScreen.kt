@@ -56,7 +56,7 @@ fun RoutineScreen(
             }
 
             (s.error ?: s.notice)?.let { msg ->
-                LaunchedEffect(msg) { if (s.error != null) haptics.error() else haptics.success() }
+                LaunchedEffect(msg) { if (s.error != null) haptics.error() else haptics.success(); vm.clearNotice() }
                 Text(
                     msg, color = if (s.error != null) PaperWhite else LabelGray,
                     fontSize = 10.sp, fontFamily = SystemMono,
@@ -91,6 +91,7 @@ fun RoutineScreen(
                             val done = item.status == "DONE"
                             Row(
                                 Modifier
+                                    .enterAnim(idx)
                                     .fillMaxWidth()
                                     .border(1.dp, if (done) LineStrong else LineSoft, RoundedCornerShape(10.dp))
                                     .padding(horizontal = 10.dp, vertical = 8.dp),

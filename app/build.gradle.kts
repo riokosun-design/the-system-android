@@ -20,8 +20,12 @@ android {
         applicationId = "com.thesystem.app"
         minSdk = 26 // low-end / older Android first
         targetSdk = 35
-        versionCode = 18
-        versionName = "0.9.0"
+        versionCode = 19
+        versionName = "0.9.2"
+
+        // 2GB-first install weight: drop emulator-only native ABIs (MediaPipe+
+        // ML Kit ship x86/x86_64 .so blobs nobody's phone uses ≈60MB unpacked).
+        ndk { abiFilters("arm64-v8a", "armeabi-v7a") }
 
         buildConfigField("String", "SUPABASE_URL", "\"${backendProp("SUPABASE_URL", "https://YOUR_PROJECT_REF.supabase.co")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${backendProp("SUPABASE_ANON_KEY", "YOUR_PUBLIC_ANON_KEY")}\"")

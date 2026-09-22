@@ -33,8 +33,23 @@ import kotlinx.coroutines.delay
 enum class SplashVariant(val label: String) {
     RANK_BARS("RANKS"),
     BLACK_ROOM_SCAN("BLACK ROOM"),
-    TERRITORY_GRID("TERRITORY"),
+    TERRITORY_GRID("TERRITORY"),   // legacy canvas — kept out of the rotation (gameplay sunset)
+    QUEST_DONUT("DAILY PROTOCOL"),
+    BATTLE_SPLIT("ARENA"),
 }
+
+/**
+ * HONEST ROTATION — only marks the product actually stands on TODAY:
+ * Ranks, the Black Room, the Daily Protocol, the Arena. Territory canvases
+ * stay compiled but out of rotation (β decision: dead gameplay never
+ * advertises on the first frame a hunter sees).
+ */
+val HONEST_SPLASH_ROTATION: List<SplashVariant> = listOf(
+    SplashVariant.RANK_BARS,
+    SplashVariant.BLACK_ROOM_SCAN,
+    SplashVariant.QUEST_DONUT,
+    SplashVariant.BATTLE_SPLIT,
+)
 
 /**
  * Dynamic Animated Splash System: crossfades between canvas variants at [variantMillis] cadence.
@@ -42,7 +57,7 @@ enum class SplashVariant(val label: String) {
  */
 @Composable
 fun DynamicSplash(
-    variants: List<SplashVariant> = SplashVariant.entries,
+    variants: List<SplashVariant> = HONEST_SPLASH_ROTATION,
     variantMillis: Long = 1600,
     showBranding: Boolean = true,
     onFinished: (() -> Unit)? = null,
@@ -100,5 +115,7 @@ fun SplashGraph(variant: SplashVariant, modifier: Modifier = Modifier) {
         SplashVariant.RANK_BARS -> RankBarsGraph(modifier)
         SplashVariant.BLACK_ROOM_SCAN -> BlackRoomScanGraph(modifier)
         SplashVariant.TERRITORY_GRID -> TerritoryGridGraph(modifier)
+        SplashVariant.QUEST_DONUT -> QuestDonutGraph(modifier)
+        SplashVariant.BATTLE_SPLIT -> BattleSplitGraph(modifier)
     }
 }

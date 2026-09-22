@@ -34,6 +34,7 @@ import com.thesystem.app.ai.Personality
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.FloatingIconButton
 import com.thesystem.app.core.ui.SystemBackground
+import com.thesystem.app.core.ui.enterAnim
 import com.thesystem.app.core.ui.rememberSystemHaptics
 
 /**
@@ -58,7 +59,7 @@ fun AssistantScreen(
     SystemBackground {
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin)) {
             // ── header ───────────────────────────────────────────────────────
-            Row(Modifier.fillMaxWidth().padding(vertical = Grid.S16), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.enterAnim(0).fillMaxWidth().padding(vertical = Grid.S16), verticalAlignment = Alignment.CenterVertically) {
                 FloatingIconButton(Icons.Default.ArrowBack, "back", onClick = onBack)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
@@ -68,7 +69,7 @@ fun AssistantScreen(
             }
 
             // ── personality rail (§13) ───────────────────────────────────────
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.enterAnim(1).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Personality.entries.forEach { p ->
                     val sel = p == s.personality
                     Box(
