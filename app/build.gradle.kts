@@ -25,7 +25,7 @@ android {
 
         // 2GB-first install weight: drop emulator-only native ABIs (MediaPipe+
         // ML Kit ship x86/x86_64 .so blobs nobody's phone uses ≈60MB unpacked).
-        ndk { abiFilters("arm64-v8a", "armeabi-v7a") }
+        ndk { abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a")) }
 
         buildConfigField("String", "SUPABASE_URL", "\"${backendProp("SUPABASE_URL", "https://YOUR_PROJECT_REF.supabase.co")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${backendProp("SUPABASE_ANON_KEY", "YOUR_PUBLIC_ANON_KEY")}\"")
