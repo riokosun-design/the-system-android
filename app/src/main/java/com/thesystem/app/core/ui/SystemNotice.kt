@@ -110,6 +110,8 @@ object NoticeTemplates {
         "You showed up. That is 90% of the battle.\nNow finish the remaining 10%.",
         "The System does not celebrate attendance.\nIt celebrates execution. Begin.",
         "Small wins, stacked daily,\nbecome an unstoppable rank climb.",
+        "SYSTEM ONLINE.\nBody in the arena. Mind on the board. Build.",
+        "MENTAL QUEST AVAILABLE.\nYour mind is your second weapon — draw it daily.",
     )
 
     private val MISSED = listOf(

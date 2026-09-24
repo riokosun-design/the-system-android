@@ -31,6 +31,7 @@ import com.thesystem.app.core.ui.pressScale
 import com.thesystem.app.core.ui.rememberSystemHaptics
 import com.thesystem.app.data.model.UserDto
 import com.thesystem.app.ui.arena.ArenaScreen
+import com.thesystem.app.ui.chess.ChessHubScreen
 import com.thesystem.app.ui.dashboard.DashboardScreen
 import com.thesystem.app.ui.profile.ProfileScreen
 import com.thesystem.app.ui.market.MarketScreen
@@ -44,6 +45,7 @@ enum class SystemTab(val label: String, val icon: ImageVector) {
     DASHBOARD("Status", Icons.Default.Dashboard),
     RANK("Rank", Icons.Default.MilitaryTech),
     ARENA("Arena", Icons.Default.Whatshot),
+    CHESS("Chess", Icons.Default.Extension),
     MARKET("Market", Icons.Default.Storefront),
     PROFILE("Vault", Icons.Default.Person),
 }
@@ -75,6 +77,7 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
                 SystemTab.DASHBOARD -> DashboardScreen(nav = nav)
                 SystemTab.RANK -> RankScreen()
                 SystemTab.ARENA -> ArenaScreen(nav = nav)
+                SystemTab.CHESS -> ChessHubScreen(nav = nav)
                 SystemTab.MARKET -> MarketScreen(nav = nav)
                 SystemTab.PROFILE -> ProfileScreen(profile = profile, nav = nav, onSignOut = onSignOut)
             }

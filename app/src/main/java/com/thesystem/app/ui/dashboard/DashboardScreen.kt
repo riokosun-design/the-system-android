@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.thesystem.app.ui.chess.ChessMode
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -167,6 +168,11 @@ fun DashboardScreen(
                                     vm = vm,
                                 )
                             }
+                        }
+
+                        // 3.25 ── MIND — today's mental discipline (§9/§18)
+                        item {
+                            Box(Modifier.enterAnim(3)) { MindQuestModule(nav = nav, bodyDone = s.quests.any { it.isDone }) }
                         }
 
                         // 3.5 ── SYSTEM AI — assistant + routine doorways (§2 hierarchy)
@@ -841,6 +847,95 @@ private fun BlackRoomDoor(unlocked: Boolean, onClick: () -> Unit) {
                 )
             }
             Text(if (unlocked) "OPEN" else "LOCKED", style = MonoLabel, color = if (unlocked) SkyBlue else FaintGray)
+        }
+    }
+}
+
+/**
+ * TODAY — MIND (§2/§9/§18): the day's mental quest with real server progress,
+ * inline CLAIM, and the BODY × MIND SYNC handshake (§8) when both sides clear.
+ */
+@Composable
+private fun MindQuestModule(
+    nav: NavHostController,
+    bodyDone: Boolean,
+    vm: com.thesystem.app.ui.chess.ChessViewModel = hiltViewModel(),
+) {
+    val s by vm.state.collectAsStateWithLifecycle()
+    val haptics = rememberSystemHaptics()
+    LaunchedEffect(Unit) { vm.refresh() }
+    LaunchedEffect(s.notice, s.error) {
+        if (s.error != null) haptics.error() else haptics.success()
+        vm.clearNotice()
+    }
+
+    GlowCard(glow = SkyBlue, modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SectionTitle("TODAY — MIND", SkyBlue)
+            Spacer(Modifier.weight(1f))
+            Text(
+                "MENTAL LV ${s.profile?.mentalLevel ?: 1} · ${s.profile?.mentalRank ?: "F"}",
+                style = MonoLabel, color = LabelGray,
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(s.quest.title, color = PaperWhite, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (s.questClaimed) "CLAIMED · +${s.quest.xp} MENTAL XP BANKED"
+                    else "${s.questProgress}/${s.quest.target} · +${s.quest.xp} MENTAL XP",
+                    style = MonoLabel, color = LabelGray,
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Box(
+            Modifier.fillMaxWidth().height(5.dp)
+                .background(TrackGray, RoundedCornerShape(3.dp)),
+        ) {
+            Box(
+                Modifier.fillMaxWidth((s.questProgress.toFloat() / s.quest.target).coerceIn(0f, 1f))
+                    .fillMaxHeight()
+                    .background(SkyBlue, RoundedCornerShape(3.dp)),
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        when {
+            s.questClaimed -> {}
+            s.questProgress >= s.quest.target -> NeonButton(
+                "CLAIM +${s.quest.xp} MENTAL XP",
+                { haptics.slam(); vm.claimQuest() },
+                Modifier.fillMaxWidth(), color = SkyBlue, enabled = !s.busy,
+            )
+            else -> NeonButton(
+                "START",
+                {
+                    haptics.select()
+                    when (s.quest.kind) {
+                        "PUZZLE" -> nav.navigate(Routes.chessPuzzles(daily = false))
+                        "DAILY" -> nav.navigate(Routes.chessPuzzles(daily = true))
+                        else -> nav.navigate(
+                            Routes.chessGame(
+                                if (s.quest.title.contains("TIME-PRESSURE")) ChessMode.TIME_PRESSURE.name
+                                else ChessMode.RAPID.name,
+                            ),
+                        )
+                    }
+                },
+                Modifier.fillMaxWidth(), color = SkyBlue,
+            )
+        }
+        if (s.questClaimed) {
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("BODY × MIND SYNC", style = MonoLabel, color = PaperWhite, modifier = Modifier.weight(1f))
+                if (bodyDone) {
+                    GhostButton("CLAIM +25 XP · +5 VC", { haptics.slam(); vm.claimSync() })
+                } else {
+                    Text("BODY PENDING", style = MonoLabel, color = FaintGray)
+                }
+            }
         }
     }
 }

@@ -82,7 +82,7 @@ class AssistantViewModel @Inject constructor(
             setOf(
                 ContextEngine.Need.PROFILE, ContextEngine.Need.QUESTS,
                 ContextEngine.Need.PERFORMANCE, ContextEngine.Need.TRAINING,
-                ContextEngine.Need.NOTES,
+                ContextEngine.Need.NOTES, ContextEngine.Need.CHESS,
             ),
         )
         val out = orchestrator.ask(text, persona, snap)

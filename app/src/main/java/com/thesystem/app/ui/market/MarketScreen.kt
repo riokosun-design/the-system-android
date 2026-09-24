@@ -145,6 +145,7 @@ fun MarketScreen(nav: NavHostController, vm: MarketViewModel = hiltViewModel()) 
                     Column(Modifier.weight(1f)) {
                         Text("SYSTEM", style = MonoLabel, color = SkyBlue)
                         Text("MARKET", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 26.sp, letterSpacing = 1.5.sp)
+                        Text("200 VC = ₹100 VALUE · VIRTUAL CREDITS ONLY", style = MonoLabel, color = FaintGray)
                     }
                     VcChip(s.vc)
                 }

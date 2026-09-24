@@ -250,6 +250,7 @@ private val QUICK_BLOCKS = listOf(
     CommitmentBlock("Football", "06:00", "07:30"),
     CommitmentBlock("Martial Arts", "19:00", "20:30"),
     CommitmentBlock("Training", "17:00", "18:30"),
+    CommitmentBlock("Chess", "20:30", "21:30"),
     CommitmentBlock("Study", "20:00", "22:00"),
     CommitmentBlock("Sleep", "22:30", "06:30"),
     CommitmentBlock("Other", "12:00", "13:00"),

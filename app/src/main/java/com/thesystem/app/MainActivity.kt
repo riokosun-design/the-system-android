@@ -116,12 +116,16 @@ object Routes {
     const val ASSISTANT = "assistant"
     const val ROUTINE = "routine"
     const val AI_BENCHMARK = "aiBenchmark"
+    const val CHESS_GAME = "chessGame/{mode}"
+    const val CHESS_PUZZLES = "chessPuzzles/{daily}"
     /** Verified proof session: every field is server content, not a client guess. */
     const val QUEST_PROOF =
         "quest/{questId}/{mode}/{exercise}/{target}/{seq}/{unit}/{rest}/{xp}/{title}"
 
     fun dm(otherId: String, otherName: String) = "dm/$otherId/$otherName"
     fun battle(id: String) = "battle/$id"
+    fun chessGame(mode: String) = "chessGame/$mode"
+    fun chessPuzzles(daily: Boolean) = "chessPuzzles/$daily"
     fun questProof(q: com.thesystem.app.data.model.QuestDto): String {
         val title = java.net.URLEncoder.encode(q.title, "UTF-8")
         val mode = q.verification.uppercase()
@@ -219,5 +223,17 @@ fun AppNavHost(profile: RootState.Ready, onSignOut: () -> Unit) {
         composable(Routes.ASSISTANT) { com.thesystem.app.ui.assistant.AssistantScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.ROUTINE) { com.thesystem.app.ui.assistant.RoutineScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.AI_BENCHMARK) { com.thesystem.app.ui.assistant.AiBenchmarkScreen(onBack = { nav.popBackStack() }) }
+        composable(Routes.CHESS_GAME) { back ->
+            com.thesystem.app.ui.chess.ChessGameScreen(
+                modeName = back.arguments?.getString("mode"),
+                onBack = { nav.popBackStack() },
+            )
+        }
+        composable(Routes.CHESS_PUZZLES) { back ->
+            com.thesystem.app.ui.chess.ChessPuzzleScreen(
+                daily = back.arguments?.getString("daily") == "true",
+                onBack = { nav.popBackStack() },
+            )
+        }
     }
 }

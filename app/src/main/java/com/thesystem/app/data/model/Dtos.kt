@@ -408,3 +408,45 @@ data class RoutineDto(
     val source: String = "AI",               // AI | MANUAL
     @SerialName("updated_at") val updatedAt: String? = null,
 )
+
+// ── MENTAL ASCENSION (mig 018) ───────────────────────────────────────────────
+
+@Serializable
+data class ChessProfileDto(
+    @SerialName("user_id") val userId: String,
+    val rating: Int = 400,
+    @SerialName("mental_xp") val mentalXp: Long = 0,
+    val games: Int = 0,
+    val wins: Int = 0,
+    val losses: Int = 0,
+    val draws: Int = 0,
+    @SerialName("puzzles_solved") val puzzlesSolved: Int = 0,
+    @SerialName("puzzles_attempted") val puzzlesAttempted: Int = 0,
+    val stats: JsonObject = JsonObject(emptyMap()),
+    @SerialName("last_session_at") val lastSessionAt: String? = null,
+) {
+    /** F-RANK → SSS-RANK ladder. Deterministic, rating-driven (spec §6). */
+    val mentalRank: String get() = when {
+        rating < 300 -> "F"; rating < 550 -> "E"; rating < 800 -> "D"
+        rating < 1100 -> "C"; rating < 1400 -> "B"; rating < 1700 -> "A"
+        rating < 2000 -> "S"; rating < 2400 -> "SS"; else -> "SSS"
+    }
+
+    /** Mental level from mental XP: L = √(xp/50) + 1 — deterministic, AI-free. */
+    val mentalLevel: Int get() = (kotlin.math.sqrt(mentalXp / 50.0).toInt() + 1).coerceAtLeast(1)
+
+    fun stat(key: String): Int = (stats[key]?.toString()?.trim('"')?.toIntOrNull() ?: 0)
+}
+
+@Serializable
+data class ChessSessionDto(
+    val id: Long,
+    val kind: String,
+    val mode: String,
+    val result: String,
+    val accuracy: Double? = null,
+    val blunders: Int = 0,
+    @SerialName("xp_gained") val xpGained: Int = 0,
+    @SerialName("rating_after") val ratingAfter: Int? = null,
+    @SerialName("created_at") val createdAt: String,
+)

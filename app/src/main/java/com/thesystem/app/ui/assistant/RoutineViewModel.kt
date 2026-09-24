@@ -99,6 +99,7 @@ class RoutineViewModel @Inject constructor(
             setOf(
                 ContextEngine.Need.PROFILE, ContextEngine.Need.QUESTS,
                 ContextEngine.Need.TRAINING, ContextEngine.Need.ROUTINE,
+                ContextEngine.Need.CHESS,
             ),
         )
         val out = orchestrator.draftRoutine(snap)

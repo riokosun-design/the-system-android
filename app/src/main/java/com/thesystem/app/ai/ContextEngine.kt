@@ -27,10 +27,11 @@ class ContextEngine @Inject constructor(
     private val system: SystemRepository,
     private val training: TrainingRepository,
     private val commerce: CommerceRepository,
+    private val chess: com.thesystem.app.data.repo.ChessRepository,
     @ApplicationContext private val app: Context,
 ) {
 
-    enum class Need { PROFILE, QUESTS, PERFORMANCE, TRAINING, MARKET, NOTES, ROUTINE }
+    enum class Need { PROFILE, QUESTS, PERFORMANCE, TRAINING, MARKET, NOTES, ROUTINE, CHESS }
 
     data class Snapshot(
         val profile: UserDto? = null,
@@ -43,6 +44,7 @@ class ContextEngine @Inject constructor(
         val routineCountToday: Int = 0,
         val recoveryRemainingSec: Int = 0,
         val commitments: List<CommitmentBlock> = emptyList(), // §6 fixed life blocks
+        val chess: com.thesystem.app.data.model.ChessProfileDto? = null, // MENTAL ASCENSION facts
     ) {
         val minor: Boolean get() = (profile?.age ?: 99) < 18
     }
@@ -57,6 +59,7 @@ class ContextEngine @Inject constructor(
         val notesD = if (Need.NOTES in needs) async { system.aiNotes() } else null
         val routineD = if (Need.ROUTINE in needs) async { system.routineToday() } else null
         val commitD = if (Need.ROUTINE in needs) async { system.myCommitments() } else null
+        val chessD = if (Need.CHESS in needs) async { chess.profile() } else null
 
         val mine = coursesD?.await().orEmpty()
         val catalog = catalogD?.await().orEmpty()
@@ -81,6 +84,7 @@ class ContextEngine @Inject constructor(
                     )
                 }.getOrNull()?.take(12)
             }.orEmpty(),
+            chess = chessD?.await(),
         )
     }
 
@@ -95,6 +99,12 @@ class ContextEngine @Inject constructor(
         appendLine("quests_today: done=${s.quests.count { it.isDone }}/${s.quests.size} open=[${open.joinToString("|") { "${it.exerciseKind ?: "?"}:${it.progress}/${it.targetValue}${it.targetUnit.take(1)}" }}]")
         appendLine("training: primary=${s.primaryCourseTitle ?: "NONE"} specials=${s.activeSpecials} recovery_wait_s=${s.recoveryRemainingSec}")
         if (s.commitments.isNotEmpty()) appendLine("commitments: ${s.commitments.take(6).joinToString("|") { "${it.title.take(12)}@${it.start}" }}")
+        s.chess?.let { c ->
+            appendLine("mind: mental_rank=${c.mentalRank} lv=${c.mentalLevel} rating=${c.rating} w${c.wins}/d${c.draws}/l${c.losses} puzzles=${c.puzzlesSolved}/${c.puzzlesAttempted}")
+            val weakest = listOf("tactics","focus","memory","calculation","adaptability","decision","composure")
+                .map { it to c.stat(it) }.filter { it.second > 0 }.minByOrNull { it.second }
+            weakest?.let { appendLine("mind_weakest: ${it.first}=${it.second}") }
+        }
         if (s.notes.isNotEmpty()) appendLine("saved_notes: ${s.notes.joinToString(" · ")}")
         if (s.products.isNotEmpty()) appendLine("market: " + s.products.take(8).joinToString("|") { "${it.id.take(6)}:${it.name.take(18)}:₹${it.priceInr.toInt()}" })
     }.take(maxChars)

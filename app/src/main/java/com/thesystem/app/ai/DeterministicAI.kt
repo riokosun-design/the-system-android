@@ -194,6 +194,14 @@ object DeterministicAI {
             )
         }
 
+        // 3.5) MIND anchor — chess training holds a midday/evening slot when the hunter plays
+        if (s.chess != null && !busyAt(20 * 60 + 30)) {
+            items += RoutineItem(
+                "CHESS TRAINING — MIND PROTOCOL", "20:30", "QUEST", 30,
+                notes = "${s.chess.mentalRank}-rank · keep the mind sharp",
+            )
+        }
+
         // 4) meals + wind-down only where commitments left the day open
         if (!busyAt(13 * 60)) items += RoutineItem("LUNCH", "13:00", "MEAL", 25)
         if (!busyAt(21 * 60)) items += RoutineItem("DINNER", "21:00", "MEAL", 25)
@@ -234,6 +242,23 @@ object DeterministicAI {
                     0 -> append("Rank holds while the streak lives.")
                     1 -> append("One miss logged — decay starts tomorrow if you skip again.")
                     else -> append("${prof?.missedDays} misses — XP decaying daily. One verified block stops the bleed.")
+                }
+            }
+            q.contains("chess") || q.contains("mind") || q.contains("puzzle") || q.contains("mental") -> buildString {
+                val c = s.chess
+                if (c == null || (c.games == 0 && c.puzzlesAttempted == 0)) {
+                    append("Mental ladder untouched. Open the CHESS tab — daily challenge takes two minutes and starts the record. ")
+                } else {
+                    append("Mind: ${c.mentalRank}-RANK LV ${c.mentalLevel} · rating ${c.rating} · ${c.wins}W/${c.draws}D/${c.losses}L · ${c.puzzlesSolved} puzzles banked. ")
+                    val weakest = listOf("tactics", "focus", "memory", "calculation", "adaptability", "decision", "composure")
+                        .map { it to c.stat(it) }.filter { it.second > 0 }.minByOrNull { it.second }
+                    weakest?.let { append("Weakest signal: ${it.first.uppercase()} — run puzzles today to move it. ") }
+                }
+                if (q.contains("lose") || q.contains("loss") || q.contains("blunder")) {
+                    append("Losses are data: after each engine game, MENTAL WAR logs your blunders and worst moment — study that square, not the shame. ")
+                }
+                if (q.contains("improve") || q.contains("better") || q.contains("train")) {
+                    append("Route: DAILY CHALLENGE → PUZZLE TRAINING until tier rises → MENTAL WAR twice a week. No shortcuts, no noise. ")
                 }
             }
             q.contains("nutrition") || q.contains("meal") || q.contains("food") || q.contains("diet") ->
