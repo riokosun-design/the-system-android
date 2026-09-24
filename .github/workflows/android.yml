@@ -28,6 +28,8 @@ jobs:
   debug:
     name: Debug APK (daily driver / testing)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # create/update the rolling APK release (artifact-quota-proof delivery)
     steps:
       - uses: actions/checkout@v4
 
@@ -58,11 +60,32 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
           "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
 
+      # PRIMARY DELIVERY — GitHub Release asset. Releases do NOT count against
+      # the Actions artifact storage quota (quota recalc can lag 6-12h).
+      - name: Stage APK under a stable filename
+        run: cp app/build/outputs/apk/debug/app-debug.apk the-system-debug.apk
+
+      - name: Publish APK to rolling release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly-debug
+          name: THE SYSTEM — Debug APK (latest main)
+          body: |
+            Auto-built from `main` on every push. Commit: `${{ github.sha }}`
+            Download `the-system-debug.apk` to your phone and install.
+          files: the-system-debug.apk
+          prerelease: true
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Secondary: artifact (short retention so the quota never piles up again)
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: the-system-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
+          retention-days: 3
 
   release:
     name: Release AAB/APK (Play upload build)
@@ -111,9 +134,10 @@ jobs:
           "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk
 
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: the-system-release
           path: |
             app/build/outputs/bundle/release/app-release.aab
             app/build/outputs/apk/release/app-release.apk
-          retention-days: 30
+          retention-days: 3

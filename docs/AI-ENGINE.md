@@ -23,6 +23,10 @@ UI talks ONLY to ViewModels → orchestrator. No model type leaks upward.
 - **§14 Routine** — new module: draft anchored now+30m from today's quests/course/
   recovery; accept→sync (`daily_routines`), edit (toggle/remove → demotes DRAFT),
   reject, regenerate (armed double-tap — CONFIRMED never silently overwritten).
+  0.10.0: DAILY PROTOCOL commitments (`user_commitments`, mig 017, owner-RLS)
+  are the engine's hard constraints — anchors first in the draft, quests fill
+  free gaps ≥40m, training hunts 17:00+, meals only in commitment-free air.
+  Per-block exact alarms device-local (never forced, reboot-resilient).
 - **§12/§13 Assistant** — HUD terminal, 4 personalities (tone-only), intents over
   a sealed context snapshot; chat in-memory ONLY; §15 memory = explicit
   SAVE MEMORY pins → `ai_notes` (RLS own rows).
