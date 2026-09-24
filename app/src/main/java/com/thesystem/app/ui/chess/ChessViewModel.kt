@@ -102,12 +102,13 @@ class ChessViewModel @Inject constructor(
             repo.logSession(
                 kind = kind, mode = mode, result = result,
                 stats = kotlinx.serialization.json.buildJsonObject {
-                    put("tactics", if (solved) 72 else 38)
-                    put("decision", if (solved) 70 else 40)
+                    fun n(v: Int) = kotlinx.serialization.json.JsonPrimitive(v)
+                    put("tactics", n(if (solved) 72 else 38))
+                    put("decision", n(if (solved) 70 else 40))
                     if (motif in listOf("PIN", "SKEWER", "DISCOVERY", "DEFLECTION")) {
-                        put("calculation", if (solved) 74 else 42)
+                        put("calculation", n(if (solved) 74 else 42))
                     }
-                    if (solved && diff >= 2) put("focus", 70)
+                    if (solved && diff >= 2) put("focus", n(70))
                 },
             )
         }

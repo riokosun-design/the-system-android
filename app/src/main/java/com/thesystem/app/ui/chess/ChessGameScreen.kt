@@ -318,10 +318,12 @@ data class GameAnalysis(
     val scores: Map<String, Int>,   // session readings 0..100
 ) {
     fun toStatJson() = kotlinx.serialization.json.buildJsonObject {
-        scores.forEach { (k, v) -> put(k, v) }
+        scores.forEach { (k, v) -> put(k, kotlinx.serialization.json.JsonPrimitive(v)) }
     }
     fun toAnalysisJson() = kotlinx.serialization.json.buildJsonObject {
-        put("best", best); put("worst", worst); put("accuracy", accuracy); put("blunders", blunders)
+        put("best", best); put("worst", worst)
+        put("accuracy", kotlinx.serialization.json.JsonPrimitive(accuracy))
+        put("blunders", kotlinx.serialization.json.JsonPrimitive(blunders))
     }
 }
 
@@ -365,7 +367,7 @@ private fun analyzeGame(
     val scores = mapOf(
         "tactics" to tactics,
         "focus" to accuracy.toInt().coerceIn(5, 100),
-        "calculation" to ((accuracy + tactics) / 2).coerceIn(5, 100),
+        "calculation" to ((accuracy + tactics) / 2).coerceIn(5.0, 100.0).toInt(),
         "decision" to decision,
         "composure" to timeCtl,
     )
