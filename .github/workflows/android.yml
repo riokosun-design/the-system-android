@@ -38,7 +38,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Cache DISABLED on purpose — the free-tier 500MB storage bucket counts
+      # gradle cache + artifacts together; a 10.7GB cache pile blocked every
+      # artifact upload until purged. Slower builds beat blocked APK delivery.
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: true
 
       - name: Prepare gradle.properties (env secrets override template placeholders)
         run: |
@@ -103,10 +108,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v4
-
       - name: Decode upload keystore (from base64 secret)
         run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > keystore/thesystem-release.keystore
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: true
 
       - name: Prepare gradle.properties
         run: |
