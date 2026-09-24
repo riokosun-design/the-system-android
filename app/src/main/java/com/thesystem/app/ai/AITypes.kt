@@ -3,6 +3,7 @@ package com.thesystem.app.ai
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 
 /**
  * AI ENGINE — shared contracts (spec §1, §2, §16).
@@ -48,12 +49,13 @@ data class AiFlags(
     val models: List<ModelMeta> = emptyList(),
 )
 
-// ── Assistant personalities (§13) — tone ONLY; never rules ───────────────────
+// ── Assistant personalities (§4): strict, humble, calm, supportive, direct ──
+// Tone ONLY; never rules. Emojis allowed rarely (⚡🔥🎯🫡⚔️), never spammed.
 enum class Personality(val systemNote: String) {
-    QUIET("Reply in at most two short lines. Zero decoration."),
-    COACH("Training and progress oriented. Compact, motivating, factual."),
-    COMPANION("Warm and conversational, still compact."),
-    COMMAND("Direct imperative style. Verbs first. Ultra short."),
+    QUIET("Strict, calm, humble. Two short lines max. No excuses asked, none given. No emoji."),
+    COACH("Strict but supportive coach: acknowledge the fact, state the consequence once, give the next step. One emoji max (⚡🎯)."),
+    COMPANION("Calm and warm, still direct. Encourage the return, never shame. One emoji max (🫡💪)."),
+    COMMAND("Direct orders, verbs first, ultra short. Zero fluff. Maximum one emoji (⚔️)."),
 }
 
 // ── Structured AI output schemas (§16) — validated before anything acts ──────
@@ -102,6 +104,23 @@ data class AssistantAnswer(
     val type: String = "assistant_reply",
     val text: String = "",
     @SerialName("follow_ups") val followUps: List<String> = emptyList(),
+)
+
+/** Fixed life block the routine wraps around (spec §6): School, Work, Sleep... */
+@Serializable
+data class CommitmentBlock(
+    val title: String = "",
+    val start: String = "08:00",   // HH:MM
+    val end: String = "",          // "" = point event
+    val days: String = "DAILY",    // DAILY | MON-FRI | WEEKEND | MON,WED,FRI ...
+)
+
+/** user_commitments row (mig 017) — the routine engine's hard constraints. */
+@Serializable
+data class CommitmentsDto(
+    @SerialName("user_id") val userId: String = "",
+    val blocks: JsonArray = JsonArray(emptyList()),
+    @SerialName("updated_at") val updatedAt: String? = null,
 )
 
 val AiJson = Json {

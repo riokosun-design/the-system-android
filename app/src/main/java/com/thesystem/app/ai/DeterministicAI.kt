@@ -136,32 +136,72 @@ object DeterministicAI {
         )
     }
 
-    // ── DAILY ROUTINE (§14) ──────────────────────────────────────────────────
+    // ── DAILY ROUTINE (§6/§14) — built AROUND the hunter's fixed life blocks ──
     fun routineDraft(s: ContextEngine.Snapshot, now: LocalTime = LocalTime.now()): RoutineDraft {
         val items = ArrayList<RoutineItem>()
-        var cursor = now.plusMinutes(30)
-        fun at(t: LocalTime, title: String, cat: String, dur: Int, notes: String = "") {
-            items += RoutineItem(title = title, time = t.format(timeFmt), category = cat, durationMin = dur, notes = notes)
+
+        // 1) FIXED commitments become untouchable anchors first
+        s.commitments.forEach { c ->
+            if (c.title.isBlank() || !c.start.matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$"))) return@forEach
+            val startMin = c.start.substringBefore(":").toInt() * 60 + c.start.substringAfter(":").toInt()
+            val endMin = if (c.end.matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$"))) {
+                c.end.substringBefore(":").toInt() * 60 + c.end.substringAfter(":").toInt()
+            } else startMin + 60
+            items += RoutineItem(
+                title = c.title.uppercase(Locale.US).take(36),
+                time = c.start, category = "COMMIT",
+                durationMin = (endMin - startMin).coerceIn(5, 240),
+                notes = if (c.days == "DAILY") "" else c.days,
+            )
         }
-        s.profile?.let { if (it.streakDays >= 2) at(LocalTime.of(6, 30), "WAKE + HYDRATE", "COMMIT", 10, "streak ×${it.streakDays} — protect it") }
-        // quest blocks in protocol order, 5-minute recovery between (§rest)
+
+        fun busyAt(min: Int): Boolean = items.any { it.category == "COMMIT" } &&
+            items.filter { it.category == "COMMIT" }.any {
+                val sm = it.time.substringBefore(":").toInt() * 60 + it.time.substringAfter(":").toInt()
+                min in sm until (sm + it.durationMin)
+            }
+
+        // 2) slots free of commitments get protocol work: first open gap ≥40m
         val open = s.quests.filter { !it.isDone && !it.isDead }.sortedBy { it.seq }
+        var cursorMin = ((now.hour * 60 + now.minute) / 30 + 1) * 30
         open.forEach { q ->
             val dur = (q.estDurationSec / 60).coerceIn(4, 40)
-            if (cursor.hour >= 23) return@forEach
-            at(cursor, "QUEST ${q.blockLabel} — ${q.title}", "QUEST", dur, "${q.targetValue} ${q.targetUnit.lowercase(Locale.US)}")
-            cursor = cursor.plusMinutes(dur.toLong() + 5)
+            var placed = false
+            var guard = 0
+            while (!placed && cursorMin + dur <= 23 * 60 && guard++ < 40) {
+                if (!busyAt(cursorMin) && !busyAt(cursorMin + dur - 5)) placed = true else cursorMin += 15
+            }
+            if (placed) {
+                items += RoutineItem(
+                    title = "QUEST — ${q.title.take(32)}",
+                    time = "%02d:%02d".format(cursorMin / 60, cursorMin % 60),
+                    category = "QUEST", durationMin = dur,
+                    notes = "${q.targetValue} ${q.targetUnit.lowercase(Locale.US)}",
+                )
+                cursorMin += dur + 15
+            }
         }
+
+        // 3) training anchor: prefer 17:00-19:00 window free of commitments
         if (s.primaryCourseTitle != null) {
-            val t = if (cursor.hour < 18) LocalTime.of(17, 30) else cursor
-            at(t, "TRAINING — ${s.primaryCourseTitle}", "TRAINING", 40, "primary muscle track")
+            var t = 17 * 60
+            var guard = 0
+            while (busyAt(t) && guard++ < 20) t += 30
+            if (t <= 21 * 60) items += RoutineItem(
+                title = "SYSTEM TRAINING — ${s.primaryCourseTitle.take(24)}",
+                time = "%02d:%02d".format(t / 60, t % 60),
+                category = "TRAINING", durationMin = 40, notes = "primary track",
+            )
         }
-        at(LocalTime.of(13, 30), "LUNCH", "MEAL", 25)
-        at(LocalTime.of(21, 0), "DINNER + LOG REVIEW", "MEAL", 25)
-        at(LocalTime.of(22, 45), "SLEEP PREP — screens off", "SLEEP", 15, "recovery is training")
+
+        // 4) meals + wind-down only where commitments left the day open
+        if (!busyAt(13 * 60)) items += RoutineItem("LUNCH", "13:00", "MEAL", 25)
+        if (!busyAt(21 * 60)) items += RoutineItem("DINNER", "21:00", "MEAL", 25)
+        if (!busyAt(22 * 60 + 45)) items += RoutineItem("WIND DOWN", "22:45", "SLEEP", 15, "recovery is training")
+
         return RoutineDraft(
             items = AIValidator.routine(items),
-            reason = "${open.size} quest block(s) · course=${s.primaryCourseTitle != null} · anchored now+30m",
+            reason = "${open.size} quest block(s) · ${s.commitments.size} commitment(s) · course=${s.primaryCourseTitle != null}",
         )
     }
 

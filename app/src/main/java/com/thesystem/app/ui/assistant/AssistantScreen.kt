@@ -153,6 +153,35 @@ fun AssistantScreen(
                 }
             }
 
+            // ── suggestion tracks — visible until the first real exchange ────
+            if (s.messages.size <= 1 && !s.busy) {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollStateSafe()).padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf(
+                        "TRAINING" to "Build my training focus for today",
+                        "ROUTINE" to "Order my routine for today",
+                        "NUTRITION" to "Plan my meals for today",
+                        "PROGRESS" to "How is my progress looking?",
+                        "MINDSET" to "I need a push today",
+                    ).forEach { (label, query) ->
+                        Box(
+                            Modifier
+                                .border(1.dp, LineSoft, RoundedCornerShape(6.dp))
+                                .background(PanelGray, RoundedCornerShape(6.dp))
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                ) { haptics.select(); vm.send(query) }
+                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                        ) {
+                            Text(label, color = LabelGray, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, fontFamily = SystemMono)
+                        }
+                    }
+                }
+            }
+
             // ── saved memory strip (§15 — only what the hunter pinned) ───────
             if (s.notes.isNotEmpty()) {
                 Row(

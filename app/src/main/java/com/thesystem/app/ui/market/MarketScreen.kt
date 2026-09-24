@@ -168,22 +168,6 @@ fun MarketScreen(nav: NavHostController, vm: MarketViewModel = hiltViewModel()) 
                 NutritionPlannerCard(s, vm)
             }
 
-            // ── courses for sale / enrollment ────────────────────────────────
-            item {
-                Column {
-                    SectionTitle("TRAINING PROGRAMS", SkyBlue)
-                    Spacer(Modifier.height(4.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(Grid.S12)) {
-                        items(s.courses, key = { it.id }) { c ->
-                            MarketCourseRow(c, s.enrollmentOf(c)) {
-                                haptics.select()
-                                nav.navigate(Routes.TRAINING)
-                            }
-                        }
-                    }
-                }
-            }
-
             // ── Black Room ───────────────────────────────────────────────────
             s.blackRoom?.let { br ->
                 item {

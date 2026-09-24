@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thesystem.app.ai.AIOrchestrator
 import com.thesystem.app.ai.AiJson
+import com.thesystem.app.ai.CommitmentBlock
 import com.thesystem.app.ai.ContextEngine
 import com.thesystem.app.ai.RoutineItem
 import com.thesystem.app.data.repo.SystemRepository
@@ -37,10 +38,12 @@ class RoutineViewModel @Inject constructor(
         val brain: String = "",
         val busy: Boolean = false,
         val regenArmed: Boolean = false,
+        val commitments: List<CommitmentBlock> = emptyList(),
         val notice: String? = null,
         val error: String? = null,
     ) {
         val doneCount: Int get() = items.count { it.status == "DONE" }
+        val needsSetup: Boolean get() = commitments.isEmpty()
     }
 
     private val _state = MutableStateFlow(RoutineState())
@@ -54,9 +57,15 @@ class RoutineViewModel @Inject constructor(
         val items = dto?.let { d ->
             runCatching { AiJson.decodeFromJsonElement(ListSerializer(RoutineItem.serializer()), d.items) }.getOrNull()
         }.orEmpty()
+        val commitments = system.myCommitments()?.let { c ->
+            runCatching {
+                AiJson.decodeFromJsonElement(ListSerializer(CommitmentBlock.serializer()), c.blocks)
+            }.getOrNull()
+        }.orEmpty().filter { it.title.isNotBlank() }
         _state.value = _state.value.copy(
             loading = false,
             items = items,
+            commitments = commitments,
             status = when (dto?.status) {
                 "CONFIRMED" -> RStatus.CONFIRMED
                 "DRAFT" -> if (items.isEmpty()) RStatus.NONE else RStatus.DRAFT
@@ -64,6 +73,18 @@ class RoutineViewModel @Inject constructor(
             },
             regenArmed = false,
         )
+    }
+
+    /** Persist fixed life blocks (school/work/training/sleep) — the routine engine's hard constraints. */
+    fun saveCommitments(blocks: List<CommitmentBlock>) = viewModelScope.launch {
+        _state.value = _state.value.copy(busy = true, error = null)
+        system.saveCommitments(JsonArray(blocks.map { AiJson.encodeToJsonElement(CommitmentBlock.serializer(), it) }))
+            .onSuccess {
+                _state.value = _state.value.copy(busy = false, commitments = blocks, notice = "PROTOCOL ANCHORS SAVED")
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(busy = false, error = e.message ?: "sync failed")
+            }
     }
 
     fun generate() = viewModelScope.launch {

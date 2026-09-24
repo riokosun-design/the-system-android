@@ -42,6 +42,7 @@ class ContextEngine @Inject constructor(
         val notes: List<String> = emptyList(),          // user-saved memory, capped 5
         val routineCountToday: Int = 0,
         val recoveryRemainingSec: Int = 0,
+        val commitments: List<CommitmentBlock> = emptyList(), // §6 fixed life blocks
     ) {
         val minor: Boolean get() = (profile?.age ?: 99) < 18
     }
@@ -55,6 +56,7 @@ class ContextEngine @Inject constructor(
         val productsD = if (Need.MARKET in needs) async { commerce.products() } else null
         val notesD = if (Need.NOTES in needs) async { system.aiNotes() } else null
         val routineD = if (Need.ROUTINE in needs) async { system.routineToday() } else null
+        val commitD = if (Need.ROUTINE in needs) async { system.myCommitments() } else null
 
         val mine = coursesD?.await().orEmpty()
         val catalog = catalogD?.await().orEmpty()
@@ -71,6 +73,14 @@ class ContextEngine @Inject constructor(
             notes = notesD?.await()?.map { it.note }?.take(5).orEmpty(),
             routineCountToday = routineD?.await()?.items?.size ?: 0,
             recoveryRemainingSec = RecoveryTracker.remainingSec(app),
+            commitments = commitD?.await()?.let { dto ->
+                runCatching {
+                    AiJson.decodeFromJsonElement(
+                        kotlinx.serialization.builtins.ListSerializer(CommitmentBlock.serializer()),
+                        dto.blocks,
+                    )
+                }.getOrNull()?.take(12)
+            }.orEmpty(),
         )
     }
 
@@ -84,6 +94,7 @@ class ContextEngine @Inject constructor(
         val open = s.quests.filter { !it.isDone && !it.isDead }
         appendLine("quests_today: done=${s.quests.count { it.isDone }}/${s.quests.size} open=[${open.joinToString("|") { "${it.exerciseKind ?: "?"}:${it.progress}/${it.targetValue}${it.targetUnit.take(1)}" }}]")
         appendLine("training: primary=${s.primaryCourseTitle ?: "NONE"} specials=${s.activeSpecials} recovery_wait_s=${s.recoveryRemainingSec}")
+        if (s.commitments.isNotEmpty()) appendLine("commitments: ${s.commitments.take(6).joinToString("|") { "${it.title.take(12)}@${it.start}" }}")
         if (s.notes.isNotEmpty()) appendLine("saved_notes: ${s.notes.joinToString(" · ")}")
         if (s.products.isNotEmpty()) appendLine("market: " + s.products.take(8).joinToString("|") { "${it.id.take(6)}:${it.name.take(18)}:₹${it.priceInr.toInt()}" })
     }.take(maxChars)

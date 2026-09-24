@@ -212,6 +212,15 @@ private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
     val harvestPrefs = remember(context) { context.getSharedPreferences("harvest_prefs", Context.MODE_PRIVATE) }
     var harvestDeclined by remember { mutableStateOf(harvestPrefs.getBoolean("declined", false)) }
 
+    // no infinite loaders: if the lens takes >8s, admit it and offer RETRY
+    var camRetry by remember { mutableIntStateOf(0) }
+    var camReady by remember(camRetry) { mutableStateOf(false) }
+    var camSlow by remember(camRetry) { mutableStateOf(false) }
+    LaunchedEffect(camRetry) {
+        delay(8000)
+        if (!camReady) camSlow = true
+    }
+
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Box(
             Modifier
@@ -222,8 +231,22 @@ private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
         ) {
             // PHASE 0: push-ups count inside the enforced envelope (gate + engine
             // v4, CV-BATTLE-ARCHITECTURE); squats keep the proven angle machine.
-            if (s.exercise == PoseRepCounter.RepExercise.SQUAT) CameraBox(s, vm, flash)
-            else PushupV4Box(s, vm, flash)
+            key(camRetry) {
+                if (s.exercise == PoseRepCounter.RepExercise.SQUAT) CameraBox(s, vm, flash, onReady = { camReady = true })
+                else PushupV4Box(s, vm, flash, onReady = { camReady = true })
+            }
+            if (camSlow && !camReady) {
+                Box(
+                    Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.82f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("CAMERA INITIALIZATION DELAYED", style = MonoLabel, color = PaperWhite)
+                        Spacer(Modifier.height(10.dp))
+                        GhostButton("RETRY", { camRetry++ })
+                    }
+                }
+            }
         }
 
         if (s.exercise == PoseRepCounter.RepExercise.PUSHUP && s.harvestConsent == false && !harvestDeclined) {
@@ -255,7 +278,7 @@ private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
 
 /** ML Kit stage — lives inside the proof Box so overlays keep BoxScope. */
 @Composable
-private fun BoxScope.CameraBox(s: QuestProofState, vm: QuestProofViewModel, flash: Float) {
+private fun BoxScope.CameraBox(s: QuestProofState, vm: QuestProofViewModel, flash: Float, onReady: () -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var preview by remember { mutableStateOf<PreviewView?>(null) }
@@ -302,17 +325,18 @@ private fun BoxScope.CameraBox(s: QuestProofState, vm: QuestProofViewModel, flas
         val selector = if (s.exercise == PoseRepCounter.RepExercise.SQUAT) CameraSelector.DEFAULT_BACK_CAMERA
         else CameraSelector.DEFAULT_FRONT_CAMERA
         provider.bindToLifecycle(lifecycleOwner, selector, camPreview, analysis)
+        onReady()
     }
 
     AndroidView(factory = { ctx -> PreviewView(ctx).also { preview = it } }, modifier = Modifier.matchParentSize())
     PoseMeshOverlay(points = mesh, repFlash = flash * depth, modifier = Modifier.matchParentSize())
 
-    // live rep readout
+    // live rep readout — giant charge counter against the target
     Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
         Text("REP", style = MonoLabel, color = SkyBlue)
         Text(
-            "${s.count}", color = PaperWhite, fontFamily = SystemMono,
-            fontWeight = FontWeight.Bold, fontSize = 44.sp,
+            "${s.count.toString().padStart(2, '0')} / ${s.target}", color = PaperWhite, fontFamily = SystemMono,
+            fontWeight = FontWeight.Bold, fontSize = 40.sp,
         )
     }
 
@@ -349,7 +373,7 @@ private fun BoxScope.CameraBox(s: QuestProofState, vm: QuestProofViewModel, flas
  * Front camera so the coaching HUD stays visible; IMU vetoes any bump.
  */
 @Composable
-private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, flash: Float) {
+private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, flash: Float, onReady: () -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var preview by remember { mutableStateOf<PreviewView?>(null) }
@@ -450,6 +474,7 @@ private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, fl
             }
         // side view works with either lens; front keeps the coaching HUD visible
         provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, camPreview, analysis)
+        onReady()
     }
 
     AndroidView(factory = { ctx -> PreviewView(ctx).also { preview = it } }, modifier = Modifier.matchParentSize())
@@ -463,8 +488,8 @@ private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, fl
     Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
         Text("REP", style = MonoLabel, color = SkyBlue)
         Text(
-            "${s.count}", color = PaperWhite, fontFamily = SystemMono,
-            fontWeight = FontWeight.Bold, fontSize = 44.sp,
+            "${s.count.toString().padStart(2, '0')} / ${s.target}", color = PaperWhite, fontFamily = SystemMono,
+            fontWeight = FontWeight.Bold, fontSize = 40.sp,
         )
     }
 

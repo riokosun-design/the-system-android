@@ -25,7 +25,7 @@ data class AssistantState(
     val messages: List<AssistantMsg> = listOf(
         AssistantMsg(
             fromUser = false,
-            text = "SYSTEM ASSISTANT online. Roster: \"progress\", \"quests\", \"rank\", \"nutrition\", \"routine\" — or ask in plain words.",
+            text = "What are we working on? Pick a track below — or just ask.",
             brain = "RULES",
         ),
     ),

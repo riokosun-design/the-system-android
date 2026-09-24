@@ -104,6 +104,29 @@ fun DashboardScreen(
         }
     }
 
+    // ── Daily SYSTEM MESSAGE (§5/§9): one cinematic notice per day — login or missed ──
+    val dayPrefs = remember { context.getSharedPreferences("system_notices", android.content.Context.MODE_PRIVATE) }
+    var dayNotice by remember { mutableStateOf<com.thesystem.app.core.ui.SystemNotice?>(null) }
+    LaunchedEffect(s.loading, s.profile?.id) {
+        if (s.loading || s.profile == null || dayNotice != null) return@LaunchedEffect
+        val today = java.time.LocalDate.now().toString()
+        if (dayPrefs.getString("last_login_notice", null) == today) return@LaunchedEffect
+        dayPrefs.edit().putString("last_login_notice", today).apply()
+        val p = s.profile ?: return@LaunchedEffect
+        dayNotice = if (p.missedDays > 0) {
+            com.thesystem.app.core.ui.SystemNotice(
+                title = "SYSTEM ALERT",
+                body = com.thesystem.app.core.ui.NoticeTemplates.missedWorkout(),
+            )
+        } else {
+            com.thesystem.app.core.ui.SystemNotice(
+                title = "SYSTEM MESSAGE",
+                body = "TODAY'S OBJECTIVE\n\n\"${com.thesystem.app.core.ui.NoticeTemplates.dailyLogin()}\"\n\n+ DAILY QUEST READY",
+            )
+        }
+        haptics.select()
+    }
+
     SystemBackground(wallpaperUrl = s.wallpaper, wallpaperAlpha = s.wallpaperAlpha) {
         Box(Modifier.fillMaxSize()) {
             if (s.loading && s.profile == null) {
@@ -146,9 +169,9 @@ fun DashboardScreen(
                             }
                         }
 
-                        // 3.5 ── SYSTEM AI — assistant + routine doorways (HUD-native, §26)
+                        // 3.5 ── SYSTEM AI — assistant + routine doorways (§2 hierarchy)
                         item {
-                            Box(Modifier.enterAnim(4)) { SystemAiModule(nav) }
+                            Box(Modifier.enterAnim(4)) { SystemAiModule(nav, haptics) }
                         }
 
                         // 4 ── TRAINING — ONE primary course commands this surface;
@@ -257,6 +280,7 @@ fun DashboardScreen(
 
             XpBurst(burstSignal, color = SkyBlue)
             LevelUpShockwave(levelUpSignal, color = SkyBlue)
+            com.thesystem.app.core.ui.SystemNoticeOverlay(dayNotice) { dayNotice = null }
             levelUpSignal.takeIf { it > 0 }?.let { LevelUpBanner(levelUpSignal, level = previousLevel) }
             snack.let { androidx.compose.material3.SnackbarHost(it, Modifier.align(Alignment.BottomCenter)) }
 
@@ -275,6 +299,7 @@ fun DashboardScreen(
                         nav.navigate(Routes.TRAINING)
                     },
                     onDismiss = { questSheetOpen = false },
+                    vm = vm,
                 )
             }
 
@@ -312,24 +337,25 @@ private fun SystemStatusHeader(s: DashboardState) {
 // ── 2.5 SYSTEM AI MODULE — doorways to ASSISTANT (§12) and ROUTINE (§14) ────
 
 @Composable
-private fun SystemAiModule(nav: NavHostController) {
+private fun SystemAiModule(nav: NavHostController, haptics: com.thesystem.app.core.ui.SystemHaptics) {
     GlowCard(modifier = Modifier.fillMaxWidth()) {
         Text("SYSTEM AI", style = MonoLabel, color = LabelGray)
         Spacer(Modifier.height(Grid.S8))
         Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
             Column(
                 Modifier
-                    .weight(1f)
+                    .weight(1.3f)
                     .clip(RoundedCornerShape(10.dp))
                     .background(TrackGray)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                    ) { nav.navigate(com.thesystem.app.Routes.ASSISTANT) }
-                    .padding(12.dp),
+                    ) { haptics.select(); nav.navigate(com.thesystem.app.Routes.ASSISTANT) }
+                    .padding(14.dp),
             ) {
-                Text("SYSTEM ASSISTANT", color = PaperWhite, style = MonoData)
-                Text("ask · explain · plan", color = FaintGray, style = MonoLabel)
+                Text("AI ASSISTANT", color = PaperWhite, style = MonoData, fontSize = 14.sp)
+                Spacer(Modifier.height(2.dp))
+                Text("What are we working on?", color = FaintGray, style = MonoLabel)
             }
             Column(
                 Modifier
@@ -339,10 +365,11 @@ private fun SystemAiModule(nav: NavHostController) {
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                    ) { nav.navigate(com.thesystem.app.Routes.ROUTINE) }
-                    .padding(12.dp),
+                    ) { haptics.select(); nav.navigate(com.thesystem.app.Routes.ROUTINE) }
+                    .padding(14.dp),
             ) {
-                Text("SYSTEM ROUTINE", color = PaperWhite, style = MonoData)
+                Text("SYSTEM ROUTINE", color = PaperWhite, style = MonoData, fontSize = 14.sp)
+                Spacer(Modifier.height(2.dp))
                 Text("today, ordered", color = FaintGray, style = MonoLabel)
             }
         }
@@ -498,13 +525,6 @@ private fun TodayQuestModule(
             open?.title ?: if (s.allCleared) "ALL BLOCKS CLEARED" else "PROTOCOL COMPILING",
             color = PaperWhite, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
         )
-        open?.let { q ->
-            Spacer(Modifier.height(2.dp))
-            Text(
-                "BLOCK ${q.seq.toString().padStart(2, '0')} · ${q.difficulty} · ${q.verification}",
-                style = MonoLabel, color = LabelGray,
-            )
-        }
         Spacer(Modifier.height(10.dp))
         // progress charge bar — the module breathes without animating everything
         Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(TrackGray)) {
@@ -543,48 +563,6 @@ private fun TodayQuestModule(
             }
         }
 
-        // ── AI ENGINE (spec §8): propose a bonus block — server law on adopt ──
-        Spacer(Modifier.height(Grid.S8))
-        GhostButton(
-            if (s.aiQuestBusy) "AI THINKING…" else "AI PROPOSE — BONUS BLOCK",
-            { haptics.tick(); vm.aiProposeQuest() },
-            Modifier.fillMaxWidth(),
-            enabled = !s.aiQuestBusy,
-        )
-        s.aiQuestNote?.let {
-            Spacer(Modifier.height(6.dp))
-            Text(it, style = MonoLabel, color = LabelGray)
-        }
-        s.aiQuest?.let { p ->
-            Spacer(Modifier.height(8.dp))
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, SkyBlue.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("PROPOSED", color = SkyBlue, style = MonoLabel)
-                    Spacer(Modifier.weight(1f))
-                    Text("BY ${s.aiQuestBrain}", color = FaintGray, style = MonoLabel)
-                }
-                Spacer(Modifier.height(4.dp))
-                Text(p.title, color = PaperWhite, style = MaterialTheme.typography.titleSmall, maxLines = 1)
-                Text(
-                    "${p.exercise} × ${p.target} ${p.targetUnit} · ${p.difficulty.uppercase()} · ~${p.durationMinutes}m",
-                    style = MonoData, color = LabelGray,
-                )
-                if (p.reason.isNotBlank()) {
-                    Spacer(Modifier.height(2.dp))
-                    Text(p.reason, style = MonoLabel, color = FaintGray, maxLines = 2)
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
-                    GhostButton("DISMISS", { haptics.tick(); vm.dismissAiQuest() }, Modifier.weight(1f), enabled = !s.aiQuestBusy)
-                    NeonButton("ADOPT", { haptics.slam(); vm.acceptAiQuest() }, Modifier.weight(1.2f), color = SkyBlue, enabled = !s.aiQuestBusy)
-                }
-            }
-        }
     }
 }
 
@@ -601,6 +579,7 @@ private fun QuestDetailSheet(
     onLog: (QuestDto) -> Unit,
     onOpenTraining: () -> Unit,
     onDismiss: () -> Unit,
+    vm: DashboardViewModel,
 ) {
     SystemBottomSheet(title = "QUEST INFO", onDismiss = onDismiss, accent = SkyBlue, maxHeight = 620.dp) {
         val nowMs = remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -648,6 +627,48 @@ private fun QuestDetailSheet(
                     "Career sessions live in the catalog — they never block today's protocol.",
                     style = MaterialTheme.typography.bodySmall, color = FaintGray,
                 )
+                // ── BONUS BLOCK (§2): AI propose lives HERE, never in the quest card ──
+                Spacer(Modifier.height(10.dp))
+                GhostButton(
+                    if (s.aiQuestBusy) "AI THINKING…" else "＋ BONUS BLOCK",
+                    { vm.aiProposeQuest() },
+                    Modifier.fillMaxWidth(),
+                    enabled = !s.aiQuestBusy,
+                )
+                s.aiQuestNote?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(it, style = MonoLabel, color = LabelGray)
+                }
+                s.aiQuest?.let { p ->
+                    Spacer(Modifier.height(8.dp))
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, SkyBlue.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("PROPOSED", color = SkyBlue, style = MonoLabel)
+                            Spacer(Modifier.weight(1f))
+                            Text("BY ${s.aiQuestBrain}", color = FaintGray, style = MonoLabel)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(p.title, color = PaperWhite, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                        Text(
+                            "${p.exercise} × ${p.target} ${p.targetUnit} · ~${p.durationMinutes}m",
+                            style = MonoData, color = LabelGray,
+                        )
+                        if (p.reason.isNotBlank()) {
+                            Spacer(Modifier.height(2.dp))
+                            Text(p.reason, style = MonoLabel, color = FaintGray, maxLines = 2)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
+                            GhostButton("DISMISS", { vm.dismissAiQuest() }, Modifier.weight(1f), enabled = !s.aiQuestBusy)
+                            NeonButton("ADOPT", { vm.acceptAiQuest() }, Modifier.weight(1.2f), color = SkyBlue, enabled = !s.aiQuestBusy)
+                        }
+                    }
+                }
             }
         }
     }

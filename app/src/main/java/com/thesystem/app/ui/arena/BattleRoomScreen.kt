@@ -96,10 +96,21 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
     LaunchedEffect(s.myCount) { if (s.myCount > 0) haptics.tick() }
 
     // Payday or pain
+    var lossNotice by remember { mutableStateOf<com.thesystem.app.core.ui.SystemNotice?>(null) }
     LaunchedEffect(s.finished) {
         if (s.finished) {
-            if (s.iWon == true) { haptics.slam(); fireWinBurst() }
-            else { haptics.error(); fireLoseWave() }
+            if (s.iWon == true) {
+                haptics.slam(); fireWinBurst()
+            } else {
+                haptics.error(); fireLoseWave()
+                if (s.battle?.winner != null) {
+                    lossNotice = com.thesystem.app.core.ui.SystemNotice(
+                        title = "SYSTEM",
+                        body = com.thesystem.app.core.ui.NoticeTemplates.arenaLoss(),
+                        cta = "STAND BACK UP",
+                    )
+                }
+            }
         }
     }
 
@@ -399,6 +410,7 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
         // ── celebration overlays (State-driven, zero composition cost when idle) ═
         XpBurst(winBurst, color = PaperWhite)
         LevelUpShockwave(loseWave, color = PaperWhite)
+        com.thesystem.app.core.ui.SystemNoticeOverlay(lossNotice) { lossNotice = null }
         MomentumFlash(momentum, momentumIsMine)
     }
 }

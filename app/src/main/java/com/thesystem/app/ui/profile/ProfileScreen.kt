@@ -57,17 +57,13 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
                 item { GhostButton("AI BENCHMARK", { nav.navigate(Routes.AI_BENCHMARK) }, Modifier.fillMaxWidth()) }
             }
             item { Box(Modifier.enterAnim(1)) { BodyStatsCard(me, vm) } }
-            item { Box(Modifier.enterAnim(2)) { FormsCard(s, me) } }
-            item { Box(Modifier.enterAnim(3)) { WalletCard(s) } }
-            item { Box(Modifier.enterAnim(4)) { BountyBoardCard(s.offerwallUrl) } }
-            item { Box(Modifier.enterAnim(5)) { ReferralCard(me, s) } }
-            item { SectionTitle("Shadow Merch — level-gated drops", HunterGold) }
-            if (s.merch.isEmpty()) item { EmptyState("The merch forge is cold. Admins can add drops from the panel.") }
-            items(s.merch, key = { it.id }) { p -> ProductCard(p, me, gated = true) }
-            item { SectionTitle("Supplement Arsenal — affiliate", VenomGreen) }
-            items(s.supplements, key = { it.id }) { p -> ProductCard(p, me, gated = false) }
+            item { Box(Modifier.enterAnim(2)) { PerformanceCard(s.bests) } }
+            item { SectionTitle("Achievement Wall") }
+            item { Box(Modifier.enterAnim(3)) { FormsCard(s, me) } }
+            item { SectionTitle("Account") }
+            item { Box(Modifier.enterAnim(4)) { AccountCard(me, s) } }
             item {
-                Box(Modifier.enterAnim(6)) {
+                Box(Modifier.enterAnim(5)) {
                     DangerZoneCard(deleting = s.deleting, onDelete = { vm.deleteAccount { onSignOut() } })
                 }
             }
@@ -303,5 +299,61 @@ private fun DangerZoneCard(deleting: Boolean, onDelete: () -> Unit) {
                 TextButton(onClick = { confirm = false }) { Text("STAY", color = TextMuted) }
             },
         )
+    }
+}
+
+/** PERFORMANCE — camera-verified records only. Honest empty state, zero padding. */
+@Composable
+private fun PerformanceCard(bests: com.thesystem.app.data.model.VerifiedBestsDto?) {
+    GlowCard {
+        Text("PERFORMANCE", style = MaterialTheme.typography.labelLarge, color = PaperWhite)
+        if (bests == null || (bests.pushReps == 0 && bests.squatReps == 0 && bests.runMeters == 0 && bests.sessions == 0)) {
+            Spacer(Modifier.height(8.dp))
+            Text("No verified records yet. Complete camera quests to write history.",
+                style = MaterialTheme.typography.bodyMedium, color = LabelGray)
+        } else {
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatTile("Push-ups", "${bests.pushReps}", modifier = Modifier.weight(1f))
+                StatTile("Squats", "${bests.squatReps}", modifier = Modifier.weight(1f))
+                StatTile("Run", "${bests.runMeters}m", modifier = Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatTile("Sessions", "${bests.sessions}", modifier = Modifier.weight(1f))
+                StatTile("Wars Won", "${bests.battleWins}", modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** ACCOUNT — utilities: bounty board, referral summon, compact rows. */
+@Composable
+private fun AccountCard(me: UserDto, s: ProfileState) {
+    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    GlowCard {
+        AccountRow("BOUNTY BOARD", "partner offers → VC") { s.offerwallUrl?.let(uriHandler::openUri) }
+        AccountRow("SUMMON HUNTERS", "code ${me.referralCode} · ${s.myReferrals} summoned") {
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, "Enter THE SYSTEM with my code ${me.referralCode} — level up or decay. @${me.username}")
+            }
+            context.startActivity(Intent.createChooser(send, "Summon hunters"))
+        }
+    }
+}
+
+@Composable
+private fun AccountRow(title: String, sub: String, onTap: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.labelLarge, color = PaperWhite)
+            Text(sub, style = MaterialTheme.typography.labelSmall, color = LabelGray)
+        }
+        GhostButton("OPEN", onTap)
     }
 }

@@ -294,6 +294,23 @@ class SystemRepository @Inject constructor(
         Unit
     }
 
+    // ═══ SYSTEM ROUTINE (017): fixed life commitments the routine wraps around ═══
+
+    suspend fun myCommitments(): com.thesystem.app.ai.CommitmentsDto? = uid?.let { me ->
+        runCatching {
+            supabase.from("user_commitments").select { filter { eq("user_id", me) } }
+                .decodeList<com.thesystem.app.ai.CommitmentsDto>().firstOrNull()
+        }.getOrNull()
+    }
+
+    suspend fun saveCommitments(blocks: JsonArray): Result<Unit> = runCatching {
+        val me = uid ?: error("Not signed in")
+        supabase.from("user_commitments").upsert(buildJsonObject {
+            put("user_id", me); put("blocks", blocks)
+        })
+        Unit
+    }
+
     /**
      * AI proposes; THE SERVER decides (mig 016): whitelist, clamps, one/day,
      * no dupes — then the row lands in daily_quests and the EXISTING verified

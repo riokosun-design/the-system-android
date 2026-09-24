@@ -22,6 +22,7 @@ data class ProfileState(
     val hall: List<ReferralHallDto> = emptyList(),
     val myReferrals: Long = 0,
     val offerwallUrl: String? = null,
+    val bests: com.thesystem.app.data.model.VerifiedBestsDto? = null,
     val notice: String? = null,
     val error: String? = null,
     val deleting: Boolean = false,
@@ -60,11 +61,13 @@ class ProfileViewModel @Inject constructor(
         val hall = async { social.referralHallOfFame() }
         val refs = async { social.myReferralCount() }
         val offerwallBase = async { system.config("offerwall_url") }
+        val bestsD = async { system.verifiedBests() }
         _state.value = _state.value.copy(
             loading = false,
             profile = p.await(), forms = forms.await(), ledger = ledger.await(),
             products = prods.await(), hall = hall.await(), myReferrals = refs.await(),
             offerwallUrl = offerwallBase.await()?.let { commerce.offerwallUrl(it) },
+            bests = bestsD.await(),
         )
     }
 

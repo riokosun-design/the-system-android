@@ -115,15 +115,15 @@ private val SystemTypography = Typography(
     bodyMedium = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 19.sp, color = LabelGray),
     bodySmall = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Normal, fontSize = 11.sp, lineHeight = 16.sp, color = LabelGray),
     // section / control labels — bold, tracked, uppercase by call sites
-    labelLarge = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.6.sp, lineHeight = 15.sp),
-    labelSmall = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 1.2.sp, lineHeight = 14.sp, color = LabelGray),
+    labelLarge = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.7.sp, lineHeight = 15.sp),
+    labelSmall = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.5.sp, lineHeight = 14.sp, color = LabelGray),
 )
 
 // ── MONO INSTRUMENT STYLES (XP / VC / scores / coordinates) ─────────────────
 val MonoDisplay = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 30.sp, letterSpacing = 0.sp, color = PaperWhite)
 val MonoTitle   = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = 0.sp, color = PaperWhite)
 val MonoData    = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 0.sp, color = PaperWhite)
-val MonoLabel   = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Normal, fontSize = 10.sp, letterSpacing = 1.4.sp, color = LabelGray)
+val MonoLabel   = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Normal, fontSize = 10.sp, letterSpacing = 0.5.sp, color = LabelGray)
 
 @Composable
 fun SystemTheme(content: @Composable () -> Unit) {
