@@ -1,0 +1,16 @@
+# QUOTA PROBE — manual 1KB artifact upload test. Success = storage counter
+# refreshed and real builds will deliver artifacts again. Cheap: ~10 seconds.
+name: Quota Probe
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    name: 1KB artifact upload probe
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "quota probe $(date -u)" > probe.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quota-probe
+          path: probe.txt
+          retention-days: 1
