@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.sp
 import com.thesystem.app.core.theme.CrimsonRed
 import com.thesystem.app.core.theme.ElectricBlue
 import com.thesystem.app.core.theme.HunterGold
+import com.thesystem.app.core.theme.LabelGray
 import com.thesystem.app.core.theme.NeonPurple
 import com.thesystem.app.core.theme.PaperWhite
 import com.thesystem.app.core.theme.SurfaceDark
@@ -420,6 +421,13 @@ fun WheelRow(
 }
 
 // ── 8. ARCHETYPE CARD — target class with living neon border ────────────────
+
+/** Target archetype contract — relocated from the retired splash package. */
+enum class Archetype(val title: String, val tagline: String, val stat: String, val goal: String, val accent: Color) {
+    SHADOW_MONARCH("Shadow Monarch", "Strength path — raw power ceiling", "STR +40% · TECH +20%", "STRENGTH", NeonPurple),
+    WIND_WALKER("Wind Walker", "Agility path — lean, fast, ruthless", "SPD +40% · FAT -20%", "SHRED", ElectricBlue),
+    TITAN("Titan", "Mass path — hypertrophy engine", "MASS +40% · STR +25%", "BULK", LabelGray),
+}
 
 @Composable
 fun ArchetypeCard(

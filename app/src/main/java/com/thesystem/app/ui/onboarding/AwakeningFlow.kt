@@ -98,7 +98,6 @@ import com.thesystem.app.core.theme.VenomGreen
 import com.thesystem.app.core.ui.AnimatedCounter
 import com.thesystem.app.core.ui.SystemHaptics
 import com.thesystem.app.core.ui.rememberSystemHaptics
-import com.thesystem.app.ui.splash.Archetype
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.cos

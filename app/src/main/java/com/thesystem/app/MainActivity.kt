@@ -11,7 +11,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -29,28 +28,13 @@ import com.thesystem.app.ui.admin.AdminScreen
 import com.thesystem.app.ui.arena.BattleRoomScreen
 import com.thesystem.app.ui.chat.ChatHomeScreen
 import com.thesystem.app.ui.chat.ConversationScreen
+import com.thesystem.app.ui.intro.SystemActivationIntro
+import com.thesystem.app.ui.intro.SystemBootSync
 import com.thesystem.app.ui.onboarding.AwakeningFlowScreen
 import com.thesystem.app.ui.protocol.ProtocolScreen
 import com.thesystem.app.ui.training.QuestProofScreen
-import com.thesystem.app.ui.splash.DynamicSplash
-import com.thesystem.app.ui.splash.SplashVariant
 import com.thesystem.app.ui.tabs.MainTabs
 import com.thesystem.app.core.theme.SystemTheme
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.Alignment
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import com.thesystem.app.core.theme.FaintGray
-import com.thesystem.app.core.theme.MonoLabel
-import com.thesystem.app.core.theme.PaperWhite
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -164,29 +148,23 @@ class MainActivity : ComponentActivity() {
             SystemTheme {
                 val vm: RootViewModel = hiltViewModel()
                 val state by vm.state.collectAsStateWithLifecycle()
-                // ROUND 7: cinematic launch flow — unregistered vessels walk the full
-                // intake → awakening → contract → evaluation → auth gate ritual.
-                // Signed-in hunters get the shuffled brand splash and go straight in.
-                val splashVariants = remember { com.thesystem.app.ui.splash.HONEST_SPLASH_ROTATION.shuffled() }
+                // THE SYSTEM ACTIVATES FIRST — S emblem → BODY → MIND → title.
+                // The generic circle-loader splash is permanently dead. The intro
+                // always completes its (short) cycle, then the session gate resolves.
+                var introDone by rememberSaveable { mutableStateOf(false) }
+                if (!introDone) {
+                    SystemActivationIntro(onFinished = { introDone = true })
+                    return@SystemTheme
+                }
                 when (val s = state) {
-                    RootState.Booting -> DynamicSplash(variants = splashVariants)
+                    RootState.Booting -> SystemBootSync()
                     RootState.NeedsOnboarding -> AwakeningFlowScreen(onDone = { vm.resolve() })
                     is RootState.Ready -> AppNavHost(profile = s, onSignOut = { vm.signOut() })
-                    is RootState.Error -> {
-                        // offline tolerance: brand screen stays alive; the tap re-resolves
-                        val err = s
-                        Box(Modifier.fillMaxSize().clickable { vm.resolve() }) {
-                            DynamicSplash(variants = splashVariants)
-                            Column(
-                                Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                Text(err.message.take(120), color = FaintGray, style = MonoLabel, textAlign = TextAlign.Center)
-                                Spacer(Modifier.height(6.dp))
-                                Text("SIGNAL LOST — TAP TO RE-SYNC", color = PaperWhite, style = MonoLabel)
-                            }
-                        }
-                    }
+                    is RootState.Error -> SystemBootSync(
+                        label = "SIGNAL LOST",
+                        error = s.message,
+                        onRetry = { vm.resolve() },
+                    )
                 }
             }
         }

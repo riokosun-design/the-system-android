@@ -62,16 +62,24 @@ fun ChessPuzzleScreen(
     var pendingPromo by remember { mutableStateOf<List<Move>>(emptyList()) }
     var outcome by remember(puzzle) { mutableStateOf<String?>(null) } // SOLVED | FAILED
     var dailyDone by remember { mutableStateOf(false) }
+    var anim by remember { mutableStateOf<AnimMove?>(null) }
 
     LaunchedEffect(daily) {
         if (daily) dailyDone = vm.puzzleRepoTodayDailySolved()
     }
 
     fun advanceLine() {
-        // opponent reply per scripted line
+        // opponent reply per scripted line — slides like a real move
         if (ply + 1 < puzzle.line.size) {
             val reply = puzzle.line[ply + 1]
-            board.playUci(reply)
+            val pre = Board.fromFen(fen)
+            val mv = legal.firstOrNull { it.uci() == reply }
+            if (mv != null) {
+                anim = AnimMove(mv.from, mv.to, pre.sq[mv.from], pre.sq[mv.to])
+                board.play(mv)
+            } else {
+                board.playUci(reply)
+            }
             fen = board.toFen()
             ply += 2
         } else {
@@ -82,6 +90,8 @@ fun ChessPuzzleScreen(
     fun onUserMove(m: Move) {
         val expected = puzzle.line.getOrNull(ply) ?: return
         if (m.uci() == expected) {
+            val pre = Board.fromFen(fen)
+            anim = AnimMove(m.from, m.to, pre.sq[m.from], pre.sq[m.to])
             board.play(m)
             fen = board.toFen()
             haptics.tick()
@@ -130,7 +140,7 @@ fun ChessPuzzleScreen(
             val pool = PuzzlePack.byDiff(diff).ifEmpty { PuzzlePack.ALL }
             pool[(cursor) % pool.size]
         }
-        fen = p.fen; ply = 0; outcome = null; selected = -1; pendingPromo = emptyList()
+        fen = p.fen; ply = 0; outcome = null; selected = -1; pendingPromo = emptyList(); anim = null
     }
 
     SystemBackground {
@@ -168,6 +178,8 @@ fun ChessPuzzleScreen(
                 selected = selected,
                 targets = remember(selected, legal) { if (selected < 0) emptySet() else targetsFor(legal, selected) },
                 lastMove = null,
+                anim = anim,
+                onAnimDone = { anim = null },
                 onSquare = onSquare@{ sq ->
                     if (outcome != null) return@onSquare
                     val piece = board.sq[sq]
@@ -209,7 +221,7 @@ fun ChessPuzzleScreen(
                 }
                 "FAILED" -> Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     GhostButton("RETRY", {
-                        fen = puzzle.fen; ply = 0; outcome = null; selected = -1
+                        fen = puzzle.fen; ply = 0; outcome = null; selected = -1; anim = null
                     }, Modifier.weight(1f))
                     if (!daily) NeonButton("NEXT", { haptics.select(); next() }, Modifier.weight(1f))
                     else NeonButton("DONE", onBack, Modifier.weight(1f))

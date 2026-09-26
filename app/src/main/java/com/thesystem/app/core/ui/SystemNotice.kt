@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -82,12 +81,7 @@ fun SystemNoticeOverlay(notice: SystemNotice?, onDismiss: () -> Unit) {
                     )
                     if (notice.spinning) {
                         Spacer(Modifier.height(18.dp))
-                        CircularProgressIndicator(
-                            color = Color.White,
-                            trackColor = Color.Transparent,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(22.dp),
-                        )
+                        SystemProcessing("THE SYSTEM IS WATCHING", compact = true)
                     }
                 }
             }

@@ -204,11 +204,10 @@ private fun ArcCard(arc: ArcDto, progress: com.thesystem.app.data.model.ArcProgr
                     val totalDays = arc.durationMonths * 30 + progress.penaltyExtraDays
                     val frac = (progress.daysCompleted.toFloat() / totalDays.coerceAtLeast(1)).coerceIn(0f, 1f)
                     Spacer(Modifier.height(4.dp))
-                    LinearProgressIndicator(
-                        progress = { frac },
-                        modifier = Modifier.fillMaxWidth().height(6.dp),
-                        color = NeonPurple, trackColor = SurfaceHigh,
-                    )
+                    // SYSTEM hairline progress — deterministic fill, no Material ring
+                    Box(Modifier.fillMaxWidth().height(6.dp).background(SurfaceHigh)) {
+                        Box(Modifier.fillMaxWidth(frac).height(6.dp).background(NeonPurple))
+                    }
                     Text("${progress.daysCompleted}/$totalDays days · ${(frac * 100).toInt()}%" +
                         if (progress.penaltyExtraDays > 0) " (+${progress.penaltyExtraDays}d penalty extension)" else "",
                         style = MaterialTheme.typography.labelSmall, color = NeonPurple)
