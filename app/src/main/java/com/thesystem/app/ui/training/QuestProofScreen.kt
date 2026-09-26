@@ -283,12 +283,10 @@ private fun BoxScope.FeedScrim() {
     Box(
         Modifier.matchParentSize().background(
             Brush.verticalGradient(
-                listOf(
-                    0f to Color.Black.copy(alpha = 0.52f),
-                    0.20f to Color.Black.copy(alpha = 0.08f),
-                    0.58f to Color.Black.copy(alpha = 0.10f),
-                    1f to Color.Black.copy(alpha = 0.64f),
-                ),
+                0f to Color.Black.copy(alpha = 0.52f),
+                0.20f to Color.Black.copy(alpha = 0.08f),
+                0.58f to Color.Black.copy(alpha = 0.10f),
+                1f to Color.Black.copy(alpha = 0.64f),
             ),
         ),
     )
