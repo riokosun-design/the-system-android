@@ -162,6 +162,7 @@ fun ChessGameScreen(
         }
         haptics.tick()
         selected = -1; pendingPromo = emptyList()
+        anim = null                      // takeback snaps — never replays a stale slide
         lastMove = playedMoves.lastOrNull()?.let { it.from to it.to }
         fen = board.toFen()
     }

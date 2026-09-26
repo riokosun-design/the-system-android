@@ -72,9 +72,11 @@ fun ChessPuzzleScreen(
         // opponent reply per scripted line — slides like a real move
         if (ply + 1 < puzzle.line.size) {
             val reply = puzzle.line[ply + 1]
-            val pre = Board.fromFen(fen)
-            val mv = legal.firstOrNull { it.uci() == reply }
+            // fresh legal list on the LIVE board — the remembered `legal` is stale mid-event
+            val preFen = fen
+            val mv = board.legalMoves().firstOrNull { it.uci() == reply }
             if (mv != null) {
+                val pre = Board.fromFen(preFen)
                 anim = AnimMove(mv.from, mv.to, pre.sq[mv.from], pre.sq[mv.to])
                 board.play(mv)
             } else {
