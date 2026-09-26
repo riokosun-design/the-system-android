@@ -3,6 +3,7 @@ package com.thesystem.app.ui.training
 import androidx.camera.core.ImageProxy
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -64,6 +65,7 @@ data class GateUi(
     val stageIndex: Int = 0,             // 0..4 — chips before LOCKED
     val reason: String = "PROP THE PHONE 30–60 CM HIGH · SIDE VIEW OF YOUR BODY",
     val holdFrac: Float = 0f,            // progress inside the current stage
+    val stuckMs: Long = 0L,              // continuous time in the CURRENT stage (relaxed-lock offer)
     val locked: Boolean = false,
     val profileLevel: CalibLevel? = null,
 ) {
@@ -87,6 +89,7 @@ class CalibrationGate(
     private var imgW = 1f
     private var imgH = 1f
     private var stage = GateStage.STABILITY
+    private var stageSinceAt = System.currentTimeMillis()
 
     // stage accumulators (cumulative-while-true with a short grace)
     private var holdMs = 0L
@@ -190,9 +193,19 @@ class CalibrationGate(
             }
 
             GateStage.LIGHT -> {
-                val ok = lumaMean in 40..220 && lumaClean
-                if (hold(ok, 500, lightReason())) {
-                    enter(GateStage.TOP_LOCK, "HOLD THE TOP POSITION — ARMS LOCKED, BODY STRAIGHT")
+                // glare is a CAUTION, not a prison: bright rooms cap strictness to
+                // YELLOW and pass. True darkness / fogged lens still blocks — the
+                // relaxed lock covers stuck vessels after the timeout offer.
+                val glare = lumaMean > 235
+                if (glare) {
+                    viewQuality = minOf(viewQuality, 0.7f)
+                    if (hold(true, 400, "")) enter(GateStage.TOP_LOCK, "HOLD THE TOP POSITION — ARMS LOCKED, BODY STRAIGHT")
+                    reason = "BRIGHT ROOM — ACCEPTED AT REDUCED STRICTNESS"
+                } else {
+                    val ok = lumaMean in 30..235 && lumaClean
+                    if (hold(ok, 500, lightReason())) {
+                        enter(GateStage.TOP_LOCK, "HOLD THE TOP POSITION — ARMS LOCKED, BODY STRAIGHT")
+                    }
                 }
             }
 
@@ -233,6 +246,7 @@ class CalibrationGate(
             stageIndex = stage.ordinal.coerceAtMost(4),
             reason = reason,
             holdFrac = (holdMs.toFloat() / stageNeedMs(stage)).coerceIn(0f, 1f),
+            stuckMs = now - stageSinceAt,
             locked = false,
             profileLevel = profile?.level,
         )
@@ -242,12 +256,39 @@ class CalibrationGate(
         stage = next
         holdMs = 0L
         lastGoodAt = 0L
+        stageSinceAt = System.currentTimeMillis()
         reason = nextReason
     }
 
     private fun stageNeedMs(s: GateStage): Long = when (s) {
         GateStage.STABILITY -> 700; GateStage.PERSON -> 1200; GateStage.VIEW -> 300
         GateStage.LIGHT -> 500; GateStage.TOP_LOCK -> 1500; GateStage.LOCKED -> 1
+    }
+
+    /**
+     * RELAXED LOCK — the envelope never leaves a hunter stranded. When a stage
+     * holds them hostage (tiny room, odd framing, glare), they may proceed with
+     * the standard profile: engine v4 still counts every rep, strictness is
+     * honestly capped at YELLOW. Ranked surfaces keep the strict gate.
+     */
+    fun relaxedLock() {
+        if (stage == GateStage.LOCKED) return
+        val torsoPx = (if (torsoSamples.isEmpty()) 140f else median(torsoSamples)).coerceAtLeast(24f)
+        val shoulderY0 = if (shoulderYSamples.isEmpty()) 0f else median(shoulderYSamples)
+        val p = CalibProfile(
+            thetaTop = 150.0,
+            thetaDepth = 68.0,
+            torsoLenPx = torsoPx,
+            shoulderY0 = shoulderY0,
+            viewQuality = 0.7f,
+            level = CalibLevel.YELLOW,
+            lumaMean = lumaMean,
+            estimatorSource = estimatorSource,
+        )
+        profile = p
+        stage = GateStage.LOCKED
+        _ui.value = _ui.value.copy(locked = true, profileLevel = CalibLevel.YELLOW)
+        onProfile(p)
     }
 
     private fun lockProfile() {
@@ -433,7 +474,12 @@ class CalibrationGate(
 // FaintGray = locked out. The traffic semantics survive without hue.
 // ═══════════════════════════════════════════════════════════════════════════
 @Composable
-fun BoxScope.GateOverlay(ui: GateUi, ranked: Boolean = false) {
+fun BoxScope.GateOverlay(
+    ui: GateUi,
+    ranked: Boolean = false,
+    stuckMs: Long = 0L,
+    onRelaxed: (() -> Unit)? = null,
+) {
     val stages = listOf("STABILITY", "BODY", "VIEW", "LIGHT", "TOP HOLD")
 
     Column(
@@ -502,5 +548,24 @@ fun BoxScope.GateOverlay(ui: GateUi, ranked: Boolean = false) {
             color = LabelGray,
             textAlign = TextAlign.Center,
         )
+        // stranded-release valve: 15s stuck on one stage → relaxed envelope offered
+        if (!ranked && onRelaxed != null && stuckMs > 15_000L) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "STUCK? USE RELAXED ENVELOPE — COUNTS TODAY AT CAPPED STRICTNESS",
+                color = SkyBlue,
+                fontFamily = SystemMono,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.Black.copy(alpha = 0.62f))
+                    .border(1.dp, SkyBlue, RoundedCornerShape(6.dp))
+                    .clickable { onRelaxed() }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+        }
     }
 }

@@ -9,8 +9,18 @@ import kotlin.math.abs
  */
 object ChessAI {
 
+    /** Depth is the REAL dial — every label maps to actual search behavior. */
     enum class Difficulty(val depth: Int, val jitter: Int) {
-        EASY(1, 60), MEDIUM(2, 20), HARD(3, 0),
+        EASY(1, 60), MEDIUM(2, 20), HARD(3, 0), EXPERT(4, 0);
+
+        /** UI label per the PLAY vs AI spec. */
+        val label: String get() = when (this) {
+            EASY -> "BEGINNER"; MEDIUM -> "MEDIUM"; HARD -> "HARD"; EXPERT -> "EXPERT"
+        }
+        /** Practice-rating anchor used by the deterministic ELO math (spec §10). */
+        val anchorElo: Int get() = when (this) {
+            EASY -> 400; MEDIUM -> 900; HARD -> 1400; EXPERT -> 1900
+        }
     }
 
     private val VALUE = intArrayOf(0, 100, 320, 330, 500, 900, 0)

@@ -84,12 +84,15 @@ class ChessViewModel @Inject constructor(
         thinkMs: Int = 0,
         stats: kotlinx.serialization.json.JsonObject? = null,
         analysis: kotlinx.serialization.json.JsonObject? = null,
+        plies: Int = 999,
+        practiceDelta: Int? = null,
     ): Result<ChessRepository.LogResult> {
         val r = repo.logSession(
             kind = kind, mode = mode, result = result,
             accuracy = accuracy, blunders = blunders, thinkMs = thinkMs,
             stats = stats ?: kotlinx.serialization.json.buildJsonObject {},
             analysis = analysis ?: kotlinx.serialization.json.buildJsonObject {},
+            plies = plies, practiceDelta = practiceDelta,
         )
         if (r.isSuccess) _state.value = _state.value.copy(profile = repo.profile())
         return r

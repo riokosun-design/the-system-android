@@ -20,8 +20,8 @@ android {
         applicationId = "com.thesystem.app"
         minSdk = 26 // low-end / older Android first
         targetSdk = 35
-        versionCode = 22
-        versionName = "0.12.0"
+        versionCode = 23
+        versionName = "0.13.0"
 
         // 2GB-first install weight: drop emulator-only native ABIs (MediaPipe+
         // ML Kit ship x86/x86_64 .so blobs nobody's phone uses ≈60MB unpacked).

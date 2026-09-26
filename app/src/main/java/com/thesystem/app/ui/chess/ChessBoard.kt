@@ -59,6 +59,7 @@ fun ChessBoard(
     onSquare: (Int) -> Unit,
     modifier: Modifier = Modifier,
     checkSquare: Int = -1,
+    hint: Pair<Int, Int>? = null,        // SHOW MOVE HINTS — engine-whispered from→to
     anim: AnimMove? = null,
     onAnimDone: () -> Unit = {},
 ) {
@@ -182,6 +183,27 @@ fun ChessBoard(
             drawContext.canvas.nativeCanvas.drawText(
                 fileChar.toString(), i * cell + cell - w - cell * 0.08f, 7f * cell + cell * 0.92f, labelPaint,
             )
+        }
+
+        // ── hint arrow (SHOW MOVE HINTS) — quiet, under the pieces ───────────
+        if (hint != null) {
+            val hfx = visualX(hint.first and 7) * cell + cell / 2f
+            val hfy = visualY(hint.first shr 4) * cell + cell / 2f
+            val htx = visualX(hint.second and 7) * cell + cell / 2f
+            val hty = visualY(hint.second shr 4) * cell + cell / 2f
+            val hc = SkyBlue.copy(alpha = 0.62f)
+            // shaft stops short of the destination center so pieces stay readable
+            val dx = htx - hfx; val dy = hty - hfy
+            val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+            val ux = dx / len; val uy = dy / len
+            val sx = hfx + ux * cell * 0.18f; val sy = hfy + uy * cell * 0.18f
+            val ex = htx - ux * cell * 0.24f; val ey = hty - uy * cell * 0.24f
+            drawLine(hc, Offset(sx, sy), Offset(ex, ey), strokeWidth = cell * 0.085f)
+            // arrowhead
+            val px = -uy; val py = ux
+            drawLine(hc, Offset(ex, ey), Offset(ex - ux * cell * 0.22f + px * cell * 0.15f, ey - uy * cell * 0.22f + py * cell * 0.15f), strokeWidth = cell * 0.085f)
+            drawLine(hc, Offset(ex, ey), Offset(ex - ux * cell * 0.22f - px * cell * 0.15f, ey - uy * cell * 0.22f - py * cell * 0.15f), strokeWidth = cell * 0.085f)
+            drawCircle(hc, radius = cell * 0.10f, center = Offset(hfx, hfy), style = Stroke(cell * 0.05f))
         }
 
         // ── pieces (skip the landing square while the mover is sliding) ──

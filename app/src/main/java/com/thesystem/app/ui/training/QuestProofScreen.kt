@@ -23,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -276,6 +277,23 @@ private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
     }
 }
 
+/** Legibility scrim over the live feed — bright rooms must never white-out the HUD. */
+@Composable
+private fun BoxScope.FeedScrim() {
+    Box(
+        Modifier.matchParentSize().background(
+            Brush.verticalGradient(
+                listOf(
+                    0f to Color.Black.copy(alpha = 0.52f),
+                    0.20f to Color.Black.copy(alpha = 0.08f),
+                    0.58f to Color.Black.copy(alpha = 0.10f),
+                    1f to Color.Black.copy(alpha = 0.64f),
+                ),
+            ),
+        ),
+    )
+}
+
 /** ML Kit stage — lives inside the proof Box so overlays keep BoxScope. */
 @Composable
 private fun BoxScope.CameraBox(s: QuestProofState, vm: QuestProofViewModel, flash: Float, onReady: () -> Unit = {}) {
@@ -329,6 +347,7 @@ private fun BoxScope.CameraBox(s: QuestProofState, vm: QuestProofViewModel, flas
     }
 
     AndroidView(factory = { ctx -> PreviewView(ctx).also { preview = it } }, modifier = Modifier.matchParentSize())
+    FeedScrim()
     PoseMeshOverlay(points = mesh, repFlash = flash * depth, modifier = Modifier.matchParentSize())
 
     // live rep readout — giant charge counter against the target
@@ -478,10 +497,16 @@ private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, fl
     }
 
     AndroidView(factory = { ctx -> PreviewView(ctx).also { preview = it } }, modifier = Modifier.matchParentSize())
+    FeedScrim()
     PoseMeshOverlay(points = mesh, repFlash = flash * depth, modifier = Modifier.matchParentSize())
 
     if (profile == null) {
-        GateOverlay(gateUi, ranked = false)
+        GateOverlay(
+            gateUi,
+            ranked = false,
+            stuckMs = gateUi.stuckMs,
+            onRelaxed = { haptics.tick(); gate.relaxedLock() },  // gate fires onProfile itself
+        )
         return
     }
 

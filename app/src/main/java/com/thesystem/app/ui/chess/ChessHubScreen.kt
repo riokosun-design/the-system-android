@@ -149,6 +149,7 @@ private fun MentalRankCard(s: ChessViewModel.ChessState) {
                     Column {
                         Text("RANK · LV ${p?.mentalLevel ?: 1}", color = PaperWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono)
                         Text("RATING ${p?.rating ?: 400} · MENTAL XP ${p?.mentalXp ?: 0}", style = MonoLabel, color = LabelGray)
+                        Text("PRACTICE ELO ${p?.practiceElo ?: 400} · WAR ${p?.wins ?: 0}W/${p?.losses ?: 0}L/${p?.draws ?: 0}D", style = MonoLabel, color = LabelGray)
                     }
                 }
             }

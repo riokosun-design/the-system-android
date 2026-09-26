@@ -57,13 +57,16 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
 
-// Timing spine — FULL ≈ 6.2s cinematic, FAST ≈ 2.6s boot cut for low-end steel.
+// Timing spine — SHORT ≈ 1.3s every open (spec §2: 1–1.5s max); the FULL
+// cinematic (≈6.2s) and FAST cut (≈2.6s) play once per install only.
 private const val FULL_TOTAL = 6200L
-private const val FULL_P1 = 0L        // SYSTEM ACTIVATION — emblem + initializing
 private const val FULL_P2 = 1550L     // PHYSICAL PROTOCOL — push-up silhouette
 private const val FULL_P3 = 3900L     // MENTAL PROTOCOL — knight entrance
 private const val FULL_P4 = 5050L     // title: THE SYSTEM
 private const val FAST_TOTAL = 2600L
+private const val SHORT_TOTAL = 1300L
+
+private enum class IntroMode { FULL, FAST, SHORT }
 
 /**
  * THE SYSTEM ACTIVATION INTRO — replaces every generic launch loader.
@@ -80,19 +83,26 @@ private const val FAST_TOTAL = 2600L
 fun SystemActivationIntro(onFinished: () -> Unit) {
     val ctx = LocalContext.current
     val haptics = rememberSystemHaptics()
-    val fast = remember { isLowEndDevice(ctx) }
-    val total = if (fast) FAST_TOTAL else FULL_TOTAL
+    // spec §2: regular opens are a 1.3s mark — the full cinematic is a
+    // once-per-install ceremony, never a tax on every launch.
+    val prefs = remember { ctx.getSharedPreferences("intro_prefs", Context.MODE_PRIVATE) }
+    val mode = remember {
+        if (!prefs.getBoolean("cinematic_seen", false)) {
+            if (isLowEndDevice(ctx)) IntroMode.FAST else IntroMode.FULL
+        } else IntroMode.SHORT
+    }
+    val total = when (mode) { IntroMode.FULL -> FULL_TOTAL; IntroMode.FAST -> FAST_TOTAL; IntroMode.SHORT -> SHORT_TOTAL }
 
     var tMs by remember { mutableLongStateOf(0L) }
     var fired by remember { mutableStateOf(false) }
 
-    LaunchedEffect(fast) {
+    LaunchedEffect(mode) {
         val start = System.currentTimeMillis()
         var lastRep = 0
         while (true) {
             val t = System.currentTimeMillis() - start
             tMs = t
-            if (!fast) {
+            if (mode == IntroMode.FULL) {
                 // haptic rep-count pulse — the floor answers each push-up
                 val rep = if (t in FULL_P2 until FULL_P3) (((t - FULL_P2) / 1050).toInt() + 1) else 0
                 if (rep != lastRep) { lastRep = rep; if (rep > 0) haptics.tick() }
@@ -100,22 +110,23 @@ fun SystemActivationIntro(onFinished: () -> Unit) {
             if (t >= total) break
             delay(16)
         }
-        if (!fired) { fired = true; onFinished() }
+        if (!fired) { fired = true; prefs.edit().putBoolean("cinematic_seen", true).apply(); onFinished() }
     }
 
     fun finishNow() {
         if (!fired) {
             fired = true
             haptics.select()
+            prefs.edit().putBoolean("cinematic_seen", true).apply()
             onFinished()
         }
     }
 
     Box(Modifier.fillMaxSize().background(InkBlack)) {
-        if (fast) {
-            FastCut(tMs)
-        } else {
-            when {
+        when (mode) {
+            IntroMode.FAST -> FastCut(tMs)
+            IntroMode.SHORT -> ShortMark(tMs)
+            IntroMode.FULL -> when {
                 tMs < FULL_P2 -> PhaseActivation(tMs)
                 tMs < FULL_P3 -> PhasePhysical(tMs - FULL_P2)
                 tMs < FULL_P4 -> PhaseMental(tMs - FULL_P3)
@@ -124,7 +135,7 @@ fun SystemActivationIntro(onFinished: () -> Unit) {
         }
 
         // SKIP — arms after the first animation cycle, stays out of the show
-        if (tMs > 1300L) {
+        if (mode != IntroMode.SHORT && tMs > 1300L) {
             Box(
                 Modifier
                     .align(Alignment.BottomEnd)
@@ -135,6 +146,30 @@ fun SystemActivationIntro(onFinished: () -> Unit) {
                     .padding(horizontal = 14.dp, vertical = 7.dp),
             ) {
                 Text("SKIP ›", color = LabelGray, style = MonoLabel, letterSpacing = 2.4.sp)
+            }
+        }
+    }
+}
+
+/** SHORT — the 1.3s everyday open: S mark, glow settle, name, hairline, gone. */
+@Composable
+private fun ShortMark(t: Long) {
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+            SystemEmblemMark(
+                Modifier.size(72.dp),
+                glitch = if (t < 260f) (1f - t / 260f) * 0.7f else 0f,
+                energy = 0.4f + 0.6f * appear(t, 200f, 420f),
+            )
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "THE SYSTEM",
+                color = PaperWhite.copy(alpha = appear(t, 240f, 360f)),
+                fontFamily = SystemMono, fontSize = 22.sp, fontWeight = FontWeight.Black, letterSpacing = 5.sp,
+            )
+            Spacer(Modifier.height(8.dp))
+            Canvas(Modifier.height(2.dp).width((appear(t, 420f, 420f) * 96).dp)) {
+                drawRect(SkyBlue, Offset.Zero, size)
             }
         }
     }

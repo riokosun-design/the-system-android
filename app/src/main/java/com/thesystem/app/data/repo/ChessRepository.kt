@@ -40,7 +40,14 @@ class ChessRepository @Inject constructor(
         }.getOrNull()
     }
 
-    data class LogResult(val rating: Int, val xpGained: Int, val ratingDelta: Int)
+    data class LogResult(
+        val rating: Int,
+        val xpGained: Int,
+        val ratingDelta: Int,
+        val practiceElo: Int? = null,     // mig 019 — AI-games ELO track
+        val practiceDelta: Int? = null,
+        val globalXp: Int = 0,            // mig 019 — chess XP bridged into GLOBAL SYSTEM XP
+    )
 
     /** Server clamps + computes everything; throws on hard failure. */
     suspend fun logSession(
@@ -52,6 +59,8 @@ class ChessRepository @Inject constructor(
         thinkMs: Int = 0,
         stats: JsonObject = buildJsonObject {},
         analysis: JsonObject = buildJsonObject {},
+        plies: Int = 999,                // real move count — server anti-farm gate
+        practiceDelta: Int? = null,      // standard-ELO proposition for AI games
     ): Result<LogResult> = withContext(Dispatchers.IO) {
         runCatching {
             val raw = client.postgrest.rpc("log_chess_session", buildJsonObject {
@@ -63,12 +72,17 @@ class ChessRepository @Inject constructor(
                 put("p_think_ms", thinkMs)
                 put("p_stats", stats)
                 put("p_analysis", analysis)
+                put("p_plies", plies)
+                practiceDelta?.let { put("p_practice_delta", it) }
             }).data ?: error("no response")
             val obj = json.parseToJsonElement(raw) as JsonObject
             LogResult(
                 rating = obj["rating"]!!.jsonPrimitive.intOrNull ?: 400,
                 xpGained = obj["xp_gained"]!!.jsonPrimitive.intOrNull ?: 0,
                 ratingDelta = obj["rating_delta"]!!.jsonPrimitive.intOrNull ?: 0,
+                practiceElo = obj["practice_elo"]?.jsonPrimitive?.intOrNull,
+                practiceDelta = obj["practice_delta"]?.jsonPrimitive?.intOrNull,
+                globalXp = obj["global_xp"]?.jsonPrimitive?.intOrNull ?: 0,
             )
         }
     }

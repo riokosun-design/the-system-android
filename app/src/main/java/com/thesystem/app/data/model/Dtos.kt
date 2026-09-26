@@ -415,6 +415,7 @@ data class RoutineDto(
 data class ChessProfileDto(
     @SerialName("user_id") val userId: String,
     val rating: Int = 400,
+    @SerialName("practice_elo") val practiceElo: Int = 400,   // AI-games track (mig 019) — standard ELO math
     @SerialName("mental_xp") val mentalXp: Long = 0,
     val games: Int = 0,
     val wins: Int = 0,

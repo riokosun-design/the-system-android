@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.thesystem.app.chess.BLACK_BIT
 import com.thesystem.app.chess.Board
 import com.thesystem.app.chess.ChessAI
@@ -63,10 +64,18 @@ fun ChessGameScreen(
     val mode = remember(modeName) { ChessMode.entries.firstOrNull { it.name == modeName } ?: ChessMode.AI_TRAINING }
     val haptics = rememberSystemHaptics()
     val epochDay = remember { LocalDate.now().toEpochDay() }
-    val (startFen, userWhite) = remember(mode) { modeStartFen(mode, epochDay) }
+    val (startFen, initialUserWhite) = remember(mode) { modeStartFen(mode, epochDay) }
+    var userWhite by remember(mode) { mutableStateOf(initialUserWhite) }
 
     var diff by remember(mode) { mutableStateOf(mode.diff ?: ChessAI.Difficulty.MEDIUM) }
     var aiTrainingUnlocked by remember(mode) { mutableStateOf(mode != ChessMode.AI_TRAINING) }
+
+    // PLAY vs AI configuration (spec §6/§8/§9): side, takeback, hints
+    var sideSel by remember(mode) { mutableIntStateOf(0) }          // 0 WHITE · 1 RANDOM · 2 BLACK
+    var allowUndoPref by remember(mode) { mutableStateOf(true) }
+    var hintsOn by remember(mode) { mutableStateOf(false) }
+    var hintMove by remember { mutableStateOf<Move?>(null) }
+    val chessUi by vm.state.collectAsStateWithLifecycle()
 
     var fen by remember { mutableStateOf(startFen) }
     val board = remember(fen) { Board.fromFen(fen) }
@@ -168,6 +177,10 @@ fun ChessGameScreen(
     }
 
     fun resetGame(keepUnlock: Boolean) {
+        if (!keepUnlock && mode == ChessMode.AI_TRAINING && sideSel == 1) {
+            userWhite = kotlin.random.Random.nextBoolean()     // RANDOM side re-rolls each duel
+        }
+        if (!keepUnlock && mode == ChessMode.AI_TRAINING) hintMove = null
         fen = Board.fromFen(startFen).toFen()
         history.clear(); history.add(startFen)
         playedMoves.clear(); undos.clear(); thinkMs.clear()
@@ -178,6 +191,16 @@ fun ChessGameScreen(
         analysis = null; logOutcome = null
         aiThinking = false
         aiTrainingUnlocked = keepUnlock || mode != ChessMode.AI_TRAINING
+    }
+
+    // SHOW MOVE HINTS — the engine whispers its best line on the hunter's turn
+    LaunchedEffect(fen, hintsOn, result, aiTrainingUnlocked) {
+        hintMove = null
+        if (!hintsOn || !aiTrainingUnlocked || result != null) return@LaunchedEffect
+        val myTurn = (if (board.whiteToMove) 0 else 1) == userColorIdx
+        if (!myTurn || board.status().first != Board.Status.ONGOING) return@LaunchedEffect
+        val mv = withContext(Dispatchers.Default) { ChessAI.bestMove(board, ChessAI.Difficulty.MEDIUM) }
+        if (mv != null && result == null) hintMove = mv
     }
 
     // engine turn
@@ -218,11 +241,19 @@ fun ChessGameScreen(
             }
         }
         val a = analysis
+        // PRACTICE ELO (§10): standard ELO proposition vs this engine's anchor —
+        // the server clamps ±48 and bridges XP globally; war keeps server steps.
+        val practiceDelta = if (mode.war) null else eloDelta(
+            myElo = chessUi.profile?.practiceElo ?: 400,
+            anchor = diff.anchorElo,
+            score = when (res) { "WIN" -> 1.0; "DRAW" -> 0.5; else -> 0.0 },
+        )
         vm.repoLog(
             kind = "GAME", mode = mode.name, result = res,
             accuracy = a?.accuracy, blunders = a?.blunders ?: 0,
             thinkMs = a?.avgThinkMs ?: 0,
             stats = a?.toStatJson(), analysis = a?.toAnalysisJson(),
+            plies = playedMoves.size, practiceDelta = practiceDelta,
         ).onSuccess { logOutcome = it }
         vm.refresh()
     }
@@ -242,7 +273,7 @@ fun ChessGameScreen(
                 Column(Modifier.weight(1f)) {
                     Text(mode.label, color = PaperWhite, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                     Text(
-                        if (mode == ChessMode.AI_TRAINING) "ENGINE ${diff.name}" else mode.sub.uppercase(),
+                        if (mode == ChessMode.AI_TRAINING) "ENGINE ${diff.label}" else mode.sub.uppercase(),
                         style = MonoLabel, color = SkyBlue,
                     )
                 }
@@ -250,31 +281,27 @@ fun ChessGameScreen(
             }
 
             if (!aiTrainingUnlocked) {
-                // AI TRAINING — level select gates the duel
-                Column(
-                    Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text("CHOOSE ENGINE LEVEL", color = PaperWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                    Spacer(Modifier.height(14.dp))
-                    ChessAI.Difficulty.entries.forEach { d ->
-                        NeonButton(
-                            d.name, {
-                                haptics.select(); diff = d; aiTrainingUnlocked = true
-                                whiteMs = mode.clockSec * 1000L; blackMs = mode.clockSec * 1000L
-                            },
-                            Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            color = if (d == ChessAI.Difficulty.HARD) SkyBlue else PaperWhite,
-                        )
-                    }
-                }
+                // PLAY vs AI — full configuration before the duel (spec §6/§8/§9)
+                PlayAiConfigSheet(
+                    diff = diff, onDiff = { diff = it },
+                    sideSel = sideSel, onSide = { sideSel = it },
+                    allowUndo = allowUndoPref, onUndo = { allowUndoPref = it },
+                    hintsOn = hintsOn, onHints = { hintsOn = it },
+                    practiceElo = chessUi.profile?.practiceElo ?: 400,
+                    onStart = {
+                        userWhite = when (sideSel) {
+                            0 -> true; 2 -> false; else -> kotlin.random.Random.nextBoolean()
+                        }
+                        whiteMs = mode.clockSec * 1000L; blackMs = mode.clockSec * 1000L
+                        haptics.select(); aiTrainingUnlocked = true
+                    },
+                )
                 return@Column
             }
 
             // ── engine strip: tag + its captures + clock ─────────────────
             PlayerTag(
-                label = "SYSTEM ENGINE · ${diff.name}",
+                label = "SYSTEM ENGINE · ${diff.label}",
                 ms = oppMs, timed = mode.clockSec > 0,
                 captures = oppCaps,
                 materialPlus = materialOf(oppCaps) - materialOf(userCaps),
@@ -298,6 +325,7 @@ fun ChessGameScreen(
                 targets = remember(selected, legal) { if (selected < 0) emptySet() else targetsFor(legal, selected) },
                 lastMove = lastMove,
                 checkSquare = if (result == null && inCheck) (if (board.whiteToMove) board.wKing else board.bKing) else -1,
+                hint = hintMove?.let { it.from to it.to },
                 anim = anim,
                 onAnimDone = { anim = null },
                 onSquare = onSquare@{ sq ->
@@ -397,7 +425,7 @@ fun ChessGameScreen(
             if (result == null) {
                 // ── controls: undo where permitted · new game · resign · back ──
                 Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (undoAllowed) {
+                    if (undoAllowed && (mode != ChessMode.AI_TRAINING || allowUndoPref)) {
                         val canUndo = !aiThinking && undos.isNotEmpty() &&
                             (if (board.whiteToMove) 0 else 1) == userColorIdx
                         GhostButton("↶ UNDO", { undoTurn() }, Modifier.weight(1f), enabled = canUndo)
@@ -423,6 +451,122 @@ fun ChessGameScreen(
 
 private fun materialOf(caps: List<Int>): Int = caps.sumOf { PIECE_VALUE[com.thesystem.app.chess.typeOf(it)] ?: 0 }
 
+/** Standard ELO proposition (K=32, capped) — server independently clamps. */
+private fun eloDelta(myElo: Int, anchor: Int, score: Double): Int {
+    val expected = 1.0 / (1.0 + Math.pow(10.0, (anchor - myElo) / 400.0))
+    return ((score - expected) * 32.0).let { kotlin.math.round(it) }.toInt().coerceIn(-48, 48)
+}
+
+// ── PLAY vs AI CONFIG SHEET ──────────────────────────────────────────────────
+
+@Composable
+private fun PlayAiConfigSheet(
+    diff: ChessAI.Difficulty,
+    onDiff: (ChessAI.Difficulty) -> Unit,
+    sideSel: Int,
+    onSide: (Int) -> Unit,
+    allowUndo: Boolean,
+    onUndo: (Boolean) -> Unit,
+    hintsOn: Boolean,
+    onHints: (Boolean) -> Unit,
+    practiceElo: Int,
+    onStart: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+        Text("PLAY vs AI", color = PaperWhite, fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
+        Spacer(Modifier.height(10.dp))
+
+        // honesty card (spec §6/§7): what engine REALLY computes the moves
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .border(1.dp, LineSoft, RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+        ) {
+            Text("AI ENGINE — SYSTEM ENGINE α-β v1 · ON-DEVICE SEARCH", style = MonoLabel, color = SkyBlue)
+            Text("NEGAMAX + PST EVAL · NO CLOUD MODEL", style = MonoLabel, color = LabelGray)
+            Text("COACH — SYSTEM CORE RULES · NO LLM CONNECTED", style = MonoLabel, color = LabelGray)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text("PRACTICE ELO $practiceElo · COMPETITIVE TRACK = MENTAL WAR", style = MonoLabel, color = PaperWhite)
+        Spacer(Modifier.height(14.dp))
+
+        Text("DIFFICULTY", style = MonoLabel, color = LabelGray)
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ChessAI.Difficulty.entries.forEach { d ->
+                ConfigChip(d.label, d == diff, Modifier.weight(1f)) { onDiff(d) }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "SEARCH DEPTH ${diff.depth} · ANCHOR ELO ${diff.anchorElo}",
+            style = MonoLabel, color = LabelGray,
+        )
+
+        Spacer(Modifier.height(14.dp))
+        Text("YOUR SIDE", style = MonoLabel, color = LabelGray)
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("WHITE", "RANDOM", "BLACK").forEachIndexed { i, label ->
+                ConfigChip(label, sideSel == i, Modifier.weight(1f)) { onSide(i) }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+        ConfigToggle("ALLOW UNDO", "take back your last move + the engine reply", allowUndo) { onUndo(it) }
+        Spacer(Modifier.height(6.dp))
+        ConfigToggle("SHOW MOVE HINTS", "engine whispers its best line on your turn", hintsOn) { onHints(it) }
+
+        Spacer(Modifier.height(18.dp))
+        NeonButton("ENGAGE", onStart, Modifier.fillMaxWidth(), color = SkyBlue)
+    }
+}
+
+@Composable
+private fun ConfigChip(label: String, on: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Text(
+        label,
+        color = if (on) SkyBlue else LabelGray,
+        fontSize = 10.sp, fontFamily = SystemMono, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+        letterSpacing = 1.2.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = modifier
+            .border(1.dp, if (on) SkyBlue else LineSoft, RoundedCornerShape(6.dp))
+            .clickable { onClick() }
+            .padding(vertical = 9.dp),
+    )
+}
+
+@Composable
+private fun ConfigToggle(title: String, sub: String, on: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .border(1.dp, if (on) SkyBlue.copy(alpha = 0.55f) else LineSoft, RoundedCornerShape(8.dp))
+            .clickable { onChange(!on) }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = PaperWhite, fontSize = 11.sp, fontFamily = SystemMono, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Text(sub, style = MonoLabel, color = LabelGray)
+        }
+        Box(
+            Modifier
+                .size(30.dp, 16.dp)
+                .border(1.dp, if (on) SkyBlue else LineSoft, RoundedCornerShape(8.dp))
+                .padding(3.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .align(if (on) Alignment.CenterEnd else Alignment.CenterStart)
+                    .background(if (on) SkyBlue else LabelGray, RoundedCornerShape(4.dp)),
+            )
+        }
+    }
+}
+
 /** Mid-game engine level control — present, never dominant. */
 @Composable
 private fun DifficultyChips(current: ChessAI.Difficulty, enabled: Boolean, onPick: (ChessAI.Difficulty) -> Unit) {
@@ -431,7 +575,7 @@ private fun DifficultyChips(current: ChessAI.Difficulty, enabled: Boolean, onPic
         ChessAI.Difficulty.entries.forEach { d ->
             val on = d == current
             Text(
-                d.name,
+                d.label,
                 color = if (on) SkyBlue else LabelGray,
                 fontSize = 10.sp, fontFamily = SystemMono, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
                 letterSpacing = 1.sp,
@@ -595,10 +739,22 @@ private fun ResultPanel(
 
         logged?.let {
             Spacer(Modifier.height(8.dp))
-            Text(
-                "RATING ${it.rating} (${if (it.ratingDelta >= 0) "+" else ""}${it.ratingDelta}) · +${it.xpGained} MENTAL XP",
-                color = PaperWhite, fontSize = 12.sp, fontFamily = SystemMono, fontWeight = FontWeight.Bold,
-            )
+            if (mode.war) {
+                Text(
+                    "COMPETITIVE RATING ${it.rating} (${if (it.ratingDelta >= 0) "+" else ""}${it.ratingDelta}) · +${it.xpGained} MENTAL XP",
+                    color = PaperWhite, fontSize = 12.sp, fontFamily = SystemMono, fontWeight = FontWeight.Bold,
+                )
+            } else {
+                val pd = it.practiceDelta ?: 0
+                Text(
+                    "PRACTICE ELO ${it.practiceElo ?: it.rating} (${if (pd >= 0) "+" else ""}$pd) · +${it.xpGained} XP",
+                    color = PaperWhite, fontSize = 12.sp, fontFamily = SystemMono, fontWeight = FontWeight.Bold,
+                )
+            }
+            if (it.globalXp > 0) {
+                Spacer(Modifier.height(2.dp))
+                Text("+${it.globalXp} GLOBAL SYSTEM XP · RANK CREDITED", color = SkyBlue, fontSize = 11.sp, fontFamily = SystemMono, fontWeight = FontWeight.Bold)
+            }
         }
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
