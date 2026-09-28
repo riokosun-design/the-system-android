@@ -147,7 +147,7 @@ fun BlackRoomScreen(onBack: () -> Unit, vm: BlackRoomViewModel = hiltViewModel()
                             .border(1.dp, SkyBlue.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
                     ) {
                         AsyncImage(
-                            model = s.course?.cover ?: "file:///android_asset/courses/black-room.webp",
+                            model = s.course?.cover ?: "file:///android_asset/courses/the-black-room.webp",
                             contentDescription = "Black Room",
                             modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = 0.55f,
                         )

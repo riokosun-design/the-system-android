@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -28,9 +29,9 @@ import com.thesystem.app.chess.PAWN
 import com.thesystem.app.chess.typeOf
 import com.thesystem.app.core.theme.SkyBlue
 
-/** Monochrome square palette — light squares clearly lifted, dark squares near-black. */
-private val LIGHT_SQ = Color(0xFF3C3C41)
-private val DARK_SQ = Color(0xFF0E0E10)
+/** Classic tournament palette — cream / warm brown, exactly like a real board. */
+private val LIGHT_SQ = Color(0xFFF0D9B5)
+private val DARK_SQ = Color(0xFFB58863)
 
 /** A move currently animating on the board — slides, never teleports. */
 data class AnimMove(
@@ -85,6 +86,12 @@ fun ChessBoard(
         }
     }
 
+    // CRITICAL (field report: "board glitches, clicks die after the first move"):
+    // pointerInput(myColor) survives recomposition — a directly-captured onSquare
+    // would freeze the FIRST frame's board/legal/selected forever. After ply one,
+    // every tap was judged against the initial position, so pieces stopped
+    // selecting. rememberUpdatedState routes every tap through the fresh lambda.
+    val currentOnSquare by rememberUpdatedState(onSquare)
     Canvas(
         modifier
             .aspectRatio(1f)
@@ -96,7 +103,7 @@ fun ChessBoard(
                     val vR = (off.y / cell).toInt().coerceIn(0, 7)
                     val r = if (myColor == 0) vR else 7 - vR
                     val f = if (myColor == 0) vF else 7 - vF
-                    onSquare((r shl 4) or f)
+                    currentOnSquare((r shl 4) or f)
                 }
             },
     ) {
@@ -169,7 +176,7 @@ fun ChessBoard(
             val leftF = if (myColor == 0) 0 else 7
             val rankNum = 8 - leftR
             val lightL = (leftR + leftF) % 2 == 0
-            labelPaint.color = if (lightL) 0xD9E2E2E6.toInt() else 0xD98A8A90.toInt()
+            labelPaint.color = if (lightL) 0xD9B58863.toInt() else 0xD9F0D9B5.toInt()
             drawContext.canvas.nativeCanvas.drawText(
                 rankNum.toString(), cell * 0.07f, i * cell + cell * 0.22f, labelPaint,
             )
@@ -178,7 +185,7 @@ fun ChessBoard(
             val botF = if (myColor == 0) i else 7 - i
             val fileChar = 'a' + botF
             val lightB = (botR + botF) % 2 == 0
-            labelPaint.color = if (lightB) 0xD9E2E2E6.toInt() else 0xD98A8A90.toInt()
+            labelPaint.color = if (lightB) 0xD9B58863.toInt() else 0xD9F0D9B5.toInt()
             val w = labelPaint.measureText(fileChar.toString())
             drawContext.canvas.nativeCanvas.drawText(
                 fileChar.toString(), i * cell + cell - w - cell * 0.08f, 7f * cell + cell * 0.92f, labelPaint,
