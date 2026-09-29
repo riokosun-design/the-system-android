@@ -1,23 +1,30 @@
 package com.thesystem.app.ai
 
+import com.thesystem.app.core.FitnessMath
+import com.thesystem.app.data.model.VerifiedBestsDto
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * DETERMINISTIC AI (spec §18) — the fallback that never fails, and TODAY also
- * the production personalization engine while converted local model artifacts
- * are pending (local_ai_enabled=false server-side).
+ * DETERMINISTIC AI (master prompt §3–§12) — the expert rules brain.
  *
- * Pure functions over a ContextEngine.Snapshot. Every number here is derived
- * from VERIFIED data — bests, quests, streaks — nothing invented.
+ * Two jobs:
+ *  1. The safety net that never fails behind the local LLM ladder.
+ *  2. TODAY's production fitness intelligence: every answer is assembled
+ *     from VERIFIED snapshot facts (profile, camera-verified bests, streak /
+ *     decay counters, course catalogue) through FitnessIntelligence — the
+ *     fixed pipeline PROFILE → STATE → HISTORY → GOAL → RECOVERY → RULES.
+ *
+ * It NEVER: invents user history, grants XP/quests/ranks, diagnoses a
+ * medical state, or calls itself a doctor (§4).
  */
 object DeterministicAI {
 
     private val timeFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
-    // ── DAILY QUEST (§8) ─────────────────────────────────────────────────────
+    // ── DAILY QUEST (§5, §6, §11) ────────────────────────────────────────────
     fun questProposal(s: ContextEngine.Snapshot): QuestProposal {
         val activeKinds = s.quests.filter { !it.isDone && !it.isDead }.mapNotNull { it.exerciseKind }.toSet()
         val anyKindToday = s.quests.mapNotNull { it.exerciseKind }.toSet()
@@ -25,7 +32,6 @@ object DeterministicAI {
         val b = s.bests
         val daySeed = LocalDate.now().toEpochDay().toInt()
         val kind = when {
-            // weakest verified link first; variation via day seed among ties
             candidates.isEmpty() -> "PLANK"
             b == null || (b.pushReps == 0 && b.squatReps == 0 && b.runMeters == 0) ->
                 candidates.firstOrNull { it == "PUSH" } ?: candidates[daySeed % candidates.size]
@@ -38,33 +44,31 @@ object DeterministicAI {
                 }
             } ?: "PUSH"
         }
-        val missed = s.profile?.missedDays ?: 0
-        val easing = missed > 0 // coming back from decay: start lighter
-        val (target, unit, durMin, diff) = when (kind) {
-            "PUSH" -> {
-                val base = (b?.pushReps ?: 0)
-                val t = if (base > 0) ((base * 0.55).toInt() + if (easing) 2 else 5) else if (easing) 6 else 10
-                Quad(t.coerceIn(5, 60), "REPS", 8, if (base >= 25 && !easing) "MEDIUM" else "EASY")
-            }
-            "SQUAT" -> {
-                val base = (b?.squatReps ?: 0)
-                val t = if (base > 0) ((base * 0.55).toInt() + if (easing) 2 else 6) else if (easing) 8 else 12
-                Quad(t.coerceIn(5, 80), "REPS", 9, if (base >= 30 && !easing) "MEDIUM" else "EASY")
-            }
-            "RUN" -> {
-                val base = (b?.runMeters ?: 0)
-                val t = if (base > 0) ((base * 0.7).toInt()) else if (easing) 800 else 1200
-                Quad(t.coerceIn(400, 3000), "METERS", 14, if (base >= 2000 && !easing) "MEDIUM" else "EASY")
-            }
-            "WALK" -> Quad(if (easing) 1200 else 2000, "METERS", 20, "EASY")
-            else -> Quad(if (easing) 45 else 75, "SECONDS", 6, "EASY")
+        // §6: continuous comeback easing — missed days scale VOLUME, never punish
+        val comeback = s.comebackFactor
+        val best = when (kind) {
+            "PUSH" -> b?.pushReps ?: 0
+            "SQUAT" -> b?.squatReps ?: 0
+            "RUN", "WALK" -> b?.runMeters ?: 0
+            else -> 0
         }
-        val why = when (kind) {
-            "PUSH" -> "verified best ${b?.pushReps ?: 0} — consistency load, not burn"
-            "SQUAT" -> "verified best ${b?.squatReps ?: 0} — base strength coverage"
-            "RUN" -> "engine work; verified ${b?.runMeters ?: 0}m on record"
-            "WALK" -> "active recovery — keep the streak alive without strain"
-            else -> "core armor; pairs with today's blocks"
+        val rich = if (best > 0) FitnessIntelligence.richQuest(kind, best, comeback) else when (kind) {
+            "PUSH" -> FitnessIntelligence.richQuest("PUSH", 10, comeback)
+            "SQUAT" -> FitnessIntelligence.richQuest("SQUAT", 15, comeback)
+            "RUN" -> FitnessIntelligence.RichQuest((1200 * comeback).toInt().coerceIn(400, 1500), "easy pace · walk breaks allowed", "no verified run yet — base building, not speed")
+            "WALK" -> FitnessIntelligence.richQuest("WALK", 0, comeback)
+            else -> FitnessIntelligence.richQuest("PLANK", 0, comeback)
+        }
+        val (unit, durMin) = when (kind) {
+            "RUN", "WALK" -> "METERS" to if (kind == "RUN") 14 else 20
+            "PLANK" -> "SECONDS" to 6
+            else -> "REPS" to if (kind == "PUSH") 8 else 9
+        }
+        val strong = when (kind) {
+            "PUSH" -> (b?.pushReps ?: 0) >= 25
+            "SQUAT" -> (b?.squatReps ?: 0) >= 30
+            "RUN", "WALK" -> (b?.runMeters ?: 0) >= 2000
+            else -> false
         }
         return QuestProposal(
             title = when (kind) {
@@ -72,51 +76,56 @@ object DeterministicAI {
                 "RUN" -> "SHADOW RUN"; "WALK" -> "SILENT MARCH"; else -> "CORE OATH"
             },
             exercise = kind,
-            target = target,
+            target = rich.target,
             targetUnit = unit,
             durationMinutes = durMin,
-            difficulty = diff,
-            reason = if (easing) "$why · post-miss easing ×0.7" else why,
+            difficulty = if (strong && comeback == 1.0) "MEDIUM" else "EASY",
+            reason = rich.structure + " · " + rich.note +
+                if (comeback < 1.0) " · comeback ×${"%.2f".format(comeback)}" else "",
             confidence = 0.9,
         )
     }
 
-    // ── DAILY NUTRITION (§9) ─────────────────────────────────────────────────
+    // ── DAILY NUTRITION (§3, §9 science-first) ───────────────────────────────
     fun nutritionPlan(s: ContextEngine.Snapshot, budgetInr: Double, floor: Int): NutritionPlan {
+        val body = FitnessIntelligence.body(s.profile, floor)
         val goal = (s.profile?.goal ?: "").uppercase(Locale.US)
         val trainingDay = s.quests.any { !it.isDead }
         val minor = s.minor
-        var calories = when {
-            minor -> 2200 // §9: never cut for the young
-            goal.contains("BULK") || goal.contains("GAIN") || goal.contains("MUSCLE") -> 2600
-            goal.contains("CUT") || goal.contains("FAT") || goal.contains("LOSE") -> maxOf(floor, 1850)
-            else -> 2200
+        // §2: calories come from app math (FitnessMath), the fallback heuristic
+        // only fires when the profile literally lacks the numbers.
+        val calories = body.calorieTarget ?: run {
+            var c = when {
+                minor -> 2200
+                goal.contains("BULK") || goal.contains("GAIN") || goal.contains("MUSCLE") -> 2600
+                goal.contains("CUT") || goal.contains("FAT") || goal.contains("LOSE") -> maxOf(floor, 1850)
+                else -> 2200
+            }
+            if (trainingDay && !minor) c += 150
+            c
         }
-        if (trainingDay && !minor) calories += 150
-        val split = when {
-            goal.contains("BULK") || goal.contains("GAIN") || goal.contains("MUSCLE") ->
-                listOf(
-                    "BREAKFAST — 4 eggs + 2 rotis + banana (~620 kcal, 28g protein)",
-                    "LUNCH — rice + dal + chicken/paneer 150g + salad (~800 kcal)",
-                    "SNACK — curd + peanuts + fruit (~350 kcal)",
-                    "DINNER — 3 rotis + dal sabzi + milk (~830 kcal)",
-                )
-            goal.contains("CUT") || goal.contains("FAT") || goal.contains("LOSE") ->
-                listOf(
-                    "BREAKFAST — oats + milk + nuts (~420 kcal, 20g protein)",
-                    "LUNCH — 2 rotis + dal + grilled protein 120g + veg (~600 kcal)",
-                    "SNACK — buttermilk + roasted chana (~250 kcal)",
-                    "DINNER — light khichdi / 2 rotis + sabzi (~${maxOf(floor, 1850) - 1270} kcal)",
-                )
-            else ->
-                listOf(
-                    "BREAKFAST — 3 eggs / poha + milk (~500 kcal)",
-                    "LUNCH — rice + dal + sabzi + curd (~700 kcal)",
-                    "SNACK — fruit + peanuts (~300 kcal)",
-                    "DINNER — 3 rotis + dal / paneer + salad (~700 kcal)",
-                )
+        val gaining = goal.contains("BULK") || goal.contains("GAIN") || goal.contains("MUSCLE")
+        val cutting = goal.contains("CUT") || goal.contains("FAT") || goal.contains("LOSE")
+        val slots = when {
+            gaining -> listOf(
+                "BREAKFAST — 4 eggs + 2 rotis + banana (~620 kcal, 28g protein)",
+                "LUNCH — rice + dal + chicken/paneer 150g + salad (~800 kcal)",
+                "SNACK — curd + peanuts + fruit (~350 kcal)",
+                "DINNER — 3 rotis + dal sabzi + milk (~830 kcal)",
+            )
+            cutting -> listOf(
+                "BREAKFAST — oats + milk + nuts (~420 kcal, 20g protein)",
+                "LUNCH — 2 rotis + dal + grilled protein 120g + veg (~600 kcal)",
+                "SNACK — buttermilk + roasted chana (~250 kcal)",
+                "DINNER — light khichdi / 2 rotis + sabzi (~530 kcal)",
+            )
+            else -> listOf(
+                "BREAKFAST — 3 eggs / poha + milk (~500 kcal)",
+                "LUNCH — rice + dal + sabzi + curd (~700 kcal)",
+                "SNACK — fruit + peanuts (~300 kcal)",
+                "DINNER — 3 rotis + dal / paneer + salad (~700 kcal)",
+            )
         }
-        // REAL products only: supplements under 30% of budget, max 2 refs
         val refs = s.products
             .filter { it.category == "SUPPLEMENT" && it.priceInr <= budgetInr * 0.3 }
             .take(2)
@@ -124,12 +133,19 @@ object DeterministicAI {
         val spend = s.products.filter { it.id in refs }.sumOf { it.priceInr }
         return NutritionPlan(
             calorieTarget = calories,
-            slots = split,
+            slots = slots,
             marketRefs = refs,
             budgetInr = spend,
             reason = buildString {
-                append("goal=${goal.ifBlank { "MAINTAIN" }} · ${calories} kcal target")
-                if (trainingDay) append(" · training day +150")
+                if (body.tdee != null) {
+                    append("TDEE-est ${body.tdee} → $calories kcal")
+                    if (gaining) append(" (+300 lean gain)")
+                    if (cutting) append(" (−400 max, no crash cuts)")
+                    body.proteinG?.let { append(" · protein ~${it}g") }
+                } else {
+                    append("goal=${goal.ifBlank { "MAINTAIN" }} · $calories kcal target (profile numbers incomplete — estimate)")
+                    if (trainingDay) append(" · training day +150")
+                }
                 if (minor) append(" · conservative (under-18)")
                 if (refs.isEmpty()) append(" · no market add-ons matched")
             },
@@ -140,7 +156,6 @@ object DeterministicAI {
     fun routineDraft(s: ContextEngine.Snapshot, now: LocalTime = LocalTime.now()): RoutineDraft {
         val items = ArrayList<RoutineItem>()
 
-        // 1) FIXED commitments become untouchable anchors first
         s.commitments.forEach { c ->
             if (c.title.isBlank() || !c.start.matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$"))) return@forEach
             val startMin = c.start.substringBefore(":").toInt() * 60 + c.start.substringAfter(":").toInt()
@@ -161,7 +176,6 @@ object DeterministicAI {
                 min in sm until (sm + it.durationMin)
             }
 
-        // 2) slots free of commitments get protocol work: first open gap ≥40m
         val open = s.quests.filter { !it.isDone && !it.isDead }.sortedBy { it.seq }
         var cursorMin = ((now.hour * 60 + now.minute) / 30 + 1) * 30
         open.forEach { q ->
@@ -182,7 +196,6 @@ object DeterministicAI {
             }
         }
 
-        // 3) training anchor: prefer 17:00-19:00 window free of commitments
         if (s.primaryCourseTitle != null) {
             var t = 17 * 60
             var guard = 0
@@ -194,7 +207,6 @@ object DeterministicAI {
             )
         }
 
-        // 3.5) MIND anchor — chess training holds a midday/evening slot when the hunter plays
         if (s.chess != null && !busyAt(20 * 60 + 30)) {
             items += RoutineItem(
                 "CHESS TRAINING — MIND PROTOCOL", "20:30", "QUEST", 30,
@@ -202,10 +214,9 @@ object DeterministicAI {
             )
         }
 
-        // 4) meals + wind-down only where commitments left the day open
         if (!busyAt(13 * 60)) items += RoutineItem("LUNCH", "13:00", "MEAL", 25)
         if (!busyAt(21 * 60)) items += RoutineItem("DINNER", "21:00", "MEAL", 25)
-        if (!busyAt(22 * 60 + 45)) items += RoutineItem("WIND DOWN", "22:45", "SLEEP", 15, "recovery is training")
+        if (!busyAt(22 * 60 + 45)) items += RoutineItem("WIND DOWN", "22:45", "SLEEP", 15, notes = "recovery is training")
 
         return RoutineDraft(
             items = AIValidator.routine(items),
@@ -213,20 +224,172 @@ object DeterministicAI {
         )
     }
 
-    // ── SYSTEM ASSISTANT (§12) — intent-answered from the same snapshot ──────
+    // ═══════════════════════════════════════════════════════════════════════
+    // SYSTEM ASSISTANT (§3–§12) — the fitness intelligence voice.
+    // Order of gates: SAFETY → body facts → training intents → system intents.
+    // Every fact read from the snapshot; unknowns are SAID unknown (§10).
+    // ═══════════════════════════════════════════════════════════════════════
     fun assistantAnswer(question: String, s: ContextEngine.Snapshot, p: Personality): AssistantAnswer {
         val q = question.lowercase(Locale.US)
+
+        // ── §4 SAFETY WALL — before everything, personality never dilutes it ──
+        AIValidator.safetyBlockOf(q)?.let { block ->
+            val text = if (block == "HARD_STOP") AIValidator.SAFETY_REPLY_HARD_STOP else AIValidator.SAFETY_REPLY_RED_FLAG
+            return AssistantAnswer(text = text, followUps = listOf("sane calorie plan" , "comeback plan", "help"))
+        }
+
         val prof = s.profile
         val open = s.quests.firstOrNull { !it.isDone && it.status != "LOCKED" && !it.isDead }
         val done = s.quests.count { it.isDone }
-        val body = when {
+        val body = s.body
+        val comeback = s.comebackFactor
+
+        fun bodyReport(): String = buildString {
+            if (!body.complete) {
+                append("Body plate incomplete — I don't see age/height/weight on your vessel record, so I won't guess. Update your intake metrics and I'll compute BMR/TDEE honestly. ")
+                append("Until then I can still plan from your verified bests."); return@buildString
+            }
+            append("Body readings: BMI ${body.bmi} (${body.bmiClass}) · BMR ≈${body.bmr} kcal · TDEE ≈${body.tdee} kcal at ${(prof?.activityLevel ?: "STEADY").uppercase()}. ")
+            prof?.heightCm?.let { h ->
+                FitnessMath.healthyWeightRange(h)?.let { (lo, hi) ->
+                    prof.weightKg?.let { w ->
+                        if (w < lo || w > hi) append("Healthy band for ${h.toInt()}cm sits ≈ ${lo}–${hi}kg — you're logged at ${w.toInt()}kg. ")
+                    }
+                }
+            }
+            if (body.weightStale) append("Scale reading is >30 days old — refresh it or the targets drift. ")
+            append(FitnessMath.ESTIMATE_NOTE)
+        }
+
+        fun todaysMove(): String = buildString {
+            open?.let {
+                append("Order: BLOCK ${it.blockLabel} ${it.title} — ${it.progress}/${it.targetValue} ${it.targetUnit.lowercase(Locale.US)} to clear today. ")
+            } ?: append(if (done > 0) "Protocol blocks: CLEAR. " else "No live blocks — refresh the Status grid. ")
+            s.bests?.let { b ->
+                val kind = if ((b.pushReps.takeIf { it > 0 } ?: 5) <= (b.squatReps.takeIf { it > 0 } ?: 5)) "PUSH" else "SQUAT"
+                val rich = FitnessIntelligence.richQuest(kind, if (kind == "PUSH") b.pushReps.takeIf { it > 0 } ?: 10 else b.squatReps.takeIf { it > 0 } ?: 15, comeback)
+                append("If spare capacity: ${rich.structure} (${rich.note}). ")
+            }
+            if (comeback < 1.0) append("Comeback scaling ×${"%.2f".format(comeback)} is armed — missed days shrink the volume, not the standards.")
+        }
+
+        val body_ = when {
+            // ── BODY / METABOLISM (§1) ────────────────────────────────────────
+            q.contains("bmi") || q.contains("bmr") || q.contains("tdee") || q.contains("weight") ||
+                q.contains("metabolism") || q.contains("body") || q.contains("height") -> bodyReport()
+
+            // ── CALORIES / FOOD / PROTEIN (§3, §17) ──────────────────────────
+            q.contains("calori") || q.contains("protein") || q.contains("nutrition") || q.contains("meal") ||
+                q.contains("food") || q.contains("diet") || q.contains("eat") -> buildString {
+                if (body.calorieTarget != null) {
+                    append("Daily target ≈${body.calorieTarget} kcal (TDEE ≈${body.tdee}, goal-adjusted). ")
+                    body.proteinG?.let { append("Protein ≈${it}g/day — anchor every meal around it. ") }
+                    body.waterMl?.let { append("Water ≈${it}ml. ") }
+                } else {
+                    append("Your intake metrics are incomplete, so I can't compute honest calories. Update age/height/weight and the numbers appear. ")
+                }
+                append("Full day plan with REAL market items: Market tab → Nutrition Planner. Conservative floors apply; no crash diets, ever.${if (s.minor) " You're under 18 — no deficit games, growth first." else ""}")
+            }
+
+            // ── HYDRATION (§3) ───────────────────────────────────────────────
+            q.contains("water") || q.contains("hydrat") || q.contains("thirst") ->
+                body.waterMl?.let {
+                    "Hydration order: ≈${it}ml today (~${"%.1f".format(it / 1000.0)}L) spread across the day — more in training heat, never force-chug. Small steady glasses beat litre bombs."
+                } ?: "Your weight isn't on record, so the standard applies: ≈2–3 litres spread across the day, more if you train. No dehydration shortcuts — ever."
+
+            // ── COMEBACK / MISSED (§6, §9) ───────────────────────────────────
+            q.contains("missed") || q.contains("comeback") || q.contains("reset") || q.contains("fell off") ||
+                q.contains("streak") && (q.contains("lost") || q.contains("recover") || q.contains("back")) -> buildString {
+                append("No excuses needed. Let's reset. ")
+                when {
+                    (prof?.missedDays ?: 0) <= 0 -> append("Your chain is live — streak ${prof?.streakDays ?: 0}. Protect it today. ")
+                    else -> {
+                        append("${prof?.missedDays} missed day(s) logged; comeback scaling ×${"%.2f".format(comeback)} is on — lighter entry, same discipline. ")
+                        open?.let { append("Clear ONE block now (${it.title}) and decay stops bleeding. ⚔️ ") }
+                            ?: append("One completed block today restarts the chain. ")
+                    }
+                }
+            }
+
+            // ── MUSCLE COURSE SESSION (§7) ───────────────────────────────────
+            q.contains("muscle") || q.contains("course") || q.contains("gym") || q.contains("push-up plan") ||
+                q.contains("program") || q.contains("sets") && q.contains("reps") -> buildString {
+                if (s.primaryCourseTitle == null) {
+                    append("No primary muscle course enrolled. ONE course is the law — pick yours on the Training catalog (muscle path = your main forge). ")
+                    append("Until then, today's verified bests steer everything: ")
+                    s.bests?.let { b ->
+                        val rich = FitnessIntelligence.richQuest("PUSH", b.pushReps.takeIf { it > 0 } ?: 10, comeback)
+                        append(rich.structure).append(". ")
+                    }
+                } else {
+                    append("PRIMARY COURSE: ${s.primaryCourseTitle}. Today's session (band ${s.band.name}${if (comeback < 1.0) ", comeback easing" else ""}):\n")
+                    FitnessIntelligence.muscleSession(s.band, comeback).forEach { append("• $it\n") }
+                    append("Stop 1–2 reps shy of form failure. Pain is a stop sign, not a challenge.")
+                }
+            }
+
+            // ── EQUIPMENT (§7 safe alternatives) ─────────────────────────────
+            q.contains("equipment") || q.contains("dumbbell") || q.contains("no gym") || q.contains("home workout") ||
+                q.contains("pull-up") || q.contains("barbell") -> buildString {
+                append("No gym required — bodyweight-first, always. Safe swaps:\n")
+                FitnessIntelligence.EQUIPMENT_EQUIVALENTS.take(3).forEach { (need, swap) -> append("• $need → $swap\n") }
+                append("Household loads only when obviously safe (seams, straps, solid anchors). Anything sketchy stays on the floor.")
+            }
+
+            // ── SPECIAL TRACKS (§8 honest suggestions) ───────────────────────
+            q.contains("special") || q.contains("speed") || q.contains("agility") || q.contains("stamina") ||
+                q.contains("endurance") || q.contains("grip") || q.contains("reflex") || q.contains("mobility") -> buildString {
+                val sugg = FitnessIntelligence.specialSuggestion(s.bests)
+                if (sugg == null) {
+                    append("No verified performance lines yet, so I can't suggest a special track honestly. Bank camera-verified push/squat/run bests first — then the data picks your track. ")
+                } else {
+                    append("${FitnessIntelligence.SUGGESTION_PHRASE} ${sugg.second}. Track: ${sugg.first}. ")
+                    append("Specials stay OPTIONAL seasoning — the ONE primary muscle course is the meal.")
+                }
+            }
+
+            // ── SLEEP / RECOVERY (§3, §17) ───────────────────────────────────
+            q.contains("sleep") || q.contains("recovery") || q.contains("rest day") || q.contains("tired") -> buildString {
+                append("Recovery is training. Target 7–9h in bed, screens off 30m before. ")
+                if (s.recoveryRemainingSec > 0) append("Live recovery window: ${s.recoveryRemainingSec}s before the next block unlocks. ")
+                if (s.band != FitnessIntelligence.Band.BEGINNER) append("One full rest day a week minimum — growth happens between sessions, not inside them. ")
+                append("Quality beats volume when the body says it's cooked. ⚡")
+            }
+
+            // ── GOAL GUIDANCE (§3 science-first) ─────────────────────────────
+            q.contains("goal") || q.contains("lose weight") || q.contains("gain") || q.contains("bulk") ||
+                q.contains("cut") || q.contains("lean") || q.contains("fat loss") -> buildString {
+                val g = (prof?.goal ?: "UNSET").uppercase()
+                append("Logged goal: $g. ")
+                if (body.tdee != null) {
+                    when {
+                        g.contains("CUT") || g.contains("FAT") || g.contains("LOSE") -> {
+                            append("Fat loss pace that keeps muscle: ~0.25–0.5 kg/week via a ≤400 kcal deficit — your target ≈${body.calorieTarget} kcal. ")
+                            append("Training stays; protein ${body.proteinG ?: ""}g shields the mass. Slower is safer; faster rebounds. ")
+                        }
+                        g.contains("BULK") || g.contains("GAIN") || g.contains("MUSCLE") -> {
+                            append("Lean gain pace: +300 kcal over TDEE (≈${body.calorieTarget}), ~0.25–0.5 kg/month on the bar, not the belly. ")
+                            append("Protein ≈${body.proteinG}g, progressive overload on the verified lines. ")
+                        }
+                        else -> append("Maintenance ≈${body.tdee} kcal — use surplus/deficit only with a declared goal; the System switches targets when you do. ")
+                    }
+                } else append("Complete your intake metrics and I'll attach exact calorie math to that goal. ")
+                append("Change the goal in your profile and the system re-targets the same day.")
+            }
+
+            // ── PROGRESS (existing, deepened) ────────────────────────────────
             q.contains("progress") || q.contains("summary") || q.contains("how am i") -> buildString {
                 append("LV ${prof?.level ?: "?"} · ${prof?.rank?.title ?: "—"} · streak ${prof?.streakDays ?: 0}. ")
                 append("Quests today ${done}/${s.quests.size}. ")
                 s.bests?.let { append("Verified: ${it.pushReps} push · ${it.squatReps} squat · ${it.runMeters}m run across ${it.sessions} sessions. ") }
+                if (s.nextTargets.isNotEmpty()) {
+                    append("Next overload marks: ${s.nextTargets.entries.joinToString(" · ") { "${it.key.lowercase()} ${it.value}" }}. ")
+                }
                 if ((prof?.missedDays ?: 0) > 0) append("Decay is armed — clear one block today to stop it.")
                 else append("No decay. Keep the chain.")
             }
+
+            // ── QUEST (existing, comeback-aware) ─────────────────────────────
             q.contains("quest") -> buildString {
                 if (s.quests.isEmpty()) append("No quest set yet — pull refresh on Status when the grid is back. ")
                 else {
@@ -236,6 +399,8 @@ object DeterministicAI {
                 }
                 if (s.recoveryRemainingSec > 0) append("Recovery window: ${s.recoveryRemainingSec}s before the next block unlocks.")
             }
+
+            // ── RANK / XP (existing) ─────────────────────────────────────────
             q.contains("rank") || q.contains("level") || q.contains("xp") -> buildString {
                 append("You are ${prof?.rank?.title ?: "—"}, LV ${prof?.level ?: "?"} (${prof?.xp ?: 0} XP). ")
                 when (prof?.missedDays ?: 0) {
@@ -244,6 +409,8 @@ object DeterministicAI {
                     else -> append("${prof?.missedDays} misses — XP decaying daily. One verified block stops the bleed.")
                 }
             }
+
+            // ── MIND (existing) ──────────────────────────────────────────────
             q.contains("chess") || q.contains("mind") || q.contains("puzzle") || q.contains("mental") -> buildString {
                 val c = s.chess
                 if (c == null || (c.games == 0 && c.puzzlesAttempted == 0)) {
@@ -261,31 +428,46 @@ object DeterministicAI {
                     append("Route: DAILY CHALLENGE → PUZZLE TRAINING until tier rises → MENTAL WAR twice a week. No shortcuts, no noise. ")
                 }
             }
-            q.contains("nutrition") || q.contains("meal") || q.contains("food") || q.contains("diet") ->
-                "Nutrition Planner lives in the Market tab — it builds a day plan from your goal (${prof?.goal ?: "UNSET"}) and matches REAL store items only. Conservative floors apply; no crash diets, ever."
+
+            // ── TODAY'S MOVE (new core intent) ───────────────────────────────
+            q.contains("workout") || q.contains("train") || q.contains("exercise") || q.contains("what should i do") ||
+                q.contains("today") && (q.contains("plan") || q.contains("session") || q.contains("work")) -> todaysMove()
+
+            // ── ROUTINE (existing) ───────────────────────────────────────────
             q.contains("routine") || q.contains("schedule") ->
-                "Open SYSTEM ROUTINE from Status → Generate. I anchor today's quests + training around now+30m; you accept, edit or reject. Confirmed routines sync to the vault."
+                "Open SYSTEM ROUTINE from Status → Generate. I anchor today's quests + training around your fixed commitments; you accept, edit or reject. Confirmed routines sync to the vault."
+
+            // ── HELP (existing) ──────────────────────────────────────────────
             q.contains("help") || q.contains("navigate") || q.contains("how to") || q.contains("what can you") ->
-                "Roster: progress summary · quest intel · rank/XP decode · routine drafts · nutrition plans · next-action orders. Ask in plain words — I only see structured context, never your private data."
+                "Roster: body readings (BMI/BMR/TDEE) · calorie+protein targets · workout orders · comeback resets · muscle-course sessions · equipment swaps · special-track suggestions · rank/XP decode · routine drafts. Ask in plain words — I answer only from verified context, and I'll say when I don't know."
+
+            // ── DEFAULT ──────────────────────────────────────────────────────
             else -> buildString {
                 open?.let { append("Order: clear ${it.title} — ${it.progress}/${it.targetValue} ${it.targetUnit.lowercase(Locale.US)} to go. ") }
                     ?: append(if (done > 0) "Day clear, hunter. Recover well." else "Status board is syncing — refresh and return.")
             }
         }
+
         val shaped = when (p) {
-            Personality.QUIET -> body.split(". ").take(2).joinToString(". ") + "."
-            Personality.COACH -> body
-            Personality.COMPANION -> "Good to see you, hunter. $body"
-            Personality.COMMAND -> body.replace("Order:", "DO:").split(". ").take(2).joinToString(". ") + "."
+            Personality.QUIET -> body_.split("\n").take(4).joinToString("\n").split(". ").take(2).joinToString(". ") + "."
+            Personality.COACH -> body_
+            Personality.COMPANION -> "Good to see you, hunter. $body_"
+            Personality.COMMAND -> body_.replace("Order:", "DO:")
         }
         return AIValidator.assistant(
             AssistantAnswer(
                 text = shaped,
                 followUps = listOfNotNull(
-                    "quest status".takeIf { s.quests.isNotEmpty() },
+                    when {
+                        q.contains("bmi") || q.contains("bmr") || q.contains("calori") -> "today's workout"
+                        q.contains("workout") || q.contains("train") -> "my progress"
+                        q.contains("missed") || q.contains("comeback") -> "quest status"
+                        q.contains("special") -> "equipment swaps"
+                        else -> "quest status".takeIf { s.quests.isNotEmpty() } ?: "today's workout"
+                    },
                     "my progress",
-                    "rank info".takeIf { prof != null },
-                ),
+                    if (body.complete) "calorie target" else null,
+                ).distinct().take(3),
             ),
         )
     }

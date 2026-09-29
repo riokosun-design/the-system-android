@@ -149,6 +149,7 @@ class DashboardViewModel @Inject constructor(
                 com.thesystem.app.ai.ContextEngine.Need.PROFILE,
                 com.thesystem.app.ai.ContextEngine.Need.QUESTS,
                 com.thesystem.app.ai.ContextEngine.Need.PERFORMANCE,
+                com.thesystem.app.ai.ContextEngine.Need.TRAINING,   // §1/§11: course facts reach the quest brain
             ),
         )
         val out = orchestrator.proposeQuest(snap)

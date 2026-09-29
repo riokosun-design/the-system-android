@@ -48,6 +48,19 @@ class DeviceCapabilityManager @Inject constructor(
         StatFs(File(app.filesDir.absolutePath).absolutePath).availableBytes / (1024 * 1024)
     }.getOrDefault(0L)
 
+    /**
+     * Unmetered-network probe (§13/§14): big model bundles must never roll
+     * down metered cellular without the hunter explicitly clearing it. True
+     * on Wi-Fi transport or an explicitly NOT_METERED connection; false on
+     * any doubt — the fail direction is always "don't burn their data".
+     */
+    fun isUnmetered(): Boolean = runCatching {
+        val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
+            caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+    }.getOrDefault(false)
+
     fun thermalStatus(): Int =
         if (Build.VERSION.SDK_INT >= 29) runCatching {
             (app.getSystemService(Context.POWER_SERVICE) as PowerManager).currentThermalStatus

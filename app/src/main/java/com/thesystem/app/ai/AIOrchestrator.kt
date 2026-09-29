@@ -53,7 +53,11 @@ class AIOrchestrator @Inject constructor(
                 }
                 var rt = runtime
                 if (rt?.loaded != true || loadedModel?.id != meta.id) {
-                    val file = models.ensure(meta) ?: run { obs.count("model_download_fail"); return@runCatching null }
+                    // §13/§14: inference NEVER implicitly downloads — the hunter
+                    // pre-stages bundles from the AI status page (orchestrator
+                    // downloadModel). Absent = instant deterministic fallback.
+                    val file = models.readyFile(meta) ?: run { obs.count("model_absent"); return@runCatching null }
+                    if ((models.freeStorageMb() < meta.sizeMb / 4)) { obs.count("model_storage_low"); return@runCatching null }
                     val fresh = runtimeFactory.create()
                     if (!fresh.load(file.absolutePath, meta.ctx)) {
                         obs.count("model_load_fail"); fresh.unload(); return@runCatching null
@@ -89,6 +93,56 @@ class AIOrchestrator @Inject constructor(
     fun release() {
         runtime?.unload(); runtime = null; loadedModel = null
         obs.count("unload_release")
+    }
+
+    /** Honest brain line for status UIs (§16): exactly what would answer now. */
+    fun activeBrainLine(): String = buildString {
+        if (runtime?.loaded == true && loadedModel != null) {
+            append("LOCAL LLM — ${loadedModel!!.id} (MEDIAPIPE_TASK, on-device)")
+        } else {
+            val tier = capability.tier(config.flags.minFreeStorageMb)
+            append("RULES ENGINE (deterministic)")
+            if (config.flags.localAiEnabled) {
+                when (val meta = config.modelFor(tier)) {
+                    null -> if (tier == ModelTier.NONE) append(" · device tier NONE") else append(" · no bundle offered for tier $tier")
+                    else -> if (models.readyFile(meta) == null) append(" · LLM bundle '${meta.id}' not downloaded")
+                }
+            } else append(" · local_ai_enabled=false (server flag)")
+        }
+    }
+
+    sealed class DownloadResult {
+        data object Started : DownloadResult()
+        data class Done(val ok: Boolean) : DownloadResult()
+        data object NoSuchModel : DownloadResult()
+        data object NeedsWifi : DownloadResult()
+        data object NoStorage : DownloadResult()
+        data object NoArtifact : DownloadResult()
+    }
+
+    /**
+     * EXPLICIT bundle fetch (§13): only from the AI status page, honouring the
+     * catalog's wifi law and a storage pre-flight. Progress pulses feed the UI
+     * bar; any failure leaves the system exactly as it was (deterministic).
+     */
+    suspend fun downloadModel(modelId: String, onProgress: (received: Long, total: Long) -> Unit): DownloadResult {
+        val meta = config.catalog().firstOrNull { it.id == modelId } ?: return DownloadResult.NoSuchModel
+        if (meta.url == null) { obs.count("download_no_artifact"); return DownloadResult.NoArtifact }
+        if (meta.wifiRequired && !capability.isUnmetered()) { obs.count("download_blocked_metered"); return DownloadResult.NeedsWifi }
+        if (!models.storageFits(meta)) { obs.count("download_blocked_storage"); return DownloadResult.NoStorage }
+        obs.count("download_start")
+        val file = models.download(meta) { got, total -> runCatching { onProgress(got, total) } }
+        val ok = file != null
+        obs.count(if (ok) "download_ok" else "download_fail")
+        return DownloadResult.Done(ok)
+    }
+
+    fun deleteModel(modelId: String) {
+        config.catalog().firstOrNull { it.id == modelId }?.let { meta ->
+            if (loadedModel?.id == meta.id) { runtime?.unload(); runtime = null; loadedModel = null }
+            models.delete(meta)
+            obs.count("download_deleted")
+        }
     }
 
     // ── §8 DAILY QUEST ───────────────────────────────────────────────────────

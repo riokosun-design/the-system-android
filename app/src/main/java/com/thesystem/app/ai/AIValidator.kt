@@ -10,6 +10,42 @@ import java.util.Locale
 object AIValidator {
 
     val QUEST_KINDS = setOf("PUSH", "SQUAT", "RUN", "WALK", "PLANK")
+
+    // ── §4 SAFETY GATE ─ every inbound question crosses this BEFORE intents ──
+    // Red-flag language ⇒ normal training advice halts; the answer points to
+    // real-world help. The AI is never a doctor and never pushes through pain.
+    private val SAFETY_RED_FLAGS = setOf(
+        "chest pain", "heart", "can't breathe", "cant breathe", "not breathing",
+        "faint", "fainting", "blackout", "black out", "dizzy", "dizziness",
+        "sharp pain", "stabbing pain", "severe pain", "unbearable pain",
+        "injured", "injury", "sprained", "sprain", "fracture", "broken bone",
+        "torn", "dislocate", "blood", "bleeding", "vomit", "throwing up",
+        "passed out", "pass out", "numb", "numbness",
+    )
+    private val SAFETY_HARD_STOP = setOf(
+        "starve", "starvation", "stop eating", "not eating", "no food today",
+        "rules: never", "skip water", "no water", "purge", "vomit on purpose",
+        "painkiller to train", "train through the pain",
+    )
+
+    /** Non-null when the question trips the safety wall (handled by callers). */
+    fun safetyBlockOf(question: String): String? {
+        val q = question.lowercase()
+        val red = SAFETY_RED_FLAGS.firstOrNull { q.contains(it) }
+        val hard = SAFETY_HARD_STOP.firstOrNull { q.contains(it) }
+        return when {
+            hard != null -> "HARD_STOP"
+            red != null -> "RED_FLAG: $red"
+            else -> null
+        }
+    }
+
+    /** §4 copy — strict, humble, human-first; never a diagnosis, never a doctor. */
+    const val SAFETY_REPLY_RED_FLAG =
+        "STOP. What you just described is beyond training advice — pause the session now, rest, and talk to a doctor or a qualified professional before any further exercise. I am not a doctor and I won't guess. The System will wait. Health first, protocol second."
+    const val SAFETY_REPLY_HARD_STOP =
+        "That request is dangerous and I will not help with it. No starvation, no dehydration games, no masking pain with pills, no training through injury. Sustainable discipline beats punishment every single week. If this is about weight, ask me for a sane calorie plan instead. ⚔️"
+
     val ROUTINE_CATS = setOf("TRAINING", "QUEST", "RECOVERY", "MEAL", "COMMIT", "SLEEP")
     private val TIME_RE = Regex("^([01]?\\d|2[0-3]):[0-5]\\d$")
 

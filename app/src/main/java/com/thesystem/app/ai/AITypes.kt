@@ -30,6 +30,12 @@ data class ModelMeta(
     val version: String = "0",
     val url: String? = null,
     val sha256: String? = null,
+    /** Exact published byte count — the downloader refuses size drift. */
+    @SerialName("size_bytes") val sizeBytes: Long = 0,
+    /** Big bundles never touch metered data without the hunter asking first. */
+    @SerialName("wifi_required") val wifiRequired: Boolean = true,
+    /** Honest source label (no fake AI §16): where this artifact actually lives. */
+    val source: String = "",
 )
 
 // ── Remote feature flags (§24) — parsed from engine_config.ai ────────────────

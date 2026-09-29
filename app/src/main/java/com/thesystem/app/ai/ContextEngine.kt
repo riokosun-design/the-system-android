@@ -45,6 +45,14 @@ class ContextEngine @Inject constructor(
         val recoveryRemainingSec: Int = 0,
         val commitments: List<CommitmentBlock> = emptyList(), // §6 fixed life blocks
         val chess: com.thesystem.app.data.model.ChessProfileDto? = null, // MENTAL ASCENSION facts
+        /** §1 (fitness master): deterministic body math the AI only READS. */
+        val body: FitnessIntelligence.Body = FitnessIntelligence.body(null),
+        /** §6 progressive-overload readout per kind, computed from verified bests. */
+        val nextTargets: Map<String, Int> = emptyMap(),
+        /** §6: comeback easing when the hunter is re-entering after missed days. */
+        val comebackFactor: Double = 1.0,
+        /** §6 training maturity band from measured bests + declared experience. */
+        val band: FitnessIntelligence.Band = FitnessIntelligence.Band.BEGINNER,
     ) {
         val minor: Boolean get() = (profile?.age ?: 99) < 18
     }
@@ -85,19 +93,38 @@ class ContextEngine @Inject constructor(
                 }.getOrNull()?.take(12)
             }.orEmpty(),
             chess = chessD?.await(),
+            body = FitnessIntelligence.body(profileD?.await()),
+            nextTargets = bestsD?.await()?.let { b ->
+                buildMap {
+                    FitnessIntelligence.nextTarget("PUSH", b.pushReps)?.let { put("PUSH", it) }
+                    FitnessIntelligence.nextTarget("SQUAT", b.squatReps)?.let { put("SQUAT", it) }
+                    FitnessIntelligence.nextTarget("RUN", b.runMeters)?.let { put("RUN", it) }
+                }
+            }.orEmpty(),
+            comebackFactor = FitnessIntelligence.comebackFactor(
+                (profileD?.await()?.missedDays ?: 0),
+            ),
+            band = FitnessIntelligence.band(bestsD?.await(), profileD?.await()?.athleticExperience),
         )
     }
 
     /** Compact prompt block — the ONLY user data a text model ever sees. */
-    fun promptBlock(s: Snapshot, maxChars: Int = 900): String = buildString {
+    fun promptBlock(s: Snapshot, maxChars: Int = 1000): String = buildString {
         s.profile?.let { p ->
-            appendLine("hunter: level=${p.level} rank=${p.rank.title} xp=${p.xp} streak=${p.streakDays} missed=${p.missedDays}")
+            appendLine("hunter: name=${p.displayName ?: p.username.take(12)} level=${p.level} rank=${p.rank.title} xp=${p.xp} streak=${p.streakDays} missed=${p.missedDays}")
             appendLine("goal=${p.goal ?: "UNSET"} age=${p.age ?: "?"} act=${p.activityLevel ?: "?"} exp=${p.athleticExperience ?: "?"}")
         }
+        // §1/§2: body math is app-computed; the model READS it, never derives it
+        s.body.let { bd ->
+            if (bd.complete) appendLine("body: bmi=${bd.bmi}(${bd.bmiClass}) bmr=${bd.bmr} tdee=${bd.tdee} kcal_target=${bd.calorieTarget} protein_g=${bd.proteinG} water_ml=${bd.waterMl}${if (bd.weightStale) " weight_stale" else ""}")
+            else appendLine("body: metrics INCOMPLETE (age/height/weight missing — do not guess)")
+        }
         s.bests?.let { b -> appendLine("verified_bests: push=${b.pushReps} squat=${b.squatReps} run_m=${b.runMeters} sessions=${b.sessions}") }
+        if (s.nextTargets.isNotEmpty()) appendLine("next_overload: ${s.nextTargets.entries.joinToString(" ") { "${it.key.lowercase()}=${it.value}" }}")
+        appendLine("state: band=${s.band.name} comeback_factor=${s.comebackFactor} recovery_wait_s=${s.recoveryRemainingSec}")
         val open = s.quests.filter { !it.isDone && !it.isDead }
         appendLine("quests_today: done=${s.quests.count { it.isDone }}/${s.quests.size} open=[${open.joinToString("|") { "${it.exerciseKind ?: "?"}:${it.progress}/${it.targetValue}${it.targetUnit.take(1)}" }}]")
-        appendLine("training: primary=${s.primaryCourseTitle ?: "NONE"} specials=${s.activeSpecials} recovery_wait_s=${s.recoveryRemainingSec}")
+        appendLine("training: primary=${s.primaryCourseTitle ?: "NONE"} specials=${s.activeSpecials}")
         if (s.commitments.isNotEmpty()) appendLine("commitments: ${s.commitments.take(6).joinToString("|") { "${it.title.take(12)}@${it.start}" }}")
         s.chess?.let { c ->
             appendLine("mind: mental_rank=${c.mentalRank} lv=${c.mentalLevel} rating=${c.rating} w${c.wins}/d${c.draws}/l${c.losses} puzzles=${c.puzzlesSolved}/${c.puzzlesAttempted}")
