@@ -112,7 +112,6 @@ class AIOrchestrator @Inject constructor(
     }
 
     sealed class DownloadResult {
-        data object Started : DownloadResult()
         data class Done(val ok: Boolean) : DownloadResult()
         data object NoSuchModel : DownloadResult()
         data object NeedsWifi : DownloadResult()
