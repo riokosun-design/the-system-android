@@ -52,9 +52,11 @@ import java.util.concurrent.Executors
 /**
  * VERIFIED PROOF SESSION — LOG never trusts a tap.
  *
- *  CAMERA : push-ups pass through the PHASE 0 envelope (calibration gate +
- *           engine v4 side-view machine, IMU witness); squats use the ML Kit
- *           angle state machine; live skeleton overlay throughout.
+ *  CAMERA : push-ups AND squats run the sim-proven REP PULSE v5 core —
+ *           geometry-agnostic adaptive-band counting over the shared pose
+ *           router (MoveNet primary / ML Kit failover), IMU witness, live
+ *           skeleton overlay throughout. No calibration ritual: the engine
+ *           learns the hunter's range from the first honest rep.
  *  STEPS  : foreground HEALTH service keeps counting through music, app switch
  *           and lock screen, then syncs the meters back here.
  *  TIMER  : running clock for holds; the server receives the elapsed seconds.
@@ -230,11 +232,12 @@ private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
                 .background(Color.Black)
                 .border(1.5.dp, SkyBlue.copy(alpha = 0.7f), RoundedCornerShape(12.dp)),
         ) {
-            // PHASE 0: push-ups count inside the enforced envelope (gate + engine
-            // v4, CV-BATTLE-ARCHITECTURE); squats keep the proven angle machine.
+            // REP PULSE v5: both engines are the sim-proven geometry-agnostic
+            // core — no calibration ritual, frame the hunter however the room
+            // allows. (CV-BATTLE-ARCHITECTURE superseded; sim gates releases.)
             key(camRetry) {
-                if (s.exercise == PoseRepCounter.RepExercise.SQUAT) CameraBox(s, vm, flash, onReady = { camReady = true })
-                else PushupV4Box(s, vm, flash, onReady = { camReady = true })
+                if (s.exercise == PoseRepCounter.RepExercise.SQUAT) SquatPulseBox(s, vm, flash, onReady = { camReady = true })
+                else PushupPulseBox(s, vm, flash, onReady = { camReady = true })
             }
             if (camSlow && !camReady) {
                 Box(
@@ -270,7 +273,7 @@ private fun CameraProofStage(s: QuestProofState, vm: QuestProofViewModel) {
         s.lastQuality?.let { q ->
             Spacer(Modifier.height(8.dp))
             Text(
-                "FORM %.0f%% · TEMPO %.1fs · DEPTH %.0f%%".format(q.symmetry * 100, q.tempoMs / 1000.0, q.depthScore * 100),
+                "DEPTH %.0f%% · TEMPO %.1fs · %s".format(q.depthScore * 100, q.tempoMs / 1000.0, q.engineVersion.uppercase()),
                 style = MonoLabel, color = LabelGray,
             )
         }
@@ -292,31 +295,68 @@ private fun BoxScope.FeedScrim() {
     )
 }
 
-/** ML Kit stage — lives inside the proof Box so overlays keep BoxScope. */
+/** v5 live guidance — what the engine SEES and NEEDS, never a silent zero. */
 @Composable
-private fun BoxScope.CameraBox(s: QuestProofState, vm: QuestProofViewModel, flash: Float, onReady: () -> Unit = {}) {
+private fun BoxScope.PulseGuidance(t: RepPulseCore.Telemetry?) {
+    if (t == null || t.hint.isEmpty()) return
+    Column(
+        Modifier.align(Alignment.TopEnd).padding(12.dp).widthIn(max = 175.dp),
+    ) {
+        if (t.personSeen && t.activeChannel == "NONE") {
+            Text("LEARNING YOUR RANGE", style = MonoLabel, color = SkyBlue)
+            Spacer(Modifier.height(4.dp))
+            Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(TrackGray)) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(t.bestRangeFrac.coerceIn(0f, 1f)).background(SkyBlue))
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+        Text(
+            t.hint, color = PaperWhite, fontFamily = SystemMono,
+            fontSize = 10.sp, fontWeight = FontWeight.Bold, lineHeight = 14.sp,
+        )
+    }
+}
+
+/** SQUAT v5 stage — geometry-agnostic core, back camera, IMU witness armed. */
+@Composable
+private fun BoxScope.SquatPulseBox(s: QuestProofState, vm: QuestProofViewModel, flash: Float, onReady: () -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var preview by remember { mutableStateOf<PreviewView?>(null) }
     var mesh by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
     var phase by remember { mutableStateOf(PoseRepCounter.RepPhase.SEARCH) }
     var depth by remember { mutableFloatStateOf(0f) }
+    var telem by remember { mutableStateOf<RepPulseCore.Telemetry?>(null) }
     val haptics = rememberSystemHaptics()
 
     val executor = remember { Executors.newSingleThreadExecutor() }
     DisposableEffect(Unit) { onDispose { executor.shutdown() } }
 
-    // one detector drives the counter, the reticle phase and the skeleton mesh
-    val counter = remember(s.exercise) {
-        PoseRepCounter(
-            exercise = s.exercise,
+    val witness = remember { com.thesystem.app.core.sensors.ImuStabilityWitness(context) }
+    DisposableEffect(witness) {
+        witness.start()
+        onDispose { witness.stop() }
+    }
+
+    val router = remember { PoseEstimatorRouter(context) }
+    DisposableEffect(router) { onDispose { router.close() } }
+
+    // the sim-proven core drives the counter, the reticle phase and the mesh
+    val engine = remember {
+        RepPulseEngineV5(
+            exercise = RepPulseCore.Exercise.SQUAT,
+            strictness = RepPulseCore.Strictness.STANDARD,
+            witness = witness,
+            estimator = router,
+            estimatorTag = { router.activeSource },
             onRep = { n, q -> haptics.success(); vm.onRep(n, q) },
             onPhase = { p, d -> phase = p; depth = d },
             onLandmarks = { mesh = it },
-            onStatus = { vm.onPoseStatus(it) },
+            onPoseStatus = { vm.onPoseStatus(it) },
+            onTelemetry = { telem = it },
         )
     }
-    DisposableEffect(counter) { onDispose { counter.close() } }
+    DisposableEffect(engine) { onDispose { engine.close() } }
 
     // leaving this stage (radar toggle, exit) must release the lens — a bound
     // camera would keep the analyzer, and its counter, alive in the dark.
@@ -336,11 +376,8 @@ private fun BoxScope.CameraBox(s: QuestProofState, vm: QuestProofViewModel, flas
         val analysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
-            .also { it.setAnalyzer(executor) { proxy -> counter.process(proxy) } }
-        // push-ups: front camera, phone on the floor. squats: back camera, full body.
-        val selector = if (s.exercise == PoseRepCounter.RepExercise.SQUAT) CameraSelector.DEFAULT_BACK_CAMERA
-        else CameraSelector.DEFAULT_FRONT_CAMERA
-        provider.bindToLifecycle(lifecycleOwner, selector, camPreview, analysis)
+            .also { it.setAnalyzer(executor) { proxy -> engine.process(proxy) } }
+        provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, camPreview, analysis)
         onReady()
     }
 
@@ -356,6 +393,8 @@ private fun BoxScope.CameraBox(s: QuestProofState, vm: QuestProofViewModel, flas
             fontWeight = FontWeight.Bold, fontSize = 40.sp,
         )
     }
+
+    PulseGuidance(telem)
 
     // status ribbon — the fix-it instruction the old build never gave
     val (statusText, statusColor) = when (s.poseStatus) {
@@ -384,18 +423,20 @@ private fun BoxScope.CameraBox(s: QuestProofState, vm: QuestProofViewModel, flas
 }
 
 /**
- * PHASE 0 PUSH-UP STAGE — the envelope, enforced. Frames route through the
- * CalibrationGate until a profile locks, then into engine v4. The hunter is
- * coached into a side view instead of being silently miscounted from the floor.
- * Front camera so the coaching HUD stays visible; IMU vetoes any bump.
+ * PUSH-UP v5 STAGE — the calibration ritual is dead. The hunter frames the set
+ * however the room allows (phone flat on the floor is a FIRST-CLASS geometry
+ * again, like the field reports always did it); the sim-proven RepPulseCore
+ * inside learns the visible channel and counts. Front camera keeps the
+ * coaching HUD in view; IMU vetoes any bump.
  */
 @Composable
-private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, flash: Float, onReady: () -> Unit = {}) {
+private fun BoxScope.PushupPulseBox(s: QuestProofState, vm: QuestProofViewModel, flash: Float, onReady: () -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var preview by remember { mutableStateOf<PreviewView?>(null) }
     var mesh by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
     var depth by remember { mutableFloatStateOf(0f) }
+    var telem by remember { mutableStateOf<RepPulseCore.Telemetry?>(null) }
     val haptics = rememberSystemHaptics()
 
     val executor = remember { Executors.newSingleThreadExecutor() }
@@ -407,12 +448,11 @@ private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, fl
         onDispose { witness.stop() }
     }
 
-    // PHASE 1 pose ownership: MoveNet Thunder primary, ML Kit failover, ROI
-    // lock, live parity probe riding with the harvest corpus (Phase 2).
+    // MoveNet Thunder primary, ML Kit failover, ROI lock, parity probe (§Phase 1/2)
     val router = remember { PoseEstimatorRouter(context) }
     DisposableEffect(router) { onDispose { router.close() } }
 
-    // PHASE 3 shadow TCN — scores sequences, rules ALWAYS decide (§20)
+    // shadow TCN keeps scoring sequences; rules ALWAYS decide
     val scorer = remember { TcnShadowScorer.create(context) }
     DisposableEffect(scorer) { onDispose { scorer.close() } }
     var lastParity by remember { mutableStateOf<Float?>(null) }
@@ -424,54 +464,41 @@ private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, fl
         onDispose { router.onParity = null; vm.flushHarvest() }
     }
 
-    var profile by remember { mutableStateOf<CalibProfile?>(null) }
-    val gate = remember {
-        CalibrationGate(
+    val engine = remember {
+        RepPulseEngineV5(
+            exercise = RepPulseCore.Exercise.PUSHUP,
+            strictness = RepPulseCore.Strictness.STANDARD,
             witness = witness,
             estimator = router,
-            onProfile = { p -> profile = p; vm.onCalibrated(p); haptics.success() },
-            onLandmarks = { mesh = it },
+            estimatorTag = { router.activeSource },
+            onRep = { n, q -> haptics.success(); vm.onRep(n, q) },
+            onPhase = { _, d -> depth = d },
+            onLandmarks = { pts -> mesh = pts },
+            onEngineStatus = { st -> vm.onEngineStatus(st) },
+            onTelemetry = { t -> telem = t },
+            onFrame12 = { v -> scorer.push(v) },
+            onDecision = { verdict ->
+                val top = scorer.topClass
+                vm.harvester.onDecision(
+                    verdict, "QUEST_PUSH", "v5.0-${router.activeSource}", scorer.snapshot(),
+                    buildJsonObject {
+                        put("engine", "v5.0")
+                        put("estimator", router.activeSource)
+                        if (top != null) {
+                            put("shadow_class", top.first)
+                            put("shadow_conf", top.second)
+                        }
+                        lastParity?.let { put("parity_mean_dist", it) }
+                        telem?.let { put("channel", it.activeChannel) }
+                    },
+                )
+            },
         )
     }
-    val engine = remember(profile) {
-        profile?.let { p ->
-            PushupEngineV4(
-                profile = p,
-                strictness = PushupEngineV4.Strictness.STANDARD,
-                witness = witness,
-                estimator = router,
-                engineVersion = "v4.1",
-                onRep = { n, q -> haptics.success(); vm.onRep(n, q) },
-                onPhase = { _, d -> depth = d },
-                onLandmarks = { pts -> mesh = pts },
-                onStatus = { st -> vm.onEngineStatus(st) },
-                onFrame12 = { v -> scorer.push(v) },
-                onDecision = { verdict ->
-                    val top = scorer.topClass
-                    vm.harvester.onDecision(
-                        verdict, "QUEST_PUSH", "v4.1-${router.activeSource}", scorer.snapshot(),
-                        buildJsonObject {
-                            put("engine", "v4.1")
-                            put("estimator", router.activeSource)
-                            if (top != null) {
-                                put("shadow_class", top.first)
-                                put("shadow_conf", top.second)
-                            }
-                            lastParity?.let { put("parity_mean_dist", it) }
-                            put("view_quality", p.viewQuality)
-                        },
-                    )
-                },
-            )
-        }
-    }
-    DisposableEffect(gate, engine) { onDispose { gate.close(); engine?.close() } }
+    DisposableEffect(engine) { onDispose { engine.close() } }
     DisposableEffect(Unit) {
         onDispose { runCatching { ProcessCameraProvider.getInstance(context).get().unbindAll() } }
     }
-
-    val gateUi by gate.ui.collectAsStateWithLifecycle()
-    val engineState = rememberUpdatedState(engine)
 
     LaunchedEffect(preview) {
         val view = preview ?: return@LaunchedEffect
@@ -483,13 +510,7 @@ private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, fl
         val analysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
-            .also {
-                it.setAnalyzer(executor) { proxy ->
-                    // gate until the envelope locks; engine afterwards (gate idles in LOCKED)
-                    engineState.value?.process(proxy) ?: gate.process(proxy)
-                }
-            }
-        // side view works with either lens; front keeps the coaching HUD visible
+            .also { it.setAnalyzer(executor) { proxy -> engine.process(proxy) } }
         provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, camPreview, analysis)
         onReady()
     }
@@ -498,16 +519,6 @@ private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, fl
     FeedScrim()
     PoseMeshOverlay(points = mesh, repFlash = flash * depth, modifier = Modifier.matchParentSize())
 
-    if (profile == null) {
-        GateOverlay(
-            gateUi,
-            ranked = false,
-            stuckMs = gateUi.stuckMs,
-            onRelaxed = { haptics.tick(); gate.relaxedLock() },  // gate fires onProfile itself
-        )
-        return
-    }
-
     Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
         Text("REP", style = MonoLabel, color = SkyBlue)
         Text(
@@ -515,6 +526,8 @@ private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, fl
             fontWeight = FontWeight.Bold, fontSize = 40.sp,
         )
     }
+
+    PulseGuidance(telem)
 
     val (statusText, statusColor) = when (s.engineStatus) {
         PushupEngineV4.EngineStatus.SEARCHING -> "FIND THE TOP — ARMS LOCKED, BODY STRAIGHT" to LabelGray
@@ -529,7 +542,7 @@ private fun BoxScope.PushupV4Box(s: QuestProofState, vm: QuestProofViewModel, fl
         PushupEngineV4.EngineStatus.CAMERA_MOVED -> "CAMERA MOVED — RE-LOCKING" to PaperWhite
         PushupEngineV4.EngineStatus.SETTLE -> "HOLD THE TOP — RE-ANCHORING" to PaperWhite
         PushupEngineV4.EngineStatus.DISPUTED -> "ANTI-CHEAT HOLD — CLEAN REPS ONLY" to PaperWhite
-        null -> "ENVELOPE LOCKED" to SkyBlue
+        null -> "ENGINE LIVE — FRAME YOUR SET" to SkyBlue
     }
     Box(
         Modifier
