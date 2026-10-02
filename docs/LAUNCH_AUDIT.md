@@ -28,7 +28,7 @@
 | 1 | Audit + plan | ✅ THIS DOCUMENT | — |
 | 2 | Crash-prone arch fixes | ✅ chess live-board race killed (sim-proven: 98% corrupt reads → ZERO) | 0.15.1 · run 37026712545 |
 | 3–5 | Chess state arch + UI + difficulty + puzzles | ✅ clone-search pipeline · director puzzles (22 pack) · pass-and-play · honest labels | 0.15.1 · run 37026712545 |
-| 6 | Sports-path onboarding | ⬜ | |
+| 6 | Sports-path onboarding | ✅ migration 022 + onboarding p26 + explicit opt-out | 0.16.0 · run 37043924851 |
 | 7 | Adaptive routine engine | ⬜ | |
 | 8 | Marketplace → Profile | ⬜ | |
 | 9 | Black Room eligibility/pricing | ⬜ | |
