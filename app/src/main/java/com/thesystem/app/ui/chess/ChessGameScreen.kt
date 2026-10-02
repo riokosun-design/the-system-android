@@ -37,9 +37,10 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.time.LocalDate
 
-/** Modes that allow takeback — training grounds, never rated / timed combat. */
+/** Modes that allow takeback — training grounds + pass-and-play, never rated / timed combat. */
 private val UNDO_MODES = setOf(
     ChessMode.AI_TRAINING, ChessMode.CLASSICAL, ChessMode.ENDGAME_TRAINING, ChessMode.OPENING_TRAINING,
+    ChessMode.FRIEND_MATCH,
 )
 
 /** Material values for the capture-strip advantage readout. */
@@ -68,7 +69,17 @@ fun ChessGameScreen(
     val (startFen, initialUserWhite) = remember(mode) { modeStartFen(mode, epochDay) }
     var userWhite by remember(mode) { mutableStateOf(initialUserWhite) }
 
-    var diff by remember(mode) { mutableStateOf(mode.diff ?: ChessAI.Difficulty.MEDIUM) }
+    // PLAY vs AI resolves its initial level from the hub's SETTINGS door (a
+    // real, persisted default); timed/rated modes pin their own engine level.
+    val prefs = remember {
+        androidx.compose.ui.platform.LocalContext.current
+            .getSharedPreferences("chess_prefs", android.content.Context.MODE_PRIVATE)
+    }
+    var diff by remember(mode) {
+        mutableStateOf(
+            mode.diff ?: ChessAI.Difficulty.entries[prefs.getInt("default_diff", 1).coerceIn(0, 3)],
+        )
+    }
     var aiTrainingUnlocked by remember(mode) { mutableStateOf(mode != ChessMode.AI_TRAINING) }
 
     // PLAY vs AI configuration (spec §6/§8/§9): side, takeback, hints
@@ -108,6 +119,8 @@ fun ChessGameScreen(
     var logOutcome by remember { mutableStateOf<com.thesystem.app.data.repo.ChessRepository.LogResult?>(null) }
 
     val userColorIdx = if (userWhite) 0 else 1
+    val pnp = mode == ChessMode.FRIEND_MATCH          // pass-and-play: BOTH sides human
+    val povColor = if (pnp) 0 else userColorIdx       // pnp reports from WHITE's seat
     val myMs = if (userWhite) whiteMs else blackMs
     val oppMs = if (userWhite) blackMs else whiteMs
     val undoAllowed = mode in UNDO_MODES
@@ -141,7 +154,7 @@ fun ChessGameScreen(
         }
         val (st, _) = board.status()
         when (st) {
-            Board.Status.CHECKMATE -> finish(if (sideAfter == userColorIdx) "LOSS" else "WIN", "CHECKMATE")
+            Board.Status.CHECKMATE -> finish(if (sideAfter == povColor) "LOSS" else "WIN", "CHECKMATE")
             Board.Status.STALEMATE -> finish("DRAW", "STALEMATE")
             Board.Status.DRAW_50 -> finish("DRAW", "FIFTY-MOVE RULE")
             Board.Status.DRAW_MATERIAL -> finish("DRAW", "INSUFFICIENT MATERIAL")
@@ -149,13 +162,15 @@ fun ChessGameScreen(
         }
     }
 
-    /** ↶ UNDO — revert the hunter's last move (and the engine reply) where the mode allows. */
+    /** ↶ UNDO — revert the hunter's last move (and the engine reply) where the
+     *  mode allows. Pass-and-play pops ONE ply — the last move by either side. */
     fun undoTurn() {
         if (!undoAllowed || result != null || aiThinking) return
         val sideToMove = if (board.whiteToMove) 0 else 1
-        if (sideToMove != userColorIdx) return
+        if (!pnp && sideToMove != userColorIdx) return
+        val maxPop = if (pnp) 1 else 2
         var popped = 0
-        while (undos.isNotEmpty() && popped < 2) {
+        while (undos.isNotEmpty() && popped < maxPop) {
             val (m, u) = undos.removeAt(undos.size - 1)
             board.unmake(m, u)
             playedMoves.removeAt(playedMoves.size - 1)
@@ -194,19 +209,30 @@ fun ChessGameScreen(
         aiTrainingUnlocked = keepUnlock || mode != ChessMode.AI_TRAINING
     }
 
-    // SHOW MOVE HINTS — the engine whispers its best line on the hunter's turn
+    // SHOW MOVE HINTS — the engine whispers its best line on the hunter's turn.
+    // RACE LAW: the hint also searches on a CLONE — negamax make/unmake never
+    // touches the live board from a worker thread (§chess architecture fix).
     LaunchedEffect(fen, hintsOn, result, aiTrainingUnlocked) {
         hintMove = null
-        if (!hintsOn || !aiTrainingUnlocked || result != null) return@LaunchedEffect
+        if (pnp || !hintsOn || !aiTrainingUnlocked || result != null) return@LaunchedEffect
         val myTurn = (if (board.whiteToMove) 0 else 1) == userColorIdx
         if (!myTurn || board.status().first != Board.Status.ONGOING) return@LaunchedEffect
-        val mv = withContext(Dispatchers.Default) { ChessAI.bestMove(board, ChessAI.Difficulty.MEDIUM) }
-        if (mv != null && result == null) hintMove = mv
+        val snapshotFen = fen
+        val mv = withContext(Dispatchers.Default) {
+            ChessAI.bestMove(Board.fromFen(snapshotFen), ChessAI.Difficulty.MEDIUM)
+        }
+        if (mv != null && result == null && fen == snapshotFen) hintMove = mv
     }
 
-    // engine turn
+    // ENGINE TURN — the master-prompt pipeline, literally:
+    //   BOARD STATE (fen snapshot) → AI THINKING (on a private clone) →
+    //   VALIDATED MOVE (still legal + board untouched meanwhile) →
+    //   COMMIT MOVE (pushMove, main thread) → UPDATE UI (recompose from fen).
+    // Never: AI thinking mutates the rendered board and rolls back — that was
+    // the "multiple pieces in wrong positions" field bug (sim-proven: the old
+    // pattern corrupted ~98% of concurrent reads; this pattern = zero).
     LaunchedEffect(fen, result, aiTrainingUnlocked) {
-        if (!aiTrainingUnlocked || result != null) return@LaunchedEffect
+        if (pnp || !aiTrainingUnlocked || result != null) return@LaunchedEffect
         val engineTurn = (if (board.whiteToMove) 0 else 1) != userColorIdx
         if (!engineTurn) {
             userMoveStartedAt = System.currentTimeMillis()
@@ -215,19 +241,25 @@ fun ChessGameScreen(
         if (board.status().first != Board.Status.ONGOING) return@LaunchedEffect
         aiThinking = true
         delay(350)
-        val mv = withContext(Dispatchers.Default) { ChessAI.bestMove(board, diff) }
+        val snapshotFen = fen
+        val mv = withContext(Dispatchers.Default) {
+            ChessAI.bestMove(Board.fromFen(snapshotFen), diff)
+        }
         aiThinking = false
-        if (mv != null && result == null) pushMove(mv)
+        // COMMIT GATE: game may have moved on while the search ran (undo / NEW
+        // key / resign). Commit only if the board is EXACTLY the snapshot and
+        // the move is still in the current legal list.
+        if (mv != null && result == null && fen == snapshotFen && legal.any { it == mv }) pushMove(mv)
     }
 
-    // deterministic clocks
+    // deterministic clocks (povColor: pnp reads the flag from WHITE's seat)
     LaunchedEffect(result, aiTrainingUnlocked) {
         if (mode.clockSec <= 0 || !aiTrainingUnlocked) return@LaunchedEffect
         while (result == null) {
             delay(200)
             if (board.whiteToMove) whiteMs = (whiteMs - 200).coerceAtLeast(0) else blackMs = (blackMs - 200).coerceAtLeast(0)
-            if (whiteMs <= 0L) finish(if (userWhite) "LOSS" else "WIN", "FLAG FALL")
-            else if (blackMs <= 0L) finish(if (userWhite) "WIN" else "LOSS", "FLAG FALL")
+            if (whiteMs <= 0L) finish(if (povColor == 0) "LOSS" else "WIN", "FLAG FALL")
+            else if (blackMs <= 0L) finish(if (povColor == 0) "WIN" else "LOSS", "FLAG FALL")
         }
     }
 
@@ -244,7 +276,8 @@ fun ChessGameScreen(
         val a = analysis
         // PRACTICE ELO (§10): standard ELO proposition vs this engine's anchor —
         // the server clamps ±48 and bridges XP globally; war keeps server steps.
-        val practiceDelta = if (mode.war) null else eloDelta(
+        // Pass-and-play proposes NO rating math — a couch duel is not ranked proof.
+        val practiceDelta = if (mode.war || pnp) null else eloDelta(
             myElo = chessUi.profile?.practiceElo ?: 400,
             anchor = diff.anchorElo,
             score = when (res) { "WIN" -> 1.0; "DRAW" -> 0.5; else -> 0.0 },
@@ -252,10 +285,10 @@ fun ChessGameScreen(
         vm.repoLog(
             kind = "GAME", mode = mode.name, result = res,
             accuracy = a?.accuracy, blunders = a?.blunders ?: 0,
-            thinkMs = a?.avgThinkMs ?: 0,
+            thinkMs = if (pnp) 0 else (a?.avgThinkMs ?: 0),
             stats = a?.toStatJson(), analysis = a?.toAnalysisJson(),
             plies = playedMoves.size, practiceDelta = practiceDelta,
-        ).onSuccess { logOutcome = it }
+        ).onSuccess { logOutcome = it }   // unknown modes rejected → silent local-only game
         vm.refresh()
     }
 
@@ -302,18 +335,17 @@ fun ChessGameScreen(
 
             // ── engine strip: tag + its captures + clock ─────────────────
             PlayerTag(
-                label = "SYSTEM ENGINE · ${diff.label}",
+                label = if (pnp) "HUNTER II · BLACK" else "SYSTEM ENGINE · ${diff.label}",
                 ms = oppMs, timed = mode.clockSec > 0,
                 captures = oppCaps,
                 materialPlus = materialOf(oppCaps) - materialOf(userCaps),
             )
 
-            // AI thinking indicator + difficulty control (training mode)
-            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (aiThinking && result == null) {
+            // AI thinking indicator. (The old mid-game engine-level slider is
+            // REMOVED per spec — difficulty is chosen pre-match, never during.)
+            if (aiThinking && result == null) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     SystemProcessing("SYSTEM COMPUTING", compact = true)
-                } else if (mode == ChessMode.AI_TRAINING) {
-                    DifficultyChips(current = diff, enabled = result == null && !aiThinking) { d -> diff = d }
                 }
             }
 
@@ -331,8 +363,9 @@ fun ChessGameScreen(
                 onAnimDone = { anim = null },
                 onSquare = onSquare@{ sq ->
                     if (result != null || aiThinking) return@onSquare
-                    val myTurn = (if (board.whiteToMove) 0 else 1) == userColorIdx
-                    if (!myTurn) return@onSquare
+                    val sideToMove = if (board.whiteToMove) 0 else 1
+                    // pass-and-play: the side to move IS the acting player
+                    if (!pnp && sideToMove != userColorIdx) return@onSquare
                     val piece = board.sq[sq]
                     if (selected >= 0) {
                         val options = legal.filter { it.from == selected && it.to == sq }
@@ -340,14 +373,14 @@ fun ChessGameScreen(
                             if (options.any { it.promo != 0 }) {
                                 pendingPromo = options
                             } else {
-                                if (userMoveStartedAt > 0) thinkMs.add(System.currentTimeMillis() - userMoveStartedAt)
+                                if (!pnp && userMoveStartedAt > 0) thinkMs.add(System.currentTimeMillis() - userMoveStartedAt)
                                 haptics.tick()
                                 pushMove(options.first())
                             }
                             return@onSquare
                         }
                     }
-                    selected = if (piece != EMPTY && colorOf(piece) == userColorIdx) sq else -1
+                    selected = if (piece != EMPTY && colorOf(piece) == (if (pnp) sideToMove else userColorIdx)) sq else -1
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -375,7 +408,7 @@ fun ChessGameScreen(
 
             // ── hunter strip: tag + captures + clock ─────────────────────
             PlayerTag(
-                label = "YOU · ${if (userWhite) "WHITE" else "BLACK"}",
+                label = if (pnp) "HUNTER I · WHITE" else "YOU · ${if (userWhite) "WHITE" else "BLACK"}",
                 ms = myMs, timed = mode.clockSec > 0,
                 captures = userCaps,
                 materialPlus = materialOf(userCaps) - materialOf(oppCaps),
@@ -383,8 +416,17 @@ fun ChessGameScreen(
 
             // status ribbon — turn indicator + check flag
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                val sideToMove = if (board.whiteToMove) 0 else 1
                 when {
                     result != null -> Text("GAME OVER · $resultReason", style = MonoLabel, color = PaperWhite)
+                    pnp -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Canvas(Modifier.size(6.dp)) { drawRect(SkyBlue) }
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            (if (sideToMove == 0) "WHITE TO MOVE" else "BLACK TO MOVE") + if (inCheck) " — CHECK" else "",
+                            style = MonoLabel, color = SkyBlue,
+                        )
+                    }
                     inCheck && (if (board.whiteToMove) 0 else 1) == userColorIdx ->
                         Text("CHECK — YOUR MOVE", color = PaperWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, fontFamily = SystemMono)
                     inCheck -> Text("CHECK", color = SkyBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, fontFamily = SystemMono)
@@ -428,7 +470,7 @@ fun ChessGameScreen(
                 Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (undoAllowed && (mode != ChessMode.AI_TRAINING || allowUndoPref)) {
                         val canUndo = !aiThinking && undos.isNotEmpty() &&
-                            (if (board.whiteToMove) 0 else 1) == userColorIdx
+                            (pnp || (if (board.whiteToMove) 0 else 1) == userColorIdx)
                         GhostButton("↶ UNDO", { undoTurn() }, Modifier.weight(1f), enabled = canUndo)
                     }
                     GhostButton("NEW", { resetGame(keepUnlock = true) }, Modifier.weight(1f))
@@ -442,6 +484,7 @@ fun ChessGameScreen(
                     reason = resultReason,
                     analysis = analysis,
                     logged = logOutcome,
+                    pnp = pnp,
                     onRematch = { resetGame(keepUnlock = false) },
                     onBack = onBack,
                 )
@@ -499,11 +542,8 @@ private fun PlayAiConfigSheet(
                 ConfigChip(d.label, d == diff, Modifier.weight(1f)) { onDiff(d) }
             }
         }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "SEARCH DEPTH ${diff.depth} · ANCHOR ELO ${diff.anchorElo}",
-            style = MonoLabel, color = LabelGray,
-        )
+        // spec: no "AI ELO"/search-depth numbers — the hunter picks a NAME,
+        // the engine's behavior is the honest proof (eval bar + play strength).
 
         Spacer(Modifier.height(14.dp))
         Text("YOUR SIDE", style = MonoLabel, color = LabelGray)
@@ -563,28 +603,6 @@ private fun ConfigToggle(title: String, sub: String, on: Boolean, onChange: (Boo
                     .size(8.dp)
                     .align(if (on) Alignment.CenterEnd else Alignment.CenterStart)
                     .background(if (on) SkyBlue else LabelGray, RoundedCornerShape(4.dp)),
-            )
-        }
-    }
-}
-
-/** Mid-game engine level control — present, never dominant. */
-@Composable
-private fun DifficultyChips(current: ChessAI.Difficulty, enabled: Boolean, onPick: (ChessAI.Difficulty) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("ENGINE LEVEL", style = MonoLabel, color = LabelGray)
-        ChessAI.Difficulty.entries.forEach { d ->
-            val on = d == current
-            Text(
-                d.label,
-                color = if (on) SkyBlue else LabelGray,
-                fontSize = 10.sp, fontFamily = SystemMono, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-                letterSpacing = 1.sp,
-                modifier = Modifier
-                    .pressScale(0.96f)
-                    .border(1.dp, if (on) SkyBlue else LineSoft, RoundedCornerShape(5.dp))
-                    .clickable(enabled = enabled) { onPick(d) }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
             )
         }
     }
@@ -704,12 +722,20 @@ private fun ResultPanel(
     reason: String,
     analysis: GameAnalysis?,
     logged: com.thesystem.app.data.repo.ChessRepository.LogResult?,
+    pnp: Boolean = false,
     onRematch: () -> Unit,
     onBack: () -> Unit,
 ) {
     GlowCard(glow = if (result == "WIN") SkyBlue else PaperWhite, modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
         Text(
-            when (result) { "WIN" -> "VICTORY"; "LOSS" -> "DEFEAT"; else -> "STALEMATE PROTOCOL" },
+            when {
+                pnp && result == "WIN" -> "WHITE WINS"
+                pnp && result == "LOSS" -> "BLACK WINS"
+                pnp -> "DRAW AGREED"
+                result == "WIN" -> "VICTORY"
+                result == "LOSS" -> "DEFEAT"
+                else -> "STALEMATE PROTOCOL"
+            },
             color = if (result == "WIN") SkyBlue else PaperWhite,
             fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, fontFamily = SystemMono,
         )
@@ -738,7 +764,14 @@ private fun ResultPanel(
             SystemProcessing("SYSTEM ANALYSIS COMPILING", compact = true)
         }
 
-        logged?.let {
+        if (pnp) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "LOCAL DUEL — no rating at stake. The proof is the handshake after.",
+                style = MonoLabel, color = LabelGray,
+            )
+        }
+        if (!pnp) logged?.let {
             Spacer(Modifier.height(8.dp))
             if (mode.war) {
                 Text(

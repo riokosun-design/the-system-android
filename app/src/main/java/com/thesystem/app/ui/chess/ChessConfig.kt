@@ -29,11 +29,13 @@ enum class ChessMode(
     BLUNDER_TRAINING("BLUNDER TRAINING", "punish the mistake", null, 0),
     TIME_PRESSURE("TIME PRESSURE", "2+0 · decide now", ChessAI.Difficulty.MEDIUM, 120),
 
+    /** Local pass-and-play — one physical board, two hunters, zero network. */
+    FRIEND_MATCH("PLAY WITH FRIENDS", "one board · two hunters", null, 0),
+
     // ── neural link incubation (honest: not shipped yet) ──────────────
     QUICK_MATCH("QUICK MATCH", "neural link — soon", null, 0, soon = true),
     RANKED("RANKED", "neural link — soon", null, 0, soon = true),
     RANDOM_OPPONENT("RANDOM OPPONENT", "neural link — soon", null, 0, soon = true),
-    FRIEND_MATCH("FRIEND MATCH", "neural link — soon", null, 0, soon = true),
 }
 
 /** Endgame set — hunter always plays the winning side (educational conversion). */

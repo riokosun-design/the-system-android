@@ -37,6 +37,22 @@ object PuzzlePack {
             "t1", "4k3/8/8/8/2r5/8/4B3/4K3 w - - 0 1",
             listOf("e2c4"), "TACTIC", 1, "The rook is hanging. Collect.",
         ),
+        Puzzle(
+            "t3", "4k3/8/8/8/r7/8/8/3Q2K1 w - - 0 1",
+            listOf("d1a4"), "TACTIC", 1, "The rook forgot its bodyguard.",
+        ),
+        Puzzle(
+            "t4", "4k3/2P5/8/8/8/8/8/4K3 w - - 0 1",
+            listOf("c7c8q"), "TACTIC", 1, "Queens are born, not given.",
+        ),
+        Puzzle(
+            "m6", "k7/8/K7/8/8/8/8/1Q6 w - - 0 1",
+            listOf("b1b7"), "MATE", 1, "One square of mercy: none.",
+        ),
+        Puzzle(
+            "m7", "k7/8/1K6/8/8/8/8/7R w - - 0 1",
+            listOf("h1h8"), "MATE", 1, "The wall closes.",
+        ),
 
         // ── TIER II ─────────────────────────────────────────────────────
         Puzzle(
@@ -63,6 +79,22 @@ object PuzzlePack {
             "t2", "4k3/8/8/8/4B3/3q4/8/4R1K1 w - - 0 1",
             listOf("e4d3", "e8d8"), "TACTIC", 2, "Take with tempo. The file opens by itself.",
         ),
+        Puzzle(
+            "m8", "6k1/5ppp/8/8/8/8/8/2RR2K1 w - - 0 1",
+            listOf("c1c8"), "MATE", 2, "Two rooks. One coffin.",
+        ),
+        Puzzle(
+            "m9", "6k1/5p1p/6pQ/7N/8/8/6PP/6K1 w - - 0 1",
+            listOf("h6g7"), "MATE", 2, "The knight holds the door.",
+        ),
+        Puzzle(
+            "t5", "q3k3/8/8/8/8/8/8/R3K3 w - - 0 1",
+            listOf("a1a8"), "TACTIC", 2, "She parked on the wrong square.",
+        ),
+        Puzzle(
+            "m10", "k7/8/KQ6/8/8/8/8/8 w - - 0 1",
+            listOf("b6b7"), "MATE", 2, "Waiting moves win wars.",
+        ),
 
         // ── TIER III ────────────────────────────────────────────────────
         Puzzle(
@@ -72,6 +104,14 @@ object PuzzlePack {
         Puzzle(
             "m5", "k7/8/3R4/8/8/8/8/K6R w - - 0 1",
             listOf("d6d7", "a8b8", "h1h8"), "MATE", 3, "Wait one move. Then close the lid.",
+        ),
+        Puzzle(
+            "m11", "k7/8/1K6/8/8/8/8/R6R w - - 0 1",
+            listOf("a1a7", "a8b8", "h1h8"), "MATE", 3, "Drive him to the wall. Slowly.",
+        ),
+        Puzzle(
+            "p2", "4k3/8/8/8/4q3/8/8/1R3K2 w - - 0 1",
+            listOf("b1e1", "e4e1", "f1e1"), "PIN", 3, "Greed has a price tag.",
         ),
     )
 
