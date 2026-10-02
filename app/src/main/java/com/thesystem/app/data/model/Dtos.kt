@@ -22,6 +22,8 @@ data class UserDto(
     @SerialName("streak_days") val streakDays: Int = 0,
     @SerialName("last_activity_date") val lastActivityDate: String? = null,
     val goal: String? = null,
+    /** Declared sport path (STEP 6) — NULL = no sport content anywhere. */
+    val sport: String? = null,
     val age: Int? = null,
     @SerialName("height_cm") val heightCm: Double? = null,
     @SerialName("weight_kg") val weightKg: Double? = null,

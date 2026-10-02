@@ -35,6 +35,9 @@ data class OnboardingUiState(
     val heightCm: Float = 170f,
     val weightKg: Float = 65f,
     val goal: String = "SHRED",
+    /** STEP 6 sport path: null = opted out (explicit or legacy); set = declared sport id. */
+    val sport: String? = null,
+    val sportChosen: Boolean = false,
     // auth
     val signingIn: Boolean = false,
     val signedInProfile: UserDto? = null,
@@ -80,6 +83,8 @@ class OnboardingViewModel @Inject constructor(
     fun setHeight(v: Float) { _ui.value = _ui.value.copy(heightCm = v) }
     fun setWeight(v: Float) { _ui.value = _ui.value.copy(weightKg = v) }
     fun setGoal(v: String) { _ui.value = _ui.value.copy(goal = v) }
+    /** Sport path selection — null sport with chosen=true = the explicit opt-out. */
+    fun setSport(v: String?) { _ui.value = _ui.value.copy(sport = v, sportChosen = true) }
     fun setReferral(v: String) { _ui.value = _ui.value.copy(referralCode = v) }
 
     // ── Google Sign-In via Credential Manager → Supabase IDToken exchange ────
@@ -143,7 +148,7 @@ class OnboardingViewModel @Inject constructor(
                 _ui.value = _ui.value.copy(busy = false, error = claimed.exceptionOrNull()?.message ?: "Username rejected")
                 return@launch
             }
-            auth.completeOnboarding(s.age, s.heightCm.toDouble(), s.weightKg.toDouble(), s.goal, activityLevel)
+            auth.completeOnboarding(s.age, s.heightCm.toDouble(), s.weightKg.toDouble(), s.goal, activityLevel, s.sport)
                 .onFailure { _ui.value = _ui.value.copy(error = it.message) }
             if (s.referralCode.isNotBlank()) runCatching { auth.applyReferralCode(s.referralCode) }
             _ui.value = _ui.value.copy(busy = false)

@@ -206,7 +206,7 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
     val stats = remember(ui.age, ui.heightCm, ui.weightKg, archetypeName, activityName) {
         computeVesselStats(ui.age, ui.heightCm, ui.weightKg, archetype, activity)
     }
-    val advance: () -> Unit = { haptics.tick(); page = (page + 1).coerceAtMost(27) }
+    val advance: () -> Unit = { haptics.tick(); page = (page + 1).coerceAtMost(28) }
 
     // system back rewinds the ritual one page instead of ejecting the hunter
     BackHandler(enabled = page > 1) { haptics.tick(); page = (page - 1).coerceAtLeast(1) }
@@ -257,8 +257,9 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
                     23 -> P23_Conquer(clock, advance)
                     24 -> P24_Rewards(clock, advance)
                     25 -> P25_Consequences(clock, advance)
-                    26 -> P26_Contract(haptics) { page = 27 }
-                    27 -> P27_FinalGate(ui, vm, haptics, context)
+                    26 -> P26_SportPath(ui, vm, clock) { haptics.select(); page = 27 }
+                    27 -> P26_Contract(haptics) { page = 28 }
+                    28 -> P27_FinalGate(ui, vm, haptics, context)
                     else -> Box(Modifier.fillMaxSize())
                     }
                 }
@@ -275,7 +276,7 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
             )
             Spacer(Modifier.weight(1f))
             Text(
-                "PAGE %02d/27".format(page),
+                "PAGE %02d/28".format(page),
                 fontFamily = FontFamily.Default, fontSize = 9.sp, color = TextMuted.copy(alpha = 0.6f), letterSpacing = 2.sp,
             )
         }
@@ -383,8 +384,9 @@ private fun pageArtFor(p: Int): PageArt? = when (p) {
     20 -> PageArt(R.drawable.onb_grind, 0.26f, mirror = true)
     22 -> PageArt(R.drawable.onb_territory, 0.26f, mirror = true)
     25 -> PageArt(R.drawable.onb_mass, 0.22f, mirror = true)
-    26 -> PageArt(R.drawable.onb_scan, 0.20f)
-    else -> null // 2/4/5/21/23/24/27 carry their own internal CinematicArt
+    26 -> PageArt(R.drawable.onb_paths, 0.22f, mirror = true)
+    27 -> PageArt(R.drawable.onb_scan, 0.20f)
+    else -> null // 2/4/5/21/23/24/28 carry their own internal CinematicArt
 }
 
 // ── PAGE 01 · SYSTEM INITIALIZATION ──────────────────────────────────────────
@@ -1517,7 +1519,80 @@ private fun P25_Consequences(clock: Float, advance: () -> Unit) {
     }
 }
 
-// ── PAGE 26 · THE CONTRACT (press & hold 1.5s) ───────────────────────────────
+// ── PAGE 26 · SPORT PATH (STEP 6) ────────────────────────────────────────────
+/**
+ * The athlete branch, offered once and honestly: pick ONE sport, or decline
+ * with zero shame. Accepting adds ONE conditioning + ONE technical quest to
+ * the daily floor (server-issued, mig 022 — never client-invented); declining
+ * writes nothing and hides all sport content permanently. The explicit
+ * opt-out is a first-class answer, not a neglected default.
+ */
+@Composable
+private fun P26_SportPath(ui: OnboardingUiState, vm: OnboardingViewModel, clock: Float, advance: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp).verticalScroll(rememberScrollState()),
+    ) {
+        Spacer(Modifier.height(56.dp))
+        Text("ATHLETE PATH", fontFamily = FontFamily.Default, fontSize = 10.sp, color = VenomGreen, letterSpacing = 3.sp,
+            modifier = Modifier.appear(seg(clock, 0.1f)))
+        Spacer(Modifier.height(12.dp))
+        Text("Will you chase a sport?", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
+            modifier = Modifier.appear(seg(clock, 0.2f)))
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "One sport. One conditioning + one technical quest on your daily floor, rotated from the System's pool. Mental and recovery pillars ride your existing rhythm.",
+            style = MaterialTheme.typography.bodyMedium, color = TextMuted,
+            modifier = Modifier.appear(seg(clock, 0.26f)),
+        )
+        Spacer(Modifier.height(20.dp))
+        com.thesystem.app.core.sport.Sport.entries.forEachIndexed { i, s ->
+            Box(Modifier.appear(seg(clock, 0.3f + i * 0.07f)).padding(vertical = 5.dp)) {
+                ArchetypeCard(
+                    title = s.label, tagline = s.tagline,
+                    stat = "COND · TECH · MENTAL · RECOVERY",
+                    accent = VenomGreen, selected = ui.sport == s.id && ui.sportChosen,
+                    onClick = { vm.setSport(s.id) },
+                )
+            }
+        }
+        // THE EXPLICIT OPT-OUT (spec law) — same weight as any path
+        Box(Modifier.appear(seg(clock, 0.6f)).padding(vertical = 8.dp)) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(if (ui.sportChosen && ui.sport == null) SurfaceHigh.copy(alpha = 0.8f) else SurfaceDark.copy(alpha = 0.5f))
+                    .border(
+                        width = if (ui.sportChosen && ui.sport == null) 1.5.dp else 1.dp,
+                        color = if (ui.sportChosen && ui.sport == null) TextPrimary.copy(alpha = 0.8f) else TextMuted.copy(alpha = 0.25f),
+                        shape = RoundedCornerShape(18.dp),
+                    )
+                    .pointerInput(Unit) { detectTapGestures(onTap = { vm.setSport(null) }) }
+                    .padding(16.dp),
+            ) {
+                Text(
+                    "I DON'T WANT TO BECOME A SPORTS PLAYER",
+                    color = if (ui.sportChosen && ui.sport == null) TextPrimary else TextMuted,
+                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp,
+                )
+                Text("The base protocol stands. No sport content will appear.", color = TextMuted, fontSize = 12.sp)
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        if (ui.sportChosen) {
+            ContinueBar(seg(clock, 0.7f), advance, label = "SEAL PATH ▸")
+        } else {
+            Text(
+                "CHOOSE A PATH — OR DECLINE ONE",
+                fontFamily = FontFamily.Default, fontSize = 10.sp, color = TextMuted, letterSpacing = 2.sp,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 30.dp).graphicsLayer { alpha = seg(clock, 0.7f) },
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+// ── PAGE 27 · THE CONTRACT ───────────────────────────────────────────────────
 @Composable
 private fun P26_Contract(haptics: SystemHaptics, onSealed: () -> Unit) {
     val clock = rememberPageClock()
@@ -1552,7 +1627,7 @@ private fun P26_Contract(haptics: SystemHaptics, onSealed: () -> Unit) {
     }
 }
 
-// ── PAGE 27 · FINAL GATE ─────────────────────────────────────────────────────
+// ── PAGE 28 · FINAL GATE ─────────────────────────────────────────────────────
 @Composable
 private fun P27_FinalGate(ui: OnboardingUiState, vm: OnboardingViewModel, haptics: SystemHaptics, context: android.content.Context) {
     val clock = rememberPageClock()
