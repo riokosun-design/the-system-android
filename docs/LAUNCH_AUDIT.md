@@ -26,8 +26,8 @@
 | # | Step | Status | Build |
 |---|---|---|---|
 | 1 | Audit + plan | ✅ THIS DOCUMENT | — |
-| 2 | Crash-prone arch fixes | ✅ chess live-board race killed (sim-proven) | 0.15.1 |
-| 3–5 | Chess state arch + UI + difficulty + puzzles | ✅ | 0.15.1 |
+| 2 | Crash-prone arch fixes | ✅ chess live-board race killed (sim-proven: 98% corrupt reads → ZERO) | 0.15.1 · run 37026712545 |
+| 3–5 | Chess state arch + UI + difficulty + puzzles | ✅ clone-search pipeline · director puzzles (22 pack) · pass-and-play · honest labels | 0.15.1 · run 37026712545 |
 | 6 | Sports-path onboarding | ⬜ | |
 | 7 | Adaptive routine engine | ⬜ | |
 | 8 | Marketplace → Profile | ⬜ | |
