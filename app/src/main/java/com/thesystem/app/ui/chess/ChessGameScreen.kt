@@ -71,9 +71,9 @@ fun ChessGameScreen(
 
     // PLAY vs AI resolves its initial level from the hub's SETTINGS door (a
     // real, persisted default); timed/rated modes pin their own engine level.
+    val appContext = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember {
-        androidx.compose.ui.platform.LocalContext.current
-            .getSharedPreferences("chess_prefs", android.content.Context.MODE_PRIVATE)
+        appContext.getSharedPreferences("chess_prefs", android.content.Context.MODE_PRIVATE)
     }
     var diff by remember(mode) {
         mutableStateOf(
