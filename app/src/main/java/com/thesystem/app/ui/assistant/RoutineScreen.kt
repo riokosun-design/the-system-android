@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.thesystem.app.core.routine.RoutineEngine
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -79,10 +80,45 @@ fun RoutineScreen(
             (s.error ?: s.notice)?.let { msg ->
                 LaunchedEffect(msg) { if (s.error != null) haptics.error() else haptics.success(); vm.clearNotice() }
                 Text(
-                    msg, color = if (s.error != null) PaperWhite else LabelGray,
+                    msg, color = if (s.error != null) PaperWhite else SkyBlue,
                     fontSize = 10.sp, fontFamily = SystemMono,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
+            }
+
+            // ── WEEK ARC (STEP 7) — the server-owned 4-week progression:
+            //    anchors fixed, work blocks scale, verdicts from MEASURED days ──
+            if (!s.loading) {
+                val plan = remember(s.routineWeek, s.minor) { RoutineEngine.weekPlan(s.routineWeek, s.minor) }
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp)
+                        .border(1.dp, SkyBlue.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                ) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "WEEK ${plan.week} — ${plan.name}",
+                            color = SkyBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                            fontFamily = SystemMono, letterSpacing = 1.sp, modifier = Modifier.weight(1f),
+                        )
+                        Text("${plan.week}/4", color = FaintGray, fontSize = 9.sp, fontFamily = SystemMono)
+                    }
+                    Text(plan.focus, color = LabelGray, fontSize = 10.sp, fontFamily = SystemMono)
+                    Text(
+                        "ANCHORS 06:30 WAKE · 23:00 LIGHTS OUT — fixed every week",
+                        color = PaperWhite, fontSize = 9.sp, fontFamily = SystemMono,
+                    )
+                    Text(
+                        "TRAIN ${plan.trainingMin}m · WALK ${plan.walkMin}m · RECOVERY ${plan.recoveryMin}m · MORNING QUESTS ≤${plan.morningQuestCap}",
+                        color = FaintGray, fontSize = 9.sp, fontFamily = SystemMono,
+                    )
+                    Text(
+                        "≥5 ACTIVE DAYS ADVANCES · ≤2 REBUILDS ONE STEP — measured, never voted",
+                        color = FaintGray, fontSize = 8.sp, fontFamily = SystemMono,
+                    )
+                }
             }
 
             // ── daily protocol anchors — fixed life blocks the AI plans around ──

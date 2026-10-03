@@ -39,6 +39,9 @@ class RoutineViewModel @Inject constructor(
         val busy: Boolean = false,
         val regenArmed: Boolean = false,
         val commitments: List<CommitmentBlock> = emptyList(),
+        /** STEP 7: server-owned week arc (mig 023) */
+        val routineWeek: Int = 1,
+        val minor: Boolean = false,
         val notice: String? = null,
         val error: String? = null,
     ) {
@@ -62,16 +65,31 @@ class RoutineViewModel @Inject constructor(
                 AiJson.decodeFromJsonElement(ListSerializer(CommitmentBlock.serializer()), c.blocks)
             }.getOrNull()
         }.orEmpty().filter { it.title.isNotBlank() }
+        // STEP 7: weekly verdict is server-owned + idempotent per ISO week.
+        // A FRESH verdict (not CACHED) announces itself honestly; cached = quiet.
+        val verdict = system.evaluateRoutineWeek()
+        val profile = if (verdict == null) system.profile() else null
+        val week = verdict?.week ?: profile?.routineWeek ?: 1
+        val minor = (profile?.age ?: 99) < 18
+        val weekNotice = if (verdict != null && verdict.verdict != "CACHED") {
+            val v = runCatching { com.thesystem.app.core.routine.WeekVerdict.valueOf(verdict.verdict) }.getOrNull()
+            if (v != null) com.thesystem.app.core.routine.RoutineEngine.verdictCopy(
+                v, verdict.prevWeek, verdict.week, verdict.activeDays ?: 0,
+            ) else null
+        } else null
         _state.value = _state.value.copy(
             loading = false,
             items = items,
             commitments = commitments,
+            routineWeek = week,
+            minor = minor,
             status = when (dto?.status) {
                 "CONFIRMED" -> RStatus.CONFIRMED
                 "DRAFT" -> if (items.isEmpty()) RStatus.NONE else RStatus.DRAFT
                 else -> RStatus.NONE
             },
             regenArmed = false,
+            notice = weekNotice,
         )
     }
 

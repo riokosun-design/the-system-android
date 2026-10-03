@@ -24,6 +24,8 @@ data class UserDto(
     val goal: String? = null,
     /** Declared sport path (STEP 6) — NULL = no sport content anywhere. */
     val sport: String? = null,
+    /** STEP 7 adaptive routine arc, server-owned (mig 023): 1..4. */
+    @SerialName("routine_week") val routineWeek: Int = 1,
     val age: Int? = null,
     @SerialName("height_cm") val heightCm: Double? = null,
     @SerialName("weight_kg") val weightKg: Double? = null,

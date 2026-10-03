@@ -1,7 +1,9 @@
 package com.thesystem.app.ai
 
 import com.thesystem.app.core.FitnessMath
+import com.thesystem.app.core.routine.RoutineEngine
 import com.thesystem.app.data.model.VerifiedBestsDto
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -152,9 +154,28 @@ object DeterministicAI {
         )
     }
 
-    // ── DAILY ROUTINE (§6/§14) — built AROUND the hunter's fixed life blocks ──
-    fun routineDraft(s: ContextEngine.Snapshot, now: LocalTime = LocalTime.now()): RoutineDraft {
+    // ── DAILY ROUTINE (§6/§14 + STEP 7 week arc) — built AROUND anchors and
+    //    the hunter's fixed life blocks. Week params come from the server-owned
+    //    routine_week (mig 023) via RoutineEngine: anchors never move, work
+    //    blocks scale, Sunday swaps training for recovery emphasis. ──────────
+    fun routineDraft(
+        s: ContextEngine.Snapshot,
+        now: LocalTime = LocalTime.now(),
+        today: LocalDate = LocalDate.now(),
+    ): RoutineDraft {
+        val plan = RoutineEngine.weekPlan(s.profile?.routineWeek ?: 1, s.minor)
+        val isSunday = today.dayOfWeek == DayOfWeek.SUNDAY
         val items = ArrayList<RoutineItem>()
+
+        // ANCHOR LAW (STEP 7) — immovable identity blocks, identical every week
+        items += RoutineItem(
+            "WAKE + HYDRATE", "06:30", "RECOVERY", 10,
+            notes = "ANCHOR — never moves · sunlight + 500ml water",
+        )
+        items += RoutineItem(
+            "LIGHTS OUT", "23:00", "SLEEP", 10,
+            notes = "ANCHOR — never moves · 7.5h window begins",
+        )
 
         s.commitments.forEach { c ->
             if (c.title.isBlank() || !c.start.matches(Regex("^([01]?\\d|2[0-3]):[0-5]\\d$"))) return@forEach
@@ -176,34 +197,87 @@ object DeterministicAI {
                 min in sm until (sm + it.durationMin)
             }
 
-        val open = s.quests.filter { !it.isDone && !it.isDead }.sortedBy { it.seq }
-        var cursorMin = ((now.hour * 60 + now.minute) / 30 + 1) * 30
-        open.forEach { q ->
-            val dur = (q.estDurationSec / 60).coerceIn(4, 40)
-            var placed = false
+        /** First free [dur]-minute slot at/after [fromMin]; returns end cursor or null. */
+        fun findSlot(dur: Int, fromMin: Int): Int? {
+            var t = fromMin
             var guard = 0
-            while (!placed && cursorMin + dur <= 23 * 60 && guard++ < 40) {
-                if (!busyAt(cursorMin) && !busyAt(cursorMin + dur - 5)) placed = true else cursorMin += 15
+            while (t + dur <= 23 * 60 && guard++ < 40) {
+                if (!busyAt(t) && !busyAt(t + dur - 5)) return t + dur
+                t += 15
             }
-            if (placed) {
+            return null
+        }
+
+        val open = s.quests.filter { !it.isDone && !it.isDead }.sortedBy { it.seq }.take(5)
+        val nowCursor = ((now.hour * 60 + now.minute) / 30 + 1) * 30
+
+        // morning cluster — habit front-loading, capped by the week plan
+        var cursor = maxOf(nowCursor, RoutineEngine.MORNING_SLOT_MIN)
+        var morningPlaced = 0
+        val deferred = ArrayList<com.thesystem.app.data.model.QuestDto>()
+        open.forEach { q ->
+            if (morningPlaced >= plan.morningQuestCap) { deferred += q; return@forEach }
+            val dur = (q.estDurationSec / 60).coerceIn(4, 40)
+            val end = findSlot(dur, cursor)
+            if (end == null || cursor > 11 * 60) { deferred += q; return@forEach }
+            items += RoutineItem(
+                title = "QUEST — ${q.title.take(32)}",
+                time = "%02d:%02d".format((end - dur) / 60, (end - dur) % 60),
+                category = "QUEST", durationMin = dur,
+                notes = "${q.targetValue} ${q.targetUnit.lowercase(Locale.US)} · morning cluster",
+            )
+            cursor = end + 15
+            morningPlaced++
+        }
+
+        // evening cluster — overflow from 16:00, never before
+        if (deferred.isNotEmpty()) {
+            cursor = maxOf(cursor, RoutineEngine.EVENING_SLOT_MIN)
+            deferred.forEach { q ->
+                val dur = (q.estDurationSec / 60).coerceIn(4, 40)
+                val end = findSlot(dur, cursor) ?: return@forEach
                 items += RoutineItem(
                     title = "QUEST — ${q.title.take(32)}",
-                    time = "%02d:%02d".format(cursorMin / 60, cursorMin % 60),
+                    time = "%02d:%02d".format((end - dur) / 60, (end - dur) % 60),
                     category = "QUEST", durationMin = dur,
                     notes = "${q.targetValue} ${q.targetUnit.lowercase(Locale.US)}",
                 )
-                cursorMin += dur + 15
+                cursor = end + 15
             }
         }
 
-        if (s.primaryCourseTitle != null) {
+        // primary work block — scaled by the week; Sunday = RECOVERY EMPHASIS
+        // at the same slot (no skip-day psychology)
+        if (s.primaryCourseTitle != null || isSunday) {
             var t = 17 * 60
             var guard = 0
             while (busyAt(t) && guard++ < 20) t += 30
+            if (t <= 21 * 60) {
+                if (isSunday) {
+                    items += RoutineItem(
+                        "RECOVERY EMPHASIS — MOBILITY + BREATHWORK",
+                        "%02d:%02d".format(t / 60, t % 60), "RECOVERY", plan.recoveryMin + 20,
+                        notes = "W${plan.week} ${plan.name} · lighter by design, anchors stand",
+                    )
+                } else if (s.primaryCourseTitle != null) {
+                    items += RoutineItem(
+                        title = "SYSTEM TRAINING — ${s.primaryCourseTitle.take(24)}",
+                        time = "%02d:%02d".format(t / 60, t % 60),
+                        category = "TRAINING", durationMin = plan.trainingMin,
+                        notes = "W${plan.week} ${plan.name}",
+                    )
+                }
+            }
+        }
+
+        // NEAT walk — the smallest habit that survives a bad day (week-scaled)
+        run {
+            var t = 18 * 60 + 30
+            var guard = 0
+            while (busyAt(t) && guard++ < 16) t += 30
             if (t <= 21 * 60) items += RoutineItem(
-                title = "SYSTEM TRAINING — ${s.primaryCourseTitle.take(24)}",
-                time = "%02d:%02d".format(t / 60, t % 60),
-                category = "TRAINING", durationMin = 40, notes = "primary track",
+                "NEAT WALK", "%02d:%02d".format(t / 60, t % 60), "RECOVERY", plan.walkMin,
+                notes = "${plan.walkMin} min · W${plan.week} base — outside, no phone",
             )
         }
 
@@ -216,11 +290,14 @@ object DeterministicAI {
 
         if (!busyAt(13 * 60)) items += RoutineItem("LUNCH", "13:00", "MEAL", 25)
         if (!busyAt(21 * 60)) items += RoutineItem("DINNER", "21:00", "MEAL", 25)
-        if (!busyAt(22 * 60 + 45)) items += RoutineItem("WIND DOWN", "22:45", "SLEEP", 15, notes = "recovery is training")
+        if (!busyAt(22 * 60 + 45)) items += RoutineItem(
+            "WIND DOWN", "22:45", "SLEEP", plan.recoveryMin,
+            notes = "recovery is training · W${plan.week}",
+        )
 
         return RoutineDraft(
             items = AIValidator.routine(items),
-            reason = "${open.size} quest block(s) · ${s.commitments.size} commitment(s) · course=${s.primaryCourseTitle != null}",
+            reason = "W${plan.week} ${plan.name} · anchors 06:30/23:00 fixed · ${open.size} quest block(s) · ${s.commitments.size} commitment(s)",
         )
     }
 

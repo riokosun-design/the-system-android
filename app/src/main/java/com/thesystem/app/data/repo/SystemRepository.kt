@@ -294,6 +294,20 @@ class SystemRepository @Inject constructor(
         Unit
     }
 
+    /** STEP 7 (mig 023): weekly adherence verdict — server-owned, idempotent per ISO week. */
+    suspend fun evaluateRoutineWeek(): RoutineWeekVerdict? = runCatching {
+        val raw = supabase.postgrest.rpc("evaluate_routine_week").data ?: error("no response")
+        cacheJson.decodeFromString(RoutineWeekVerdict.serializer(), raw)
+    }.getOrNull()
+
+    @kotlinx.serialization.Serializable
+    data class RoutineWeekVerdict(
+        val week: Int = 1,
+        @kotlinx.serialization.SerialName("prev_week") val prevWeek: Int = 1,
+        val verdict: String = "HOLD",
+        @kotlinx.serialization.SerialName("active_days") val activeDays: Int? = null,
+    )
+
     // ═══ SYSTEM ROUTINE (017): fixed life commitments the routine wraps around ═══
 
     suspend fun myCommitments(): com.thesystem.app.ai.CommitmentsDto? = uid?.let { me ->
