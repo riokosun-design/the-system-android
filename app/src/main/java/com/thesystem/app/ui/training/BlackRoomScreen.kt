@@ -173,6 +173,10 @@ fun BlackRoomScreen(onBack: () -> Unit, vm: BlackRoomViewModel = hiltViewModel()
                         GateRow("≥5 historical missed / penalty events", checks?.get("penalty_events_min5")?.bool())
                         GateRow("Primary muscle course ≥ 50%", checks?.get("muscle_progress_ok")?.bool())
                         GateRow("3 performance tracks completed", checks?.get("specials_completed_ok")?.bool())
+                        // REASON LAW (mig 024) — exact gaps, in the server's own words
+                        s.eligibility?.reasons?.filter { it.contains("MISSING") || it.contains("MET (") }?.forEach { r ->
+                            Text(r, style = MonoLabel, color = if (r.contains("MISSING")) PaperWhite else FaintGray)
+                        }
                         Spacer(Modifier.height(Grid.S8))
                         Text(
                             "Ledger: ${checks?.get("missed_days")?.int() ?: 0} missed days · " +
@@ -199,6 +203,11 @@ fun BlackRoomScreen(onBack: () -> Unit, vm: BlackRoomViewModel = hiltViewModel()
                                 "an admin verifies and unlocks the room.",
                             style = MaterialTheme.typography.bodySmall, color = LabelGray,
                         )
+                        // STEP 9 · REASON LAW — the two pricing factors, in the
+                        // server's own words (deterministic, stable per hunter)
+                        s.eligibility?.reasons?.filter { it.startsWith("PRICE FACTOR") }?.forEach { r ->
+                            Text(r, style = MonoLabel, color = FaintGray)
+                        }
                         Spacer(Modifier.height(Grid.S12))
                         if (s.eligibility?.eligible == true) {
                             OutlinedTextField(

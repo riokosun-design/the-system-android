@@ -110,6 +110,8 @@ data class BlackRoomEligibilityDto(
     val upi: Double? = null,
     val usd: Double? = null,
     @SerialName("potential_index") val potentialIndex: Int = 0,
+    /** STEP 9 (mig 024): server-authored reason lines — gates + price factors. */
+    val reasons: List<String> = emptyList(),
 )
 
 /** `black_room_programs` — the Super Admin's hand-built personalized track. */
