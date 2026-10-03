@@ -38,15 +38,20 @@ class AuthRepository @Inject constructor(private val supabase: SupabaseClient) {
         }.getOrNull()
     }
 
-    /** Claim a unique @handle. Server validates regex ^[a-z0-9_]{3,20}$ + uniqueness atomically. */
+    /** Claim a unique @handle. Server validates regex ^[a-z0-9_]{3,20}$, the
+     *  reserved list and uniqueness atomically — and stores the typed case in
+     *  display_name so SaN renders as SaN (mig 027). */
     suspend fun claimUsername(handle: String): Result<Unit> = runCatching {
         supabase.postgrest.rpc("claim_username", buildJsonObject { put("p_handle", handle) })
         Unit
     }
 
+    /** Instant availability — server RPC (mig 027) so format, reserved names
+     *  and uniqueness are judged by ONE authority, callable pre-auth. */
     suspend fun isUsernameAvailable(handle: String): Boolean = runCatching {
-        supabase.from("users").select { filter { eq("username", handle.lowercase()) } }.decodeList<UserDto>().isEmpty()
-    }.getOrDefault(false)
+        val raw = supabase.postgrest.rpc("username_available", buildJsonObject { put("p_handle", handle) }).data
+        raw.trim().toBooleanStrictOrNull()
+    }.getOrNull() ?: false
 
     /** Final step of onboarding: write metrics + mark gate complete. Role/xp columns are trigger-guarded.
      *  [sport] = STEP 6 athlete path; null leaves the column NULL (server CHECK guards the enum). */

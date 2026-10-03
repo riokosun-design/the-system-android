@@ -117,8 +117,10 @@ class OnboardingViewModel @Inject constructor(
     }
 
     // ── Unique @handle with 400ms debounce + live availability ──────────────
+    // STEP 16: the hunter's typed case is PRESERVED for display (SaN stays SaN);
+    // the server normalizes for uniqueness and enforces the reserved list.
     fun onUsernameChanged(raw: String) {
-        val clean = raw.lowercase().filter { it.isLetterOrDigit() || it == '_' }.take(20)
+        val clean = raw.filter { it.isLetterOrDigit() || it == '_' }.take(20)
         _ui.value = _ui.value.copy(username = clean, usernameAvailable = null, usernameError = null)
         usernameJob?.cancel()
         if (clean.length < 3) return
@@ -145,7 +147,14 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             val claimed = auth.claimUsername(s.username)
             if (claimed.isFailure) {
-                _ui.value = _ui.value.copy(busy = false, error = claimed.exceptionOrNull()?.message ?: "Username rejected")
+                val raw = claimed.exceptionOrNull()?.message ?: ""
+                val copy = when {
+                    "handle_taken" in raw -> "@${s.username.lowercase()} is already claimed by another hunter."
+                    "reserved_handle" in raw -> "That handle is reserved by THE SYSTEM."
+                    "bad_handle" in raw -> "3–20 characters: letters, numbers, underscore."
+                    else -> raw.ifBlank { "Username rejected" }
+                }
+                _ui.value = _ui.value.copy(busy = false, error = copy)
                 return@launch
             }
             auth.completeOnboarding(s.age, s.heightCm.toDouble(), s.weightKg.toDouble(), s.goal, activityLevel, s.sport)
