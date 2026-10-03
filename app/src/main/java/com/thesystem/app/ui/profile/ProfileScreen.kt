@@ -56,12 +56,14 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
                 item { GhostButton("ADMIN CONTROL PANEL", { nav.navigate(Routes.ADMIN) }, Modifier.fillMaxWidth()) }
                 item { GhostButton("AI BENCHMARK", { nav.navigate(Routes.AI_BENCHMARK) }, Modifier.fillMaxWidth()) }
             }
-            item { Box(Modifier.enterAnim(1)) { BodyStatsCard(me, vm) } }
-            item { Box(Modifier.enterAnim(2)) { PerformanceCard(s.bests) } }
+            // STEP 8: supply lives in the Vault now, right under the lab doors
+            item { Box(Modifier.enterAnim(1)) { MarketplaceCard(nav = nav) } }
+            item { Box(Modifier.enterAnim(2)) { BodyStatsCard(me, vm) } }
+            item { Box(Modifier.enterAnim(3)) { PerformanceCard(s.bests) } }
             item { SectionTitle("Achievement Wall") }
-            item { Box(Modifier.enterAnim(3)) { FormsCard(s, me) } }
+            item { Box(Modifier.enterAnim(4)) { FormsCard(s, me) } }
             item { SectionTitle("Account") }
-            item { Box(Modifier.enterAnim(4)) { AccountCard(me, s) } }
+            item { Box(Modifier.enterAnim(5)) { AccountCard(me, s) } }
             item {
                 Box(Modifier.enterAnim(5)) {
                     DangerZoneCard(deleting = s.deleting, onDelete = { vm.deleteAccount { onSignOut() } })
@@ -94,6 +96,35 @@ private fun ProfileHeader(me: UserDto, onOpenChat: () -> Unit, onSignOut: () -> 
             NeonButton("MESSAGES", onOpenChat, Modifier.weight(1f))
             GhostButton("SIGN OUT", onSignOut, Modifier.weight(1f))
         }
+    }
+}
+
+@Composable
+/** STEP 8 — SYSTEM SUPPLY door. Extensible by design: the category row is
+ *  data-shaped (MERCH/SUPPLEMENT/DIGITAL today), and every number inside is
+ *  server-priced. Settlement stays the manual UPI rail — no IAP, ever. */
+@Composable
+private fun MarketplaceCard(nav: androidx.navigation.NavHostController) {
+    GlowCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("SYSTEM SUPPLY", style = MonoLabel, color = SkyBlue)
+                Text(
+                    "MARKETPLACE",
+                    color = PaperWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono,
+                )
+            }
+            GhostButton("ENTER", { nav.navigate(Routes.MARKET) })
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "MERCH · SUPPLEMENTS · DIGITAL — shelves grow category by category",
+            style = MonoLabel, color = LabelGray,
+        )
+        Text(
+            "Prices are server-set. Settlement: manual UPI rail with admin confirmation — no auto-charge, no payment SDK.",
+            style = MonoLabel, color = FaintGray,
+        )
     }
 }
 

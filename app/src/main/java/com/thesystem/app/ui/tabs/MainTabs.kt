@@ -34,19 +34,18 @@ import com.thesystem.app.ui.arena.ArenaScreen
 import com.thesystem.app.ui.chess.ChessHubScreen
 import com.thesystem.app.ui.dashboard.DashboardScreen
 import com.thesystem.app.ui.profile.ProfileScreen
-import com.thesystem.app.ui.market.MarketScreen
 import com.thesystem.app.ui.rank.RankScreen
 
 /**
- * Strict 4-tab rail. The training catalog and the Black Room are reached from
- * Status and the Market — they are not tabs.
+ * 5-slot rail (STEP 8: Market moved to the Vault; its slot is reserved for the
+ * SQUAD network — STEPs 11–14). The training catalog and the Black Room are
+ * reached from Status — they are not tabs.
  */
 enum class SystemTab(val label: String, val icon: ImageVector) {
     DASHBOARD("Status", Icons.Default.Dashboard),
     RANK("Rank", Icons.Default.MilitaryTech),
     ARENA("Arena", Icons.Default.Whatshot),
     CHESS("Chess", Icons.Default.Extension),
-    MARKET("Market", Icons.Default.Storefront),
     PROFILE("Vault", Icons.Default.Person),
 }
 
@@ -78,7 +77,6 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
                 SystemTab.RANK -> RankScreen()
                 SystemTab.ARENA -> ArenaScreen(nav = nav)
                 SystemTab.CHESS -> ChessHubScreen(nav = nav)
-                SystemTab.MARKET -> MarketScreen(nav = nav)
                 SystemTab.PROFILE -> ProfileScreen(profile = profile, nav = nav, onSignOut = onSignOut)
             }
         }

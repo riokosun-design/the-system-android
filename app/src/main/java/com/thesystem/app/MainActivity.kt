@@ -116,6 +116,8 @@ object Routes {
     const val ASSISTANT = "assistant"
     const val ROUTINE = "routine"
     const val AI_BENCHMARK = "aiBenchmark"
+    /** STEP 8: supply is a pushed route from the Vault, no longer a tab. */
+    const val MARKET = "market"
     const val CHESS_GAME = "chessGame/{mode}"
     const val CHESS_PUZZLES = "chessPuzzles/{daily}"
     /** Verified proof session: every field is server content, not a client guess. */
@@ -223,6 +225,7 @@ fun AppNavHost(profile: RootState.Ready, onSignOut: () -> Unit) {
         composable(Routes.ASSISTANT) { com.thesystem.app.ui.assistant.AssistantScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.ROUTINE) { com.thesystem.app.ui.assistant.RoutineScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.AI_BENCHMARK) { com.thesystem.app.ui.assistant.AiBenchmarkScreen(onBack = { nav.popBackStack() }) }
+        composable(Routes.MARKET) { com.thesystem.app.ui.market.MarketScreen(nav = nav) }
         composable(Routes.CHESS_GAME) { back ->
             com.thesystem.app.ui.chess.ChessGameScreen(
                 modeName = back.arguments?.getString("mode"),
