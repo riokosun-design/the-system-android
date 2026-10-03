@@ -30,7 +30,7 @@
 | 3–5 | Chess state arch + UI + difficulty + puzzles | ✅ clone-search pipeline · director puzzles (22 pack) · pass-and-play · honest labels | 0.15.1 · run 37026712545 |
 | 6 | Sports-path onboarding | ✅ migration 022 + onboarding p26 + explicit opt-out | 0.16.0 · run 37043924851 |
 | 7 | Adaptive routine engine | ✅ 4-law arc + mig 023 verdicts + week-aware drafts | 0.17.0 · run 37100247561 |
-| 8 | Marketplace → Profile | ⬜ | |
+| 8 | Marketplace → Profile | ✅ pushed route + SYSTEM SUPPLY card | 0.17.1 · run 37101145814 |
 | 9 | Black Room eligibility/pricing | ⬜ | |
 | 10 | Country/currency | ⬜ | |
 | 11–14 | Squad system + chat + progression + wars | ⬜ | |
