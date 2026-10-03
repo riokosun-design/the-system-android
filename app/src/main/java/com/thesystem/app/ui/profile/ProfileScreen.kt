@@ -99,7 +99,6 @@ private fun ProfileHeader(me: UserDto, onOpenChat: () -> Unit, onSignOut: () -> 
     }
 }
 
-@Composable
 /** STEP 8 — SYSTEM SUPPLY door. Extensible by design: the category row is
  *  data-shaped (MERCH/SUPPLEMENT/DIGITAL today), and every number inside is
  *  server-priced. Settlement stays the manual UPI rail — no IAP, ever. */
