@@ -32,7 +32,7 @@
 | 7 | Adaptive routine engine | ✅ 4-law arc + mig 023 verdicts + week-aware drafts | 0.17.0 · run 37100247561 |
 | 8 | Marketplace → Profile | ✅ pushed route + SYSTEM SUPPLY card | 0.17.1 · run 37101145814 |
 | 9 | Black Room eligibility/pricing | ✅ mig 024 band+seed+reason laws | 0.17.2 · run 37101705155 |
-| 10 | Country/currency | ⬜ | |
+| 10 | Country/currency | ✅ mig 025 user-selected rail, zero IP | 0.17.3 · run 37103010444 |
 | 11–14 | Squad system + chat + progression + wars | ⬜ | |
 | 15 | Prediction safety | ⬜ (VC display-only law holds) | |
 | 16 | Auth → username order | ⬜ | |
