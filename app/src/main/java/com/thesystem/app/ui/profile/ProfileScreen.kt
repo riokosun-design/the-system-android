@@ -13,6 +13,8 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
@@ -63,7 +65,7 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
             item { SectionTitle("Achievement Wall") }
             item { Box(Modifier.enterAnim(4)) { FormsCard(s, me) } }
             item { SectionTitle("Account") }
-            item { Box(Modifier.enterAnim(5)) { AccountCard(me, s) } }
+            item { Box(Modifier.enterAnim(5)) { AccountCard(me, s, vm) } }
             item {
                 Box(Modifier.enterAnim(5)) {
                     DangerZoneCard(deleting = s.deleting, onDelete = { vm.deleteAccount { onSignOut() } })
@@ -359,9 +361,20 @@ private fun PerformanceCard(bests: com.thesystem.app.data.model.VerifiedBestsDto
 
 /** ACCOUNT — utilities: bounty board, referral summon, compact rows. */
 @Composable
-private fun AccountCard(me: UserDto, s: ProfileState) {
+/** STEP 10 picker — modest, extensible, data-shaped. Codes are free-form
+ *  ^[A-Z]{2}$ server-side; ZZ = OTHER/undisclosed (USD rail). */
+private val COUNTRY_CHOICES = listOf(
+    "IN" to "INDIA", "US" to "USA", "GB" to "UK", "AE" to "UAE",
+    "SG" to "SINGAPORE", "MY" to "MALAYSIA", "AU" to "AUSTRALIA",
+    "CA" to "CANADA", "DE" to "GERMANY", "BR" to "BRAZIL",
+    "ZA" to "S. AFRICA", "ZZ" to "OTHER",
+)
+
+@Composable
+private fun AccountCard(me: UserDto, s: ProfileState, vm: ProfileViewModel) {
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
+    var countryOpen by remember { mutableStateOf(false) }
     GlowCard {
         AccountRow("BOUNTY BOARD", "partner offers → VC") { s.offerwallUrl?.let(uriHandler::openUri) }
         AccountRow("SUMMON HUNTERS", "code ${me.referralCode} · ${s.myReferrals} summoned") {
@@ -370,6 +383,33 @@ private fun AccountCard(me: UserDto, s: ProfileState) {
                 putExtra(Intent.EXTRA_TEXT, "Enter THE SYSTEM with my code ${me.referralCode} — level up or decay. @${me.username}")
             }
             context.startActivity(Intent.createChooser(send, "Summon hunters"))
+        }
+        AccountRow(
+            "REGION",
+            (me.country ?: "IN — default") + " · settles your price rail (₹ UPI / \$ international)",
+        ) { countryOpen = !countryOpen }
+        if (countryOpen) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "You pick this — the System never reads your IP, GPS or SIM.",
+                style = MaterialTheme.typography.labelSmall, color = FaintGray,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                COUNTRY_CHOICES.forEach { (code, label) ->
+                    val on = (me.country ?: "IN") == code
+                    Text(
+                        label,
+                        color = if (on) SkyBlue else LabelGray,
+                        fontSize = 10.sp, fontFamily = SystemMono,
+                        fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier
+                            .border(1.dp, if (on) SkyBlue else LineSoft, RoundedCornerShape(6.dp))
+                            .clickable { vm.setCountry(if (code == "IN") null else code); countryOpen = false }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                    )
+                }
+            }
         }
     }
 }

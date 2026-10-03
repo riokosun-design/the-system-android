@@ -188,6 +188,15 @@ class SystemRepository @Inject constructor(
             .decodeSingle<SystemConfigDto>().value
     }.getOrNull()
 
+    /** STEP 10 (mig 025): the hunter's OWN country choice — the only source
+     *  that column ever accepts. null clears back to the India rail. */
+    suspend fun setCountry(code: String?): Result<Unit> = runCatching {
+        val me = uid ?: error("Not signed in")
+        val clean = code?.uppercase()?.takeIf { it.matches(Regex("^[A-Z]{2}$")) }
+        supabase.from("users").update({ set("country", clean) }) { filter { eq("id", me) } }
+        Unit
+    }
+
     /** Sequential protocol bookkeeping lives server-side; the client only mirrors it. */
     suspend fun dailyQuestsStatus(): List<QuestDto> = dailyQuests()
 

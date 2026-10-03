@@ -26,6 +26,8 @@ data class UserDto(
     val sport: String? = null,
     /** STEP 7 adaptive routine arc, server-owned (mig 023): 1..4. */
     @SerialName("routine_week") val routineWeek: Int = 1,
+    /** STEP 10 (mig 025): USER-SELECTED country only — never IP/GPS-derived. NULL → India rail. */
+    val country: String? = null,
     val age: Int? = null,
     @SerialName("height_cm") val heightCm: Double? = null,
     @SerialName("weight_kg") val weightKg: Double? = null,

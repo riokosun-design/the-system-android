@@ -43,8 +43,9 @@ import javax.inject.Inject
  * · Gate: level 50, ≥1 unlocked form, ≥5 historical missed/penalty events,
  *   primary muscle course ≥50%, 3 performance tracks completed — all live
  *   answers from `black_room_eligibility()`.
- * · Price: server-computed (₹199–599 India/low-price regions, $5–19 tier-1
- *   international). Never hardcoded in the client.
+ * · Price: server-computed (₹149–699 India rail, $10–30 international rail;
+ *   mig 024 seed+consistency bands, mig 025 user-selected country). Never
+ *   hardcoded in the client.
  * · APPLY: manual UPI rail — UTR + screenshot → Super Admin review.
  * · Approved hunters receive a program the admin built row by row.
  */
@@ -64,7 +65,11 @@ data class BlackRoomState(
 @HiltViewModel
 class BlackRoomViewModel @Inject constructor(
     private val training: TrainingRepository,
+    private val system: com.thesystem.app.data.repo.SystemRepository,
 ) : ViewModel() {
+
+    /** STEP 10: the hunter's chosen rail (NULL country = India default, honest). */
+    private var country: String? = null
 
     private val _state = MutableStateFlow(BlackRoomState())
     val state: StateFlow<BlackRoomState> = _state
@@ -74,7 +79,8 @@ class BlackRoomViewModel @Inject constructor(
     fun refresh() = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true)
         val course = training.courses("FORBIDDEN").firstOrNull()
-        val elig = training.blackRoomEligibility()
+        country = system.profile()?.country
+        val elig = training.blackRoomEligibility(country ?: "IN")
         val program = if (elig?.eligible == true) training.blackRoomProgram() else emptyList()
         _state.value = _state.value.copy(loading = false, course = course, eligibility = elig, program = program)
     }
@@ -89,7 +95,7 @@ class BlackRoomViewModel @Inject constructor(
             return@launch
         }
         _state.value = s.copy(submitting = true, error = null)
-        training.applyBlackRoom(s.utr.trim(), s.screenshotPath)
+        training.applyBlackRoom(s.utr.trim(), s.screenshotPath, country ?: "IN")
             .onSuccess {
                 _state.value = _state.value.copy(
                     submitting = false, applied = true,

@@ -78,6 +78,16 @@ class ProfileViewModel @Inject constructor(
             .onFailure { _state.value = _state.value.copy(error = it.message) }
     }
 
+    /** STEP 10: the hunter's own country selection (never IP-derived). */
+    fun setCountry(code: String?) = viewModelScope.launch {
+        system.setCountry(code)
+            .onSuccess {
+                _state.value = _state.value.copy(notice = if (code != null) "REGION SET — $code (chosen by you, not tracked)" else "REGION CLEARED — India rail")
+                refresh()
+            }
+            .onFailure { _state.value = _state.value.copy(error = it.message) }
+    }
+
     /** Play policy: in-app account deletion. onDeleted should re-route to onboarding. */
     fun deleteAccount(onDeleted: () -> Unit) = viewModelScope.launch {
         if (_state.value.deleting) return@launch
