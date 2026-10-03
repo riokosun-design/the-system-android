@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.platform.LocalContext
@@ -360,7 +361,7 @@ private fun PerformanceCard(bests: com.thesystem.app.data.model.VerifiedBestsDto
 }
 
 /** ACCOUNT — utilities: bounty board, referral summon, compact rows. */
-@Composable
+
 /** STEP 10 picker — modest, extensible, data-shaped. Codes are free-form
  *  ^[A-Z]{2}$ server-side; ZZ = OTHER/undisclosed (USD rail). */
 private val COUNTRY_CHOICES = listOf(
