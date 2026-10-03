@@ -4,6 +4,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 // Every DTO maps 1:1 to a table/view in supabase/migrations. snake_case ↔ camelCase via @SerialName.
 
@@ -179,6 +181,40 @@ data class ClanMemberDto(
     val role: String = "MEMBER", // GUILD_MASTER | VICE_CAPTAIN | ELITE_HUNTER | MEMBER
     val username: String? = null, // joined
 )
+
+// ── SQUAD CORE (mig 026) — 41% work · 9% member level · 50% wars ────────────
+
+@Serializable
+data class SquadStatusDto(
+    @SerialName("in_squad") val inSquad: Boolean = false,
+    @SerialName("clan_id") val clanId: String? = null,
+    val name: String = "",
+    val tag: String = "",
+    @SerialName("stored_level") val storedLevel: Int = 1,
+    @SerialName("treasury_vc") val treasuryVc: Long = 0,
+    @SerialName("guild_master") val guildMaster: String? = null,
+    val score: Int = 0,
+    @SerialName("work_component") val workComponent: Double = 0.0,
+    @SerialName("level_component") val levelComponent: Double = 0.0,
+    @SerialName("wars_component") val warsComponent: Double = 0.0,
+    @SerialName("task_title") val taskTitle: String = "",
+    @SerialName("task_target") val taskTarget: Int = 0,
+    @SerialName("task_unit") val taskUnit: String = "REPS",
+    @SerialName("task_progress") val taskProgress: Long = 0,
+    val members: Int = 0,
+    @SerialName("war_points") val warPoints: Int = 0,
+)
+
+@Serializable
+data class SquadLeaderRowDto(
+    val id: String,
+    val name: String,
+    val tag: String,
+    val members: Int = 0,
+    @SerialName("score_json") val scoreJson: JsonObject = JsonObject(emptyMap()),
+) {
+    val score: Int get() = scoreJson["score"]?.jsonPrimitive?.intOrNull ?: 0
+}
 
 @Serializable
 data class ZoneLeaderboardDto(

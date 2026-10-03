@@ -62,6 +62,21 @@ class SocialRepository @Inject constructor(private val supabase: SupabaseClient)
         supabase.postgrest.rpc("create_clan", buildJsonObject { put("p_name", name); put("p_tag", tag) }); Unit
     }
 
+    // ── SQUAD CORE (mig 026): measured progression, never invented numbers ────
+    private val squadJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+    suspend fun squadStatus(): SquadStatusDto? = runCatching {
+        val raw = supabase.postgrest.rpc("squad_status").data ?: return@runCatching null
+        squadJson.decodeFromString(SquadStatusDto.serializer(), raw)
+    }.getOrNull()
+
+    suspend fun squadLeaderboard(): List<SquadLeaderRowDto> = runCatching {
+        val raw = supabase.postgrest.rpc("squad_leaderboard").data ?: "[]"
+        squadJson.decodeFromString(
+            kotlinx.serialization.builtins.ListSerializer(SquadLeaderRowDto.serializer()), raw,
+        )
+    }.getOrDefault(emptyList())
+
     suspend fun joinClan(clanId: String): Result<Unit> = runCatching {
         supabase.postgrest.rpc("join_clan", buildJsonObject { put("p_clan_id", clanId) }); Unit
     }
