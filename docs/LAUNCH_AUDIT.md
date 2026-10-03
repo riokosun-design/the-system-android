@@ -36,4 +36,4 @@
 | 11–14 | Squad system + chat + progression + wars | ✅ 0.18.0 · run 37104495289 | squad tab, 41/9/50 war score, weekly rotating task, hunter search + DM, rankings; wars sealed-honest until monthly window |
 | 15 | Prediction safety | ✅ verified (no ship) | live prosrc audit: place_bet debits prediction_points only, never VC; daily allowance server-capped; UI "FREE non-redeemable (13+, no cash value)"; zero real-money path |
 | 16 | Auth → username order | ✅ 0.18.1 · run 37105164997 | username typed after auth; case preserved (display_name) vs normalized uniqueness; 25 reserved handles; instant RPC availability |
-| 17–19 | Regression / perf / polish | ⬜ | |
+| 17–19 | Regression / perf / polish | ✅ swept | 15/15 used Routes registered; zero dead tab refs; zero fake data; live RPC battery 15/15 present (incl. all squad + username fns); 32 sport templates, 8 squad tasks confirmed live; squad lists lazy + 45s poll only; SquadScreen 100% monochrome (0 SkyBlue) under tokens 3.0 |
