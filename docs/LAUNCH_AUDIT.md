@@ -33,7 +33,7 @@
 | 8 | Marketplace → Profile | ✅ pushed route + SYSTEM SUPPLY card | 0.17.1 · run 37101145814 |
 | 9 | Black Room eligibility/pricing | ✅ mig 024 band+seed+reason laws | 0.17.2 · run 37101705155 |
 | 10 | Country/currency | ✅ mig 025 user-selected rail, zero IP | 0.17.3 · run 37103010444 |
-| 11–14 | Squad system + chat + progression + wars | ⬜ | |
+| 11–14 | Squad system + chat + progression + wars | ✅ 0.18.0 · run 37104495289 | squad tab, 41/9/50 war score, weekly rotating task, hunter search + DM, rankings; wars sealed-honest until monthly window |
 | 15 | Prediction safety | ⬜ (VC display-only law holds) | |
 | 16 | Auth → username order | ⬜ | |
 | 17–19 | Regression / perf / polish | ⬜ | |
