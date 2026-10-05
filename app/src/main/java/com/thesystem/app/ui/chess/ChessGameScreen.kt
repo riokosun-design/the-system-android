@@ -111,6 +111,7 @@ fun ChessGameScreen(
 
     var whiteMs by remember { mutableLongStateOf(mode.clockSec * 1000L) }
     var blackMs by remember { mutableLongStateOf(mode.clockSec * 1000L) }
+    val pieceImgs = rememberPieceBitmaps()   // bundled cburnett set (one decode per composition)
 
     var result by remember { mutableStateOf<String?>(null) } // WIN | LOSS | DRAW (hunter view)
     var resultReason by remember { mutableStateOf("") }
@@ -292,13 +293,14 @@ fun ChessGameScreen(
         vm.refresh()
     }
 
+    // viewport law (spec): full-height column, top pinned, controls pinned to
+    // the bottom, the board optically centered between them — no page scroll.
     SystemBackground {
         Column(
             Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .padding(horizontal = Grid.Margin)
-                .verticalScroll(rememberScrollState()),
+                .padding(horizontal = Grid.Margin),
         ) {
             // ── HUD header ───────────────────────────────────────────────
             Row(Modifier.fillMaxWidth().padding(vertical = Grid.S12), verticalAlignment = Alignment.CenterVertically) {
@@ -316,20 +318,22 @@ fun ChessGameScreen(
 
             if (!aiTrainingUnlocked) {
                 // PLAY vs AI — full configuration before the duel (spec §6/§8/§9)
-                PlayAiConfigSheet(
-                    diff = diff, onDiff = { diff = it },
-                    sideSel = sideSel, onSide = { sideSel = it },
-                    allowUndo = allowUndoPref, onUndo = { allowUndoPref = it },
-                    hintsOn = hintsOn, onHints = { hintsOn = it },
-                    practiceElo = chessUi.profile?.practiceElo ?: 400,
-                    onStart = {
-                        userWhite = when (sideSel) {
-                            0 -> true; 2 -> false; else -> kotlin.random.Random.nextBoolean()
-                        }
-                        whiteMs = mode.clockSec * 1000L; blackMs = mode.clockSec * 1000L
-                        haptics.select(); aiTrainingUnlocked = true
-                    },
-                )
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    PlayAiConfigSheet(
+                        diff = diff, onDiff = { diff = it },
+                        sideSel = sideSel, onSide = { sideSel = it },
+                        allowUndo = allowUndoPref, onUndo = { allowUndoPref = it },
+                        hintsOn = hintsOn, onHints = { hintsOn = it },
+                        practiceElo = chessUi.profile?.practiceElo ?: 400,
+                        onStart = {
+                            userWhite = when (sideSel) {
+                                0 -> true; 2 -> false; else -> kotlin.random.Random.nextBoolean()
+                            }
+                            whiteMs = mode.clockSec * 1000L; blackMs = mode.clockSec * 1000L
+                            haptics.select(); aiTrainingUnlocked = true
+                        },
+                    )
+                }
                 return@Column
             }
 
@@ -339,6 +343,7 @@ fun ChessGameScreen(
                 ms = oppMs, timed = mode.clockSec > 0,
                 captures = oppCaps,
                 materialPlus = materialOf(oppCaps) - materialOf(userCaps),
+                pieceImgs = pieceImgs,
             )
 
             // AI thinking indicator. (The old mid-game engine-level slider is
@@ -349,57 +354,67 @@ fun ChessGameScreen(
                 }
             }
 
-            // ── board ────────────────────────────────────────────────────
+            // ── THE BOARD, optically centered: the middle zone owns all free
+            // height ("margin: auto 0"), square is locked at min(width, height),
+            // capped at 400dp (spec: max-width 400px · aspect-ratio 1/1). ─────
             val inCheck = board.inCheck(board.whiteToMove)
-            ChessBoard(
-                board = board,
-                myColor = userColorIdx,
-                selected = selected,
-                targets = remember(selected, legal) { if (selected < 0) emptySet() else targetsFor(legal, selected) },
-                lastMove = lastMove,
-                checkSquare = if (result == null && inCheck) (if (board.whiteToMove) board.wKing else board.bKing) else -1,
-                hint = hintMove?.let { it.from to it.to },
-                anim = anim,
-                onAnimDone = { anim = null },
-                onSquare = onSquare@{ sq ->
-                    if (result != null || aiThinking) return@onSquare
-                    val sideToMove = if (board.whiteToMove) 0 else 1
-                    // pass-and-play: the side to move IS the acting player
-                    if (!pnp && sideToMove != userColorIdx) return@onSquare
-                    val piece = board.sq[sq]
-                    if (selected >= 0) {
-                        val options = legal.filter { it.from == selected && it.to == sq }
-                        if (options.isNotEmpty()) {
-                            if (options.any { it.promo != 0 }) {
-                                pendingPromo = options
-                            } else {
-                                if (!pnp && userMoveStartedAt > 0) thinkMs.add(System.currentTimeMillis() - userMoveStartedAt)
-                                haptics.tick()
-                                pushMove(options.first())
+            BoxWithConstraints(
+                Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                val boardSide = minOf(maxWidth, maxHeight, 400.dp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    ChessBoard(
+                        board = board,
+                        myColor = userColorIdx,
+                        selected = selected,
+                        targets = remember(selected, legal) { if (selected < 0) emptySet() else targetsFor(legal, selected) },
+                        lastMove = lastMove,
+                        checkSquare = if (result == null && inCheck) (if (board.whiteToMove) board.wKing else board.bKing) else -1,
+                        hint = hintMove?.let { it.from to it.to },
+                        anim = anim,
+                        onAnimDone = { anim = null },
+                        onSquare = onSquare@{ sq ->
+                            if (result != null || aiThinking) return@onSquare
+                            val sideToMove = if (board.whiteToMove) 0 else 1
+                            // pass-and-play: the side to move IS the acting player
+                            if (!pnp && sideToMove != userColorIdx) return@onSquare
+                            val piece = board.sq[sq]
+                            if (selected >= 0) {
+                                val options = legal.filter { it.from == selected && it.to == sq }
+                                if (options.isNotEmpty()) {
+                                    if (options.any { it.promo != 0 }) {
+                                        pendingPromo = options
+                                    } else {
+                                        if (!pnp && userMoveStartedAt > 0) thinkMs.add(System.currentTimeMillis() - userMoveStartedAt)
+                                        haptics.tick()
+                                        pushMove(options.first())
+                                    }
+                                    return@onSquare
+                                }
                             }
-                            return@onSquare
-                        }
-                    }
-                    selected = if (piece != EMPTY && colorOf(piece) == (if (pnp) sideToMove else userColorIdx)) sq else -1
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+                            selected = if (piece != EMPTY && colorOf(piece) == (if (pnp) sideToMove else userColorIdx)) sq else -1
+                        },
+                        modifier = Modifier.size(boardSide),
+                    )
 
-            if (pendingPromo.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("PROMOTE:", style = MonoLabel, color = SkyBlue)
-                    pendingPromo.forEach { m ->
-                        GhostButton(
-                            when (m.promo) {
-                                com.thesystem.app.chess.QUEEN -> "Q"; com.thesystem.app.chess.ROOK -> "R"
-                                com.thesystem.app.chess.BISHOP -> "B"; else -> "N"
-                            },
-                            {
-                                if (userMoveStartedAt > 0) thinkMs.add(System.currentTimeMillis() - userMoveStartedAt)
-                                pushMove(m)
-                            },
-                        )
+                    if (pendingPromo.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("PROMOTE:", style = MonoLabel, color = SkyBlue)
+                            pendingPromo.forEach { m ->
+                                GhostButton(
+                                    when (m.promo) {
+                                        com.thesystem.app.chess.QUEEN -> "Q"; com.thesystem.app.chess.ROOK -> "R"
+                                        com.thesystem.app.chess.BISHOP -> "B"; else -> "N"
+                                    },
+                                    {
+                                        if (userMoveStartedAt > 0) thinkMs.add(System.currentTimeMillis() - userMoveStartedAt)
+                                        pushMove(m)
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -412,6 +427,7 @@ fun ChessGameScreen(
                 ms = myMs, timed = mode.clockSec > 0,
                 captures = userCaps,
                 materialPlus = materialOf(userCaps) - materialOf(oppCaps),
+                pieceImgs = pieceImgs,
             )
 
             // status ribbon — turn indicator + check flag
@@ -609,7 +625,14 @@ private fun ConfigToggle(title: String, sub: String, on: Boolean, onChange: (Boo
 }
 
 @Composable
-private fun PlayerTag(label: String, ms: Long, timed: Boolean, captures: List<Int>, materialPlus: Int) {
+private fun PlayerTag(
+    label: String,
+    ms: Long,
+    timed: Boolean,
+    captures: List<Int>,
+    materialPlus: Int,
+    pieceImgs: Map<Int, androidx.compose.ui.graphics.ImageBitmap>,
+) {
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = MonoLabel, color = LabelGray)
@@ -623,7 +646,13 @@ private fun PlayerTag(label: String, ms: Long, timed: Boolean, captures: List<In
             Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 captures.take(8).forEach { p ->
-                    Canvas(Modifier.size(15.dp)) { drawChessPiece(p, 0f, 0f, size.minDimension) }
+                    pieceImgs[p]?.let {
+                        androidx.compose.foundation.Image(
+                            bitmap = it, contentDescription = null,
+                            modifier = Modifier.size(15.dp),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                        )
+                    }
                 }
                 if (captures.size > 8) {
                     Text(" +${captures.size - 8}", style = MonoLabel, color = LabelGray)
@@ -726,7 +755,15 @@ private fun ResultPanel(
     onRematch: () -> Unit,
     onBack: () -> Unit,
 ) {
-    GlowCard(glow = if (result == "WIN") SkyBlue else PaperWhite, modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+    // end-of-war panel scrolls INSIDE its own card — the board above never dies
+    GlowCard(
+        glow = if (result == "WIN") SkyBlue else PaperWhite,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 14.dp)
+            .heightIn(max = 320.dp)
+            .verticalScroll(rememberScrollState()),
+    ) {
         Text(
             when {
                 pnp && result == "WIN" -> "WHITE WINS"

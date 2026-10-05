@@ -35,7 +35,7 @@ import com.thesystem.app.ui.chess.ChessHubScreen
 import com.thesystem.app.ui.dashboard.DashboardScreen
 import com.thesystem.app.ui.profile.ProfileScreen
 import com.thesystem.app.ui.rank.RankScreen
-import com.thesystem.app.ui.squad.SquadScreen
+import com.thesystem.app.ui.squad.SquadChatsScreen
 
 /**
  * 6-slot rail (STEP 14: the SQUAD network takes the slot the Market vacated in
@@ -79,7 +79,7 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
                 SystemTab.RANK -> RankScreen()
                 SystemTab.ARENA -> ArenaScreen(nav = nav)
                 SystemTab.CHESS -> ChessHubScreen(nav = nav)
-                SystemTab.SQUAD -> SquadScreen(nav = nav)
+                SystemTab.SQUAD -> SquadChatsScreen(nav = nav)
                 SystemTab.PROFILE -> ProfileScreen(profile = profile, nav = nav, onSignOut = onSignOut)
             }
         }

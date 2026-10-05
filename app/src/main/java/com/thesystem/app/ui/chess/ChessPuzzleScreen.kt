@@ -257,46 +257,53 @@ private fun PuzzleBoard(
             style = MonoLabel, modifier = Modifier.padding(bottom = 6.dp),
         )
 
-        ChessBoard(
-            board = board,
-            myColor = 0,
-            selected = selected,
-            targets = remember(selected, legal) { if (selected < 0) emptySet() else targetsFor(legal, selected) },
-            lastMove = null,
-            anim = anim,
-            onAnimDone = { anim = null },
-            onSquare = onSquare@{ sq ->
-                if (outcome != null) return@onSquare
-                val piece = board.sq[sq]
-                if (selected >= 0) {
-                    val options = legal.filter { it.from == selected && it.to == sq }
-                    if (options.isNotEmpty()) {
-                        if (options.any { it.promo != 0 }) pendingPromo = options else onUserMove(options.first())
-                        return@onSquare
-                    }
-                }
-                selected = if (piece != com.thesystem.app.chess.EMPTY &&
-                    com.thesystem.app.chess.colorOf(piece) == 0) sq else -1
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        // same optical-center law as the duel screen: board floats mid-viewport
+        BoxWithConstraints(
+            Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            val boardSide = minOf(maxWidth, maxHeight, 400.dp)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                ChessBoard(
+                    board = board,
+                    myColor = 0,
+                    selected = selected,
+                    targets = remember(selected, legal) { if (selected < 0) emptySet() else targetsFor(legal, selected) },
+                    lastMove = null,
+                    anim = anim,
+                    onAnimDone = { anim = null },
+                    onSquare = onSquare@{ sq ->
+                        if (outcome != null) return@onSquare
+                        val piece = board.sq[sq]
+                        if (selected >= 0) {
+                            val options = legal.filter { it.from == selected && it.to == sq }
+                            if (options.isNotEmpty()) {
+                                if (options.any { it.promo != 0 }) pendingPromo = options else onUserMove(options.first())
+                                return@onSquare
+                            }
+                        }
+                        selected = if (piece != com.thesystem.app.chess.EMPTY &&
+                            com.thesystem.app.chess.colorOf(piece) == 0) sq else -1
+                    },
+                    modifier = Modifier.size(boardSide),
+                )
 
-        if (pendingPromo.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("PROMOTE:", style = MonoLabel, color = SkyBlue)
-                pendingPromo.forEach { m ->
-                    GhostButton(
-                        when (m.promo) {
-                            com.thesystem.app.chess.QUEEN -> "Q"; com.thesystem.app.chess.ROOK -> "R"
-                            com.thesystem.app.chess.BISHOP -> "B"; else -> "N"
-                        }, { onUserMove(m) },
-                    )
+                if (pendingPromo.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("PROMOTE:", style = MonoLabel, color = SkyBlue)
+                        pendingPromo.forEach { m ->
+                            GhostButton(
+                                when (m.promo) {
+                                    com.thesystem.app.chess.QUEEN -> "Q"; com.thesystem.app.chess.ROOK -> "R"
+                                    com.thesystem.app.chess.BISHOP -> "B"; else -> "N"
+                                }, { onUserMove(m) },
+                            )
+                        }
+                    }
                 }
             }
         }
-
-        Spacer(Modifier.weight(1f))
 
         when (outcome) {
             "SOLVED" -> Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

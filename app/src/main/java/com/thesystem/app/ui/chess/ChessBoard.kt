@@ -19,19 +19,68 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import com.thesystem.app.R
+import com.thesystem.app.chess.BISHOP
+import com.thesystem.app.chess.BLACK_BIT
 import com.thesystem.app.chess.Board
 import com.thesystem.app.chess.EMPTY
+import com.thesystem.app.chess.KING
+import com.thesystem.app.chess.KNIGHT
 import com.thesystem.app.chess.Move
 import com.thesystem.app.chess.PAWN
+import com.thesystem.app.chess.QUEEN
+import com.thesystem.app.chess.ROOK
 import com.thesystem.app.chess.typeOf
 import com.thesystem.app.core.theme.SkyBlue
 
 /** Classic tournament palette — cream / warm brown, exactly like a real board. */
 private val LIGHT_SQ = Color(0xFFF0D9B5)
 private val DARK_SQ = Color(0xFFB58863)
+
+/**
+ * THE CBURNETT PIECE SET (Wikipedia standard) — bundled 120px PNGs, zero
+ * runtime network, identical art to chessboardjs.com/img/chesspieces/wikipedia.
+ * Pieces: Cburnett / Wikimedia Commons, CC BY-SA 3.0 (see NOTICE.md).
+ */
+@Composable
+fun rememberPieceBitmaps(): Map<Int, ImageBitmap> = mapOf(
+    PAWN to ImageBitmap.imageResource(R.drawable.piece_wp),
+    KNIGHT to ImageBitmap.imageResource(R.drawable.piece_wn),
+    BISHOP to ImageBitmap.imageResource(R.drawable.piece_wb),
+    ROOK to ImageBitmap.imageResource(R.drawable.piece_wr),
+    QUEEN to ImageBitmap.imageResource(R.drawable.piece_wq),
+    KING to ImageBitmap.imageResource(R.drawable.piece_wk),
+    PAWN or BLACK_BIT to ImageBitmap.imageResource(R.drawable.piece_bp),
+    KNIGHT or BLACK_BIT to ImageBitmap.imageResource(R.drawable.piece_bn),
+    BISHOP or BLACK_BIT to ImageBitmap.imageResource(R.drawable.piece_bb),
+    ROOK or BLACK_BIT to ImageBitmap.imageResource(R.drawable.piece_br),
+    QUEEN or BLACK_BIT to ImageBitmap.imageResource(R.drawable.piece_bq),
+    KING or BLACK_BIT to ImageBitmap.imageResource(R.drawable.piece_bk),
+)
+
+/** object-fit: contain inside the cell · pointer-events: none (taps live on the
+ *  board's single pointerInput, never on pixels). */
+private fun DrawScope.drawPieceImg(images: Map<Int, ImageBitmap>, p: Int, x: Float, y: Float, cell: Float, alpha: Float = 1f) {
+    val img = images[p] ?: return
+    val side = (cell * 0.96f).toInt()
+    val pad = ((cell - side) / 2f).toInt()
+    drawImage(
+        img,
+        dstOffset = IntOffset(x.toInt() + pad, y.toInt() + pad),
+        dstSize = IntSize(side, side),
+        alpha = alpha,
+        filterQuality = FilterQuality.Medium,
+    )
+}
 
 /** A move currently animating on the board — slides, never teleports. */
 data class AnimMove(
@@ -44,9 +93,10 @@ data class AnimMove(
 /**
  * THE SYSTEM CHESSBOARD — one Canvas, real 8×8 geometry, hardware-drawn.
  *
- *  · clearly distinguished light/dark squares, vector piece set (SystemChessSet)
- *  · selected-square frame, legal-move dots, capture rings, last-move wash
- *  · pulsing royal frame on the checked king
+ *  · classic wood squares (#f0d9b5 / #b58863 — chessboard.js standard)
+ *  · cburnett Wikipedia piece set (bundled PNGs, drawn with alpha for slides)
+ *  · selected square: soft #38bdf8 glow at 40% opacity · legal-move dots #38bdf8
+ *  · capture rings, last-move wash, pulsing royal frame on the checked king
  *  · short slide animation per move + capture fade + promotion crossfade
  *  · file/rank coordinate etching — the board behaves like a real board
  */
@@ -92,6 +142,7 @@ fun ChessBoard(
     // every tap was judged against the initial position, so pieces stopped
     // selecting. rememberUpdatedState routes every tap through the fresh lambda.
     val currentOnSquare by rememberUpdatedState(onSquare)
+    val pieceImgs = rememberPieceBitmaps()
     Canvas(
         modifier
             .aspectRatio(1f)
@@ -130,13 +181,18 @@ fun ChessBoard(
                 if (lastMove != null && (sq == lastMove.first || sq == lastMove.second)) {
                     drawRect(SkyBlue.copy(alpha = 0.20f), Offset(left, top), androidx.compose.ui.geometry.Size(cell, cell))
                 }
-                // selected frame
+                // selected frame — soft #38bdf8 glow at 40% opacity (spec)
                 if (sq == selected) {
-                    drawRect(SkyBlue.copy(alpha = 0.22f), Offset(left, top), androidx.compose.ui.geometry.Size(cell, cell))
+                    drawRect(SkyBlue.copy(alpha = 0.18f), Offset(left, top), androidx.compose.ui.geometry.Size(cell, cell))
                     drawRect(
-                        SkyBlue, Offset(left + 1f, top + 1f),
+                        SkyBlue.copy(alpha = 0.40f), Offset(left + 1f, top + 1f),
                         androidx.compose.ui.geometry.Size(cell - 2f, cell - 2f),
                         style = Stroke(2.2f),
+                    )
+                    drawRect(
+                        SkyBlue.copy(alpha = 0.40f), Offset(left + 3f, top + 3f),
+                        androidx.compose.ui.geometry.Size(cell - 6f, cell - 6f),
+                        style = Stroke(1.1f),
                     )
                 }
                 // checked king frame — royal pulse
@@ -221,7 +277,7 @@ fun ChessBoard(
                 val p = board.sq[sq]
                 if (p == EMPTY) continue
                 if (animating && sq == anim!!.to) continue
-                drawChessPiece(p, visualX(f) * cell, visualY(r) * cell, cell)
+                drawPieceImg(pieceImgs, p, visualX(f) * cell, visualY(r) * cell, cell)
             }
         }
 
@@ -235,7 +291,7 @@ fun ChessBoard(
             val ty = visualY(a.to shr 4) * cell
             // captured defender fades out under the attacker
             if (a.captured != EMPTY) {
-                drawChessPiece(a.captured, tx, ty, cell, alpha = (1f - t * 1.8f).coerceIn(0f, 1f))
+                drawPieceImg(pieceImgs, a.captured, tx, ty, cell, alpha = (1f - t * 1.8f).coerceIn(0f, 1f))
             }
             val cx = fx + (tx - fx) * t
             val cy = fy + (ty - fy) * t
@@ -243,14 +299,14 @@ fun ChessBoard(
             if (typeOf(landed) != typeOf(a.movingPiece) && landed != EMPTY) {
                 // promotion crossfade in the last quarter of the slide
                 if (t < 0.75f) {
-                    drawChessPiece(a.movingPiece, cx, cy, cell)
+                    drawPieceImg(pieceImgs, a.movingPiece, cx, cy, cell)
                 } else {
                     val k = (t - 0.75f) / 0.25f
-                    drawChessPiece(a.movingPiece, cx, cy, cell, alpha = (1f - k).coerceIn(0f, 1f))
-                    drawChessPiece(landed, tx, ty, cell, alpha = k)
+                    drawPieceImg(pieceImgs, a.movingPiece, cx, cy, cell, alpha = (1f - k).coerceIn(0f, 1f))
+                    drawPieceImg(pieceImgs, landed, tx, ty, cell, alpha = k)
                 }
             } else {
-                drawChessPiece(a.movingPiece, cx, cy, cell)
+                drawPieceImg(pieceImgs, a.movingPiece, cx, cy, cell)
             }
         }
     }

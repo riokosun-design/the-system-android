@@ -25,6 +25,31 @@ class SocialRepository @Inject constructor(private val supabase: SupabaseClient)
 
     private val uid: String? get() = supabase.auth.currentSessionOrNull()?.user?.id
 
+    /** The signed-in hunter's id — thread aggregation needs it client-side. */
+    fun myId(): String? = uid
+
+    // ── Squad messenger hub (STEP: WhatsApp rail) — raw recent streams; the hub
+    //    aggregates threads + unread counts client-side against local seen marks.
+    suspend fun recentDmMessages(limit: Int = 200): List<MessageDto> {
+        val me = uid ?: return emptyList()
+        return runCatching {
+            supabase.from("messages_with_sender").select {
+                filter {
+                    eq("kind", "DM")
+                    or { eq("sender_id", me); eq("recipient_id", me) }
+                }
+                order("created_at", Order.DESCENDING); limit(limit)
+            }.decodeList<MessageDto>()
+        }.getOrDefault(emptyList())
+    }
+
+    suspend fun clanMessagesRecent(clanId: String, limit: Int = 50): List<MessageDto> = runCatching {
+        supabase.from("messages_with_sender").select {
+            filter { eq("clan_id", clanId) }
+            order("created_at", Order.DESCENDING); limit(limit)
+        }.decodeList<MessageDto>()
+    }.getOrDefault(emptyList())
+
     // ── User directory (global DM search by @handle) ─────────────────────────
     suspend fun searchUsers(query: String): List<UserDto> = runCatching {
         supabase.from("users").select {
