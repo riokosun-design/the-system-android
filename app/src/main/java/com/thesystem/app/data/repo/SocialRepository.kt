@@ -38,7 +38,7 @@ class SocialRepository @Inject constructor(private val supabase: SupabaseClient)
                     eq("kind", "DM")
                     or { eq("sender_id", me); eq("recipient_id", me) }
                 }
-                order("created_at", Order.DESCENDING); limit(limit)
+                order("created_at", Order.DESCENDING); limit(limit.toLong())
             }.decodeList<MessageDto>()
         }.getOrDefault(emptyList())
     }
@@ -46,7 +46,7 @@ class SocialRepository @Inject constructor(private val supabase: SupabaseClient)
     suspend fun clanMessagesRecent(clanId: String, limit: Int = 50): List<MessageDto> = runCatching {
         supabase.from("messages_with_sender").select {
             filter { eq("clan_id", clanId) }
-            order("created_at", Order.DESCENDING); limit(limit)
+            order("created_at", Order.DESCENDING); limit(limit.toLong())
         }.decodeList<MessageDto>()
     }.getOrDefault(emptyList())
 
