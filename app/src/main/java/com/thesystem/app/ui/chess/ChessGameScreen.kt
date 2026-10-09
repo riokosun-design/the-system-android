@@ -62,11 +62,13 @@ fun ChessGameScreen(
     modeName: String?,
     onBack: () -> Unit,
     vm: ChessViewModel = hiltViewModel(),
+    lesson: Int = -1,
+    onMode: (String) -> Unit = {},
 ) {
     val mode = remember(modeName) { ChessMode.entries.firstOrNull { it.name == modeName } ?: ChessMode.AI_TRAINING }
     val haptics = rememberSystemHaptics()
     val epochDay = remember { LocalDate.now().toEpochDay() }
-    val (startFen, initialUserWhite) = remember(mode) { modeStartFen(mode, epochDay) }
+    val (startFen, initialUserWhite) = remember(mode, lesson) { modeStartFen(mode, epochDay, lesson) }
     var userWhite by remember(mode) { mutableStateOf(initialUserWhite) }
 
     // PLAY vs AI resolves its initial level from the hub's SETTINGS door (a
@@ -325,6 +327,7 @@ fun ChessGameScreen(
                         allowUndo = allowUndoPref, onUndo = { allowUndoPref = it },
                         hintsOn = hintsOn, onHints = { hintsOn = it },
                         practiceElo = chessUi.profile?.practiceElo ?: 400,
+                        onMode = onMode,
                         onStart = {
                             userWhite = when (sideSel) {
                                 0 -> true; 2 -> false; else -> kotlin.random.Random.nextBoolean()
@@ -530,6 +533,7 @@ private fun PlayAiConfigSheet(
     hintsOn: Boolean,
     onHints: (Boolean) -> Unit,
     practiceElo: Int,
+    onMode: (String) -> Unit,
     onStart: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
@@ -575,9 +579,42 @@ private fun PlayAiConfigSheet(
         Spacer(Modifier.height(6.dp))
         ConfigToggle("SHOW MOVE HINTS", "engine whispers its best line on your turn", hintsOn) { onHints(it) }
 
+        // TIMED COMBAT — the clock modes live HERE now (moved off the hub
+        // home per the seven-card spec); every one launches the same shipped
+        // engine session with its pinned clock + level. No features deleted.
+        Spacer(Modifier.height(14.dp))
+        Text("TIMED COMBAT", style = MonoLabel, color = LabelGray)
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ActionChip("BLITZ 5+0", Modifier.weight(1f)) { onMode(ChessMode.BLITZ.name) }
+            ActionChip("RAPID 15+10", Modifier.weight(1f)) { onMode(ChessMode.RAPID.name) }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ActionChip("CLASSICAL", Modifier.weight(1f)) { onMode(ChessMode.CLASSICAL.name) }
+            ActionChip("TIME PRESSURE 2+0", Modifier.weight(1f)) { onMode(ChessMode.TIME_PRESSURE.name) }
+        }
+        Spacer(Modifier.height(6.dp))
+        ActionChip("MENTAL WAR · RATED · FULL ANALYSIS", Modifier.fillMaxWidth()) { onMode(ChessMode.MENTAL_WAR.name) }
+
         Spacer(Modifier.height(18.dp))
         NeonButton("ENGAGE", onStart, Modifier.fillMaxWidth(), color = SkyBlue)
     }
+}
+
+/** Combat-door chip — an action (navigate into that clock mode), not a toggle. */
+@Composable
+private fun ActionChip(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Text(
+        label,
+        color = SkyBlue,
+        fontSize = 10.sp, fontFamily = SystemMono,
+        letterSpacing = 1.2.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = modifier
+            .border(1.dp, SkyBlue.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
+            .clickable { onClick() }
+            .padding(vertical = 9.dp),
+    )
 }
 
 @Composable

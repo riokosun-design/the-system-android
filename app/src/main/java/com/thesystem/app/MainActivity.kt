@@ -119,15 +119,19 @@ object Routes {
     const val SQUAD_COMMAND = "squadCommand"
     /** STEP 8: supply is a pushed route from the Vault, no longer a tab. */
     const val MARKET = "market"
-    const val CHESS_GAME = "chessGame/{mode}"
+    const val CHESS_GAME = "chessGame/{mode}?lesson={lesson}"
     const val CHESS_PUZZLES = "chessPuzzles/{daily}"
+    const val CHESS_LESSONS = "chessLessons"
+    const val CHESS_RANKINGS = "chessRankings"
+    const val CHESS_SETTINGS = "chessSettings"
     /** Verified proof session: every field is server content, not a client guess. */
     const val QUEST_PROOF =
         "quest/{questId}/{mode}/{exercise}/{target}/{seq}/{unit}/{rest}/{xp}/{title}"
 
     fun dm(otherId: String, otherName: String) = "dm/$otherId/$otherName"
     fun battle(id: String) = "battle/$id"
-    fun chessGame(mode: String) = "chessGame/$mode"
+    fun chessGame(mode: String, lesson: Int = -1) =
+        if (lesson >= 0) "chessGame/$mode?lesson=$lesson" else "chessGame/$mode"
     fun chessPuzzles(daily: Boolean) = "chessPuzzles/$daily"
     fun questProof(q: com.thesystem.app.data.model.QuestDto): String {
         val title = java.net.URLEncoder.encode(q.title, "UTF-8")
@@ -228,17 +232,37 @@ fun AppNavHost(profile: RootState.Ready, onSignOut: () -> Unit) {
         composable(Routes.AI_BENCHMARK) { com.thesystem.app.ui.assistant.AiBenchmarkScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.SQUAD_COMMAND) { com.thesystem.app.ui.squad.SquadScreen(nav = nav) }
         composable(Routes.MARKET) { com.thesystem.app.ui.market.MarketScreen(nav = nav) }
-        composable(Routes.CHESS_GAME) { back ->
+        composable(
+            route = Routes.CHESS_GAME,
+            arguments = listOf(
+                androidx.navigation.navArgument("lesson") {
+                    type = androidx.navigation.NavType.IntType
+                    defaultValue = -1
+                },
+            ),
+        ) { back ->
             com.thesystem.app.ui.chess.ChessGameScreen(
                 modeName = back.arguments?.getString("mode"),
+                lesson = back.arguments?.getInt("lesson") ?: -1,
                 onBack = { nav.popBackStack() },
+                onMode = { m -> nav.navigate(Routes.chessGame(m)) },
             )
         }
         composable(Routes.CHESS_PUZZLES) { back ->
             com.thesystem.app.ui.chess.ChessPuzzleScreen(
                 daily = back.arguments?.getString("daily") == "true",
                 onBack = { nav.popBackStack() },
+                onToggleDaily = { d -> nav.navigate(Routes.chessPuzzles(d)) },
             )
+        }
+        composable(Routes.CHESS_LESSONS) {
+            com.thesystem.app.ui.chess.ChessLessonsScreen(nav = nav)
+        }
+        composable(Routes.CHESS_RANKINGS) {
+            com.thesystem.app.ui.chess.ChessRankingsScreen(nav = nav)
+        }
+        composable(Routes.CHESS_SETTINGS) {
+            com.thesystem.app.ui.chess.ChessSettingsScreen(nav = nav)
         }
     }
 }

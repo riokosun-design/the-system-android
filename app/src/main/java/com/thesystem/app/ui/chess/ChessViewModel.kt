@@ -118,5 +118,8 @@ class ChessViewModel @Inject constructor(
 
     suspend fun puzzleRepoTodayDailySolved(): Boolean = repo.todayCount("DAILY", "SOLVED") > 0
 
+    /** Rankings screen: the hunter's REAL recent session proofs (server rows only). */
+    suspend fun repoRecentSessions(limit: Int = 15) = repo.recentSessions(limit)
+
     fun clearNotice() { _state.value = _state.value.copy(notice = null, error = null) }
 }

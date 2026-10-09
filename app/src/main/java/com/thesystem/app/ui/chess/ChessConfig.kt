@@ -39,10 +39,11 @@ enum class ChessMode(
 }
 
 /** Endgame set — hunter always plays the winning side (educational conversion). */
+data class EndgameLesson(val name: String, val fen: String)
 val ENDGAMES = listOf(
-    "8/8/1k6/8/8/1K6/1P6/8 w - - 0 1",   // KP vs K — opposition craft
-    "6k1/8/6K1/8/8/8/8/R7 w - - 0 1",   // KR mate net
-    "8/6k1/8/6KP/8/8/8/8 w - - 0 1",    // outside passer race
+    EndgameLesson("King & Pawn Conversion", "8/8/1k6/8/8/1K6/1P6/8/8 w - - 0 1"),
+    EndgameLesson("Rook Mate Net", "6k1/8/6K1/8/8/8/8/R7 w - - 0 1"),
+    EndgameLesson("Outside Passer Race", "8/6k1/8/6KP/8/8/8/8 w - - 0 1"),
 )
 
 /** Opening set — date-rotated, labeled honestly. */
@@ -65,8 +66,18 @@ fun mentalQuestOf(day: DayOfWeek): MentalQuest = when (day) {
     DayOfWeek.SUNDAY -> MentalQuest("1 ENGINE GAME", "GAME", null, 1, 25)
 }
 
-fun modeStartFen(mode: ChessMode, epochDay: Long): Pair<String, Boolean> = when (mode) {
-    ChessMode.ENDGAME_TRAINING -> ENDGAMES[(epochDay % ENDGAMES.size).toInt()] to true
-    ChessMode.OPENING_TRAINING -> { val o = OPENINGS[(epochDay % OPENINGS.size).toInt()]; o.fen to o.userWhite }
+/**
+ * Start position for a mode. [lesson] ≥ 0 pins an EXACT curriculum entry (the
+ * Lessons screen); -1 keeps the original date-rotated behavior.
+ */
+fun modeStartFen(mode: ChessMode, epochDay: Long, lesson: Int = -1): Pair<String, Boolean> = when (mode) {
+    ChessMode.ENDGAME_TRAINING ->
+        (ENDGAMES.getOrNull(if (lesson >= 0) lesson else (epochDay % ENDGAMES.size).toInt())
+            ?: ENDGAMES.first()).fen to true
+    ChessMode.OPENING_TRAINING -> {
+        val o = OPENINGS.getOrNull(if (lesson >= 0) lesson else (epochDay % OPENINGS.size).toInt())
+            ?: OPENINGS.first()
+        o.fen to o.userWhite
+    }
     else -> Board.START_FEN to true
 }

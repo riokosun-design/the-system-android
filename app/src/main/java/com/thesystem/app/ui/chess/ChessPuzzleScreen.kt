@@ -63,6 +63,7 @@ fun ChessPuzzleScreen(
     daily: Boolean,
     onBack: () -> Unit,
     vm: ChessViewModel = hiltViewModel(),
+    onToggleDaily: (Boolean) -> Unit = {},
 ) {
     val haptics = rememberSystemHaptics()
     val context = LocalContext.current
@@ -110,15 +111,20 @@ fun ChessPuzzleScreen(
                         style = MonoLabel, color = SkyBlue,
                     )
                 }
+                // daily ↔ training switch (the hub no longer carries a daily
+                // banner per the seven-card spec — the door lives here now)
+                GhostButton(if (daily) "TRAINING" else "DAILY", { haptics.select(); onToggleDaily(!daily) })
             }
 
             if (daily && dailyDone && !playedThisSession) {
                 // one shot per seed — an honest wall, never a looped replay
                 Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("CHALLENGE CLEARED", color = SkyBlue, fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                    Text("Next seed unlocks tomorrow. The training pool stays open below the hub.", style = MonoLabel, color = LabelGray)
+                    Text("Next seed unlocks tomorrow. The training pool stays open.", style = MonoLabel, color = LabelGray)
                     Spacer(Modifier.height(14.dp))
-                    NeonButton("BACK TO HUB", onBack, Modifier.fillMaxWidth(), color = SkyBlue)
+                    NeonButton("TRAINING POOL", { onToggleDaily(false) }, Modifier.fillMaxWidth(), color = SkyBlue)
+                    Spacer(Modifier.height(8.dp))
+                    GhostButton("BACK TO HUB", onBack, Modifier.fillMaxWidth())
                 }
                 return@Column
             }
