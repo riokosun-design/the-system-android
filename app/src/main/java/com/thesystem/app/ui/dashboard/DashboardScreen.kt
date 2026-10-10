@@ -360,8 +360,6 @@ private fun SystemAiModule(nav: NavHostController, haptics: com.thesystem.app.co
                     .padding(14.dp),
             ) {
                 Text("AI ASSISTANT", color = PaperWhite, style = MonoData, fontSize = 14.sp)
-                Spacer(Modifier.height(2.dp))
-                Text("What are we working on?", color = FaintGray, style = MonoLabel)
             }
             Column(
                 Modifier
@@ -375,8 +373,6 @@ private fun SystemAiModule(nav: NavHostController, haptics: com.thesystem.app.co
                     .padding(14.dp),
             ) {
                 Text("SYSTEM ROUTINE", color = PaperWhite, style = MonoData, fontSize = 14.sp)
-                Spacer(Modifier.height(2.dp))
-                Text("today, ordered", color = FaintGray, style = MonoLabel)
             }
         }
     }
@@ -402,7 +398,6 @@ private fun PlayerSnapshotCard(s: DashboardState) {
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text("${SystemMath.formatXp(p.xp)} XP", style = MonoData, color = PaperWhite)
-                Text("TOTAL", style = MonoLabel, color = FaintGray)
             }
         }
         Spacer(Modifier.height(Grid.S8))
@@ -653,21 +648,13 @@ private fun QuestDetailSheet(
                             .border(1.dp, SkyBlue.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("PROPOSED", color = SkyBlue, style = MonoLabel)
-                            Spacer(Modifier.weight(1f))
-                            Text("BY ${s.aiQuestBrain}", color = FaintGray, style = MonoLabel)
-                        }
+                        Text("PROPOSED", color = SkyBlue, style = MonoLabel)
                         Spacer(Modifier.height(4.dp))
                         Text(p.title, color = PaperWhite, style = MaterialTheme.typography.titleSmall, maxLines = 1)
                         Text(
                             "${p.exercise} × ${p.target} ${p.targetUnit} · ~${p.durationMinutes}m",
                             style = MonoData, color = LabelGray,
                         )
-                        if (p.reason.isNotBlank()) {
-                            Spacer(Modifier.height(2.dp))
-                            Text(p.reason, style = MonoLabel, color = FaintGray, maxLines = 2)
-                        }
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
                             GhostButton("DISMISS", { vm.dismissAiQuest() }, Modifier.weight(1f), enabled = !s.aiQuestBusy)

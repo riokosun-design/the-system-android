@@ -182,6 +182,21 @@ class SystemRepository @Inject constructor(
         supabase.from("users").update({ set("display_name", displayName) }) { filter { eq("id", userId) } }
     }
 
+    /** PROFILE IDENTITY (mig 029): bio ≤160 + avatar (system://KEY preset or storage URL). */
+    suspend fun updateIdentity(userId: String, bio: String?, avatarUrl: String?) {
+        supabase.from("users").update({
+            set("bio", bio?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
+            set("avatar_url", avatarUrl?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
+        }) { filter { eq("id", userId) } }
+    }
+
+    /** Custom avatar → public `avatars` bucket (RLS: owner-write), cache-busted public URL. */
+    suspend fun uploadAvatarBytes(userId: String, bytes: ByteArray): String? = runCatching {
+        val path = "$userId.jpg"
+        supabase.storage.from("avatars").upload(path, bytes) { upsert = true }
+        supabase.storage.from("avatars").publicUrl(path) + "?v=" + System.currentTimeMillis()
+    }.getOrNull()
+
     // ── System config (UPI id, offerwall, etc. — admin editable) ────────────
     suspend fun config(key: String): String? = runCatching {
         supabase.from("system_config").select { filter { eq("key", key) } }

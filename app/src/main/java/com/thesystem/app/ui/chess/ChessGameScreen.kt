@@ -349,13 +349,10 @@ fun ChessGameScreen(
                 pieceImgs = pieceImgs,
             )
 
-            // AI thinking indicator. (The old mid-game engine-level slider is
-            // REMOVED per spec — difficulty is chosen pre-match, never during.)
-            if (aiThinking && result == null) {
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    SystemProcessing("SYSTEM COMPUTING", compact = true)
-                }
-            }
+            // STEALTH COMPUTATION (spec): no banner, no status strip — the
+            // board NEVER shifts a pixel while the engine thinks. The search
+            // itself already runs on Dispatchers.Default; the hunter simply
+            // sees the piece slide when the move lands.
 
             // ── THE BOARD, optically centered: the middle zone owns all free
             // height ("margin: auto 0"), square is locked at min(width, height),

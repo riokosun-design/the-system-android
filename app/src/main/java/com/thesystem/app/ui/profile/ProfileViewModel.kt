@@ -78,6 +78,25 @@ class ProfileViewModel @Inject constructor(
             .onFailure { _state.value = _state.value.copy(error = it.message) }
     }
 
+    /** IDENTITY (spec Phase 6): persist bio + chosen avatar, then refresh the header. */
+    fun saveIdentity(bio: String, avatarUrl: String?) = viewModelScope.launch {
+        val me = _state.value.profile ?: return@launch
+        runCatching { system.updateIdentity(me.id, bio.ifBlank { null }?.take(160), avatarUrl) }
+            .onSuccess { _state.value = _state.value.copy(notice = "IDENTITY SAVED — bio & avatar locked in."); refresh() }
+            .onFailure { _state.value = _state.value.copy(error = it.message) }
+    }
+
+    /** Custom photo → storage bucket; onDone hands back the public URL (or null offline). */
+    fun uploadAvatar(bytes: ByteArray, onDone: (String?) -> Unit) = viewModelScope.launch {
+        val me = _state.value.profile
+        if (me == null) { onDone(null); return@launch }
+        val url = system.uploadAvatarBytes(me.id, bytes)
+        if (url == null) {
+            _state.value = _state.value.copy(error = "UPLOAD FAILED — check the connection, retry.")
+        }
+        onDone(url)
+    }
+
     /** STEP 10: the hunter's own country selection (never IP-derived). */
     fun setCountry(code: String?) = viewModelScope.launch {
         system.setCountry(code)

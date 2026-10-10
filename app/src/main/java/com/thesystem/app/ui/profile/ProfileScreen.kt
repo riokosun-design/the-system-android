@@ -55,7 +55,7 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(vertical = 14.dp),
         ) {
-            item { Box(Modifier.enterAnim(0)) { ProfileHeader(me, onOpenChat = { haptics.tick(); nav.navigate(Routes.CHAT) }, onSignOut = { haptics.select(); onSignOut() }) } }
+            item { Box(Modifier.enterAnim(0)) { ProfileHeader(me, vm, onOpenChat = { haptics.tick(); nav.navigate(Routes.CHAT) }, onSignOut = { haptics.select(); onSignOut() }) } }
             if (me.isAdmin) {
                 item { GhostButton("ADMIN CONTROL PANEL", { nav.navigate(Routes.ADMIN) }, Modifier.fillMaxWidth()) }
                 item { GhostButton("AI BENCHMARK", { nav.navigate(Routes.AI_BENCHMARK) }, Modifier.fillMaxWidth()) }
@@ -80,27 +80,141 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
 }
 
 @Composable
-private fun ProfileHeader(me: UserDto, onOpenChat: () -> Unit, onSignOut: () -> Unit) {
+private fun ProfileHeader(me: UserDto, vm: ProfileViewModel, onOpenChat: () -> Unit, onSignOut: () -> Unit) {
     val rank = me.rank.value
+    var identityOpen by remember { mutableStateOf(false) }
     GlowCard(glow = rankColor(rank)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            XpRing(xp = me.xp, level = me.level, modifier = Modifier.size(92.dp), color = rankColor(rank))
+            // the avatar IS the identity door (spec Phase 6)
+            Box(Modifier.size(64.dp).clickable { identityOpen = true }) {
+                SystemAvatar(me.avatarUrl, me.username, Modifier.size(64.dp))
+            }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(me.displayName ?: "Hunter", style = MaterialTheme.typography.titleLarge)
                 Text("@${me.username}", color = ElectricBlue, style = MaterialTheme.typography.labelLarge)
+                me.bio?.takeIf { it.isNotBlank() }?.let {
+                    Spacer(Modifier.height(3.dp))
+                    Text(it, color = LabelGray, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                }
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     RankBadge(rank); VcChip(me.vcBalance)
                 }
             }
+            XpRing(xp = me.xp, level = me.level, modifier = Modifier.size(64.dp), color = rankColor(rank))
         }
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(Grid.S12)) {
             NeonButton("MESSAGES", onOpenChat, Modifier.weight(1f))
+            GhostButton("EDIT IDENTITY", { identityOpen = true }, Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(Grid.S12)) {
             GhostButton("SIGN OUT", onSignOut, Modifier.weight(1f))
         }
     }
+    if (identityOpen) {
+        IdentityDialog(me = me, vm = vm, onDismiss = { identityOpen = false })
+    }
+}
+
+/** Phase 6 — bio (≤160) + avatar: four system presets or a custom photo (storage). */
+@Composable
+private fun IdentityDialog(me: UserDto, vm: ProfileViewModel, onDismiss: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var bio by remember(me.bio) { mutableStateOf(me.bio ?: "") }
+    var avatarPick by remember(me.avatarUrl) { mutableStateOf(me.avatarUrl ?: SYSTEM_AVATARS.first()) }
+    var uploading by remember { mutableStateOf(false) }
+    val pickImage = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent(),
+    ) { uri ->
+        if (uri != null) {
+            uploading = true
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val bytes = runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        val src = android.graphics.BitmapFactory.decodeStream(stream) ?: return@use null
+                        val scale = minOf(1f, 256f / maxOf(src.width, src.height))
+                        val bmp = if (scale < 1f) {
+                            android.graphics.Bitmap.createScaledBitmap(
+                                src, (src.width * scale).toInt().coerceAtLeast(1),
+                                (src.height * scale).toInt().coerceAtLeast(1), true,
+                            )
+                        } else src
+                        val out = java.io.ByteArrayOutputStream()
+                        bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 82, out)
+                        out.toByteArray()
+                    }
+                }.getOrNull()
+                if (bytes == null) { uploading = false; return@launch }
+                vm.uploadAvatar(bytes) { url ->
+                    uploading = false
+                    if (url != null) avatarPick = url
+                }
+            }
+        }
+    }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = PanelGray,
+        title = { Text("EDIT IDENTITY", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 15.sp, letterSpacing = 1.sp) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = bio,
+                    onValueChange = { bio = it.take(160) },
+                    label = { Text("Bio") },
+                    supportingText = { Text("${bio.length} / 160", color = LabelGray) },
+                    maxLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SkyBlue, focusedTextColor = PaperWhite, unfocusedTextColor = PaperWhite),
+                )
+                Spacer(Modifier.height(10.dp))
+                Text("SYSTEM AVATARS", style = MonoLabel, color = SkyBlue)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SYSTEM_AVATARS.forEach { key ->
+                        Box(
+                            Modifier
+                                .size(48.dp)
+                                .border(
+                                    2.dp,
+                                    if (avatarPick == key) SkyBlue else LineSoft,
+                                    androidx.compose.foundation.shape.CircleShape,
+                                )
+                                .clickable { avatarPick = key },
+                        ) { SystemAvatar(key, me.username, Modifier.size(44.dp).align(Alignment.Center)) }
+                    }
+                }
+                if (avatarPick.startsWith("http")) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SystemAvatar(avatarPick, me.username, Modifier.size(32.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("CUSTOM PHOTO", style = MonoLabel, color = SkyBlue)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                GhostButton(
+                    if (uploading) "UPLOADING…" else "UPLOAD CUSTOM PHOTO",
+                    { if (!uploading) pickImage.launch("image/*") },
+                    Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                vm.saveIdentity(bio.trim(), avatarPick)
+                onDismiss()
+            }) { Text("SAVE", color = SkyBlue, fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("CANCEL", color = LabelGray) }
+        },
+    )
 }
 
 /** STEP 8 — SYSTEM SUPPLY door. Extensible by design: the category row is

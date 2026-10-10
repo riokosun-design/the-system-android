@@ -184,6 +184,18 @@ class SocialRepository @Inject constructor(private val supabase: SupabaseClient)
         ); Unit
     }
 
+    /** READ RECEIPTS (mig 029): stamp every incoming DM from this partner as read. */
+    suspend fun markDmRead(otherId: String): Result<Unit> = runCatching {
+        supabase.from("messages").update({
+            set("read_at", java.time.Instant.now().toString())
+        }) {
+            filter {
+                eq("recipient_id", uid ?: error("Not signed in"))
+                eq("sender_id", otherId)
+            }
+        }; Unit
+    }
+
     /** Inbox: distinct DM partners ordered by last message. */
     suspend fun dmInbox(): List<Pair<UserDto, MessageDto>> {
         val me = uid ?: return emptyList()

@@ -41,18 +41,11 @@ import com.thesystem.app.core.SystemMath
 import com.thesystem.app.core.sensors.ImuStabilityWitness
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
-import com.thesystem.app.ui.training.CalibLevel
-import com.thesystem.app.ui.training.CalibProfile
-import com.thesystem.app.ui.training.CalibrationGate
-import com.thesystem.app.ui.training.FlashLivenessController
-import com.thesystem.app.ui.training.FlashStrobeOverlay
-import com.thesystem.app.ui.training.GateOverlay
-import com.thesystem.app.ui.training.GateUi
 import com.thesystem.app.ui.training.PoseRepCounter
-import com.thesystem.app.ui.training.PushupEngineV4
+import com.thesystem.app.ui.training.RepCounterService
+import com.thesystem.app.ui.training.RepPulseCore
+import com.thesystem.app.ui.training.RepTracker
 import com.thesystem.app.ui.training.estimate.PoseEstimatorRouter
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.Executors
 import kotlin.math.PI
 import kotlin.math.sin
@@ -125,10 +118,10 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
 
     // DESIGN 2.5 — hologram mesh: ML Kit landmarks flow into the overlay canvas
     var meshPoints by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
-    // Push-up wars are RANKED — they run inside the PHASE 0 envelope
-    // (CV-BATTLE-ARCHITECTURE): the calibration gate must lock before READY can
-    // be armed (GREEN required), then engine v4 STRICT judges. Squat wars keep
-    // the proven angle machine.
+    // PHASE 3 (spec): 1v1 wars run the SAME tracking stack as daily quests —
+    // the sim-proven v5 pulse core via RepCounterService, STRICT row because
+    // ranked. The v4 gate/angle-machine era fails in real rooms (phone flat
+    // on the floor); the core is geometry-agnostic, so the war finally counts.
     val warKind = if (s.battle?.exerciseType?.uppercase() == "SQUAT") {
         PoseRepCounter.RepExercise.SQUAT
     } else {
@@ -140,64 +133,25 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
         onDispose { witness?.stop() }
     }
 
-    // PHASE 1 pose ownership (router: MoveNet primary / ML Kit failover) +
-    // PHASE 4 flash liveness — ranked wars demand a LIVE human, not a screen.
+    // PHASE 1 pose ownership (router: MoveNet primary / ML Kit failover)
     val router = remember(spectating) { if (spectating) null else PoseEstimatorRouter(context) }
     DisposableEffect(router) { onDispose { router?.close() } }
-    val flash = remember(warKind, spectating) {
-        if (spectating || warKind != PoseRepCounter.RepExercise.PUSHUP) null else FlashLivenessController()
-    }
-    val flashUi = flash?.ui?.collectAsStateWithLifecycle()?.value ?: FlashLivenessController.Ui()
-    val flashPassed = flashUi.phase == FlashLivenessController.Phase.PASSED
 
-    var v4Profile by remember { mutableStateOf<CalibProfile?>(null) }
-    // challenge fires automatically the moment the envelope locks GREEN
-    LaunchedEffect(v4Profile?.level) {
-        val f = flash
-        if (v4Profile?.level == CalibLevel.GREEN && f != null &&
-            f.ui.value.phase == FlashLivenessController.Phase.IDLE
-        ) f.start(System.currentTimeMillis())
-    }
-    val gate = remember(warKind, spectating) {
-        if (spectating || warKind != PoseRepCounter.RepExercise.PUSHUP) null
-        else CalibrationGate(
+    // THE UNIFIED TRACKER — one service, one core. STANDARD row on purpose:
+    // sim scenario K proves STRICT refuses floor posture (the war posture);
+    // ranked integrity rides the IMU witness + signed events + the referee.
+    val tracker: RepTracker? = remember(warKind, spectating) {
+        if (spectating) null
+        else RepCounterService.start(
+            exercise = warKind,
+            strictness = RepPulseCore.Strictness.STANDARD,
             witness = witness!!,
-            estimator = router!!,
-            onProfile = { p -> v4Profile = p },
+            router = router!!,
+            onRep = { n, q -> vm.onRep(n, q); haptics.tick() },
             onLandmarks = { meshPoints = it },
-            onLuma = { m -> flash?.onLuma(m.toFloat()) },
         )
     }
-    val counter: Any? = remember(warKind, spectating, v4Profile) {
-        when {
-            spectating -> null
-            warKind == PoseRepCounter.RepExercise.PUSHUP -> v4Profile?.let { p ->
-                PushupEngineV4(
-                    profile = p,
-                    strictness = PushupEngineV4.Strictness.STRICT,
-                    witness = witness!!,
-                    estimator = router!!,
-                    engineVersion = "v4.1",
-                    onRep = { n, q -> vm.onRep(n, q) },
-                    onLandmarks = { meshPoints = it },
-                )
-            }
-            else -> PoseRepCounter(
-                exercise = warKind,
-                onRep = { n, q -> vm.onRep(n, q) },
-                onLandmarks = { meshPoints = it },
-            )
-        }
-    }
-    DisposableEffect(counter, gate) {
-        onDispose {
-            gate?.close()
-            when (counter) {
-                is PushupEngineV4 -> counter.close()
-                is PoseRepCounter -> counter.close()
-            }
-        }
-    }
+    DisposableEffect(tracker) { onDispose { tracker?.close() } }
 
     val cameraPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -213,11 +167,9 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
             runCatching { cameraProvider?.unbindAll() }
         }
     }
-    // one analyzer, always attached: frames route through the gate (lobby time
-    // IS calibration time) until the envelope locks, then into the war's engine
-    // — but only while the clock runs. Engineers count nothing before LIVE.
-    val gateState = rememberUpdatedState(gate)
-    val counterState = rememberUpdatedState(counter)
+    // one analyzer, always attached: frames flow into the unified tracker —
+    // but only while the clock runs. Engineers count nothing before LIVE.
+    val trackerState = rememberUpdatedState(tracker)
     val countingState = rememberUpdatedState(s.counting)
     LaunchedEffect(s.cameraGranted, previewView != null) {
         val view = previewView ?: return@LaunchedEffect
@@ -233,14 +185,8 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
             .build()
             .also {
                 it.setAnalyzer(analysisExecutor) { proxy ->
-                    val g = gateState.value
-                    val c = counterState.value
-                    when {
-                        c is PushupEngineV4 && countingState.value -> c.process(proxy)
-                        g != null && c == null -> g.process(proxy)
-                        c is PoseRepCounter && countingState.value -> c.process(proxy)
-                        else -> proxy.close()
-                    }
+                    val t = trackerState.value
+                    if (t != null && countingState.value) t.process(proxy) else proxy.close()
                 }
             }
         provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, preview, analysis)
@@ -255,8 +201,7 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
             )
             Text(
                 if (spectating) "Watching live. Your camera stays off — this is not your war."
-                else "${s.durationSec} SECONDS · Winner +${SystemMath.BATTLE_WIN_XP} XP · Loser +${SystemMath.BATTLE_LOSS_XP} XP. No mercy." +
-                    if (warKind == PoseRepCounter.RepExercise.PUSHUP) " SIDE-VIEW VERIFIED — THE GATE GUARDS THIS WAR." else "",
+                else "${s.durationSec} SECONDS · Winner +${SystemMath.BATTLE_WIN_XP} XP · Loser +${SystemMath.BATTLE_LOSS_XP} XP. No mercy.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.height(10.dp))
@@ -294,25 +239,16 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                     }, color = TextMuted)
                 }
             } else {
-                val gateUi = gate?.ui?.collectAsStateWithLifecycle()?.value ?: GateUi()
                 Box(Modifier.fillMaxWidth().height(300.dp)) {
                     AndroidView(factory = { ctx -> PreviewView(ctx).also { previewView = it } }, modifier = Modifier.fillMaxSize())
-                    // mesh rides the gate stream while calibrating, the engine while at war
-                    if (s.counting || (gate != null && v4Profile == null)) {
+                    // mesh rides the unified tracker while at war
+                    if (s.counting) {
                         PoseMeshOverlay(points = meshPoints, repFlash = repPop.value, modifier = Modifier.matchParentSize())
                     }
-                    if (flash != null && v4Profile != null) {
-                        // PHASE 4 strobe — the screen is the light source
-                        FlashStrobeOverlay(flashUi)
-                    }
-                    if (gate != null && v4Profile == null && s.battle?.status != "FINISHED") {
-                        // the gate IS the referee's front door
-                        GateOverlay(gateUi, ranked = true)
-                    } else if (!s.counting && s.battle?.status != "FINISHED") {
+                    if (!s.counting && s.battle?.status != "FINISHED") {
                         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                if (gate != null && s.battle?.status == "LOBBY") "ENVELOPE LOCKED — ARM READY BELOW"
-                                else "PHONE ON THE FLOOR — FRONT CAMERA FACING YOU",
+                                "PHONE ON THE FLOOR — FRONT CAMERA FACING YOU",
                                 color = PaperWhite, style = MonoLabel,
                             )
                         }
@@ -340,24 +276,6 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                             )
                             Text("REPS", color = LabelGray, fontSize = 8.sp, fontFamily = SystemMono, letterSpacing = 3.sp)
                         }
-                    }
-                }
-                // PHASE 4 verdict line — live human required before READY arms
-                if (flash != null && v4Profile != null && s.battle?.status == "LOBBY") {
-                    Spacer(Modifier.height(8.dp))
-                    when (flashUi.phase) {
-                        FlashLivenessController.Phase.PASSED ->
-                            Text("LIVE HUMAN CONFIRMED", style = MonoLabel, color = SkyBlue)
-                        FlashLivenessController.Phase.RUNNING ->
-                            Text("FLASH CHALLENGE RUNNING — HOLD STILL", style = MonoLabel, color = LabelGray)
-                        FlashLivenessController.Phase.FAILED -> {
-                            Text(flashUi.reason, style = MonoLabel, color = LabelGray)
-                            Spacer(Modifier.height(6.dp))
-                            GhostButton("RETRY FLASH CHECK", {
-                                flash.start(System.currentTimeMillis())
-                            }, Modifier.fillMaxWidth())
-                        }
-                        FlashLivenessController.Phase.IDLE -> Unit
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -391,12 +309,7 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                     Spacer(Modifier.height(8.dp))
                     NeonButton("LEAVE THE ARENA", onExit, Modifier.fillMaxWidth())
                 }
-                s.battle?.status == "LOBBY" -> LobbyCard(
-                    s, vm, haptics, onExit,
-                    gateRequired = warKind == PoseRepCounter.RepExercise.PUSHUP,
-                    gateReady = v4Profile?.level == CalibLevel.GREEN &&
-                        (s.engineConfig?.get("flash_liveness_required")?.jsonPrimitive?.booleanOrNull != true || flashPassed),
-                )
+                s.battle?.status == "LOBBY" -> LobbyCard(s, vm, haptics, onExit)
                 s.battle?.status == "CANCELLED" -> GlowCard {
                     Text("BATTLE CANCELLED", style = MaterialTheme.typography.titleLarge, color = PaperWhite)
                     Text("The lobby was dismissed. Any prediction stakes are refunded.", style = MaterialTheme.typography.bodyMedium)
@@ -456,8 +369,6 @@ private fun LobbyCard(
     vm: BattleRoomViewModel,
     haptics: SystemHaptics,
     onExit: () -> Unit,
-    gateRequired: Boolean = false,
-    gateReady: Boolean = false,
 ) {
     val b = s.battle
     val opponentReady = s.opponentReadyOf(b, s.myId)
@@ -517,20 +428,12 @@ private fun LobbyCard(
             when {
                 s.myReady -> "STAND DOWN"
                 !s.cameraGranted -> "GRANT CAMERA TO READY"
-                gateRequired && !gateReady -> "PASS THE GATE TO READY"
                 else -> "READY"
             },
             { haptics.select(); vm.toggleReady() },
             Modifier.fillMaxWidth().height(52.dp),
-            enabled = s.myReady || (s.cameraGranted && (!gateRequired || gateReady)),
+            enabled = s.myReady || s.cameraGranted,
         )
-        if (gateRequired && !gateReady && !s.myReady) {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "RANKED LAW: no side-view GREEN, no war. The gate above decides when you fight.",
-                style = MaterialTheme.typography.bodySmall, color = LabelGray,
-            )
-        }
         Spacer(Modifier.height(8.dp))
         GhostButton(if (amHost) "CANCEL — RIVAL NEVER SHOWED" else "LEAVE LOBBY", {
             haptics.select()

@@ -100,6 +100,49 @@ class ArenaRepository @Inject constructor(private val supabase: SupabaseClient) 
         }); Unit
     }
 
+    // ── MATCH CHALLENGES (mig 028) — invite → bell badge → accept → battle ────
+
+    /** Dispatch an invite: row lands pending server-side; the opponent's bell lights up. */
+    suspend fun createMatchChallenge(opponentId: String, exercise: String, durationSec: Int): Result<String> = runCatching {
+        val raw = supabase.postgrest.rpc("create_match_challenge", buildJsonObject {
+            put("p_opponent", opponentId); put("p_exercise", exercise); put("p_duration_sec", durationSec)
+        }).data ?: error("no response")
+        Json.decodeFromString(String.serializer(), raw)
+    }
+
+    /** Answer an invite. Accept spawns the battle server-side and returns its id; decline → null. */
+    suspend fun respondMatchChallenge(id: String, accept: Boolean): Result<String?> = runCatching {
+        val raw = supabase.postgrest.rpc("respond_match_challenge", buildJsonObject {
+            put("p_id", id); put("p_accept", accept)
+        }).data ?: error("no response")
+        if (raw.trim() == "null") null else Json.decodeFromString(String.serializer(), raw)
+    }
+
+    /** Challenger retracts a still-pending invite. */
+    suspend fun cancelMatchChallenge(id: String): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("cancel_match_challenge", buildJsonObject { put("p_id", id) }); Unit
+    }
+
+    /** INCOMING pendings for the bell (challenger name embedded via FK). */
+    suspend fun incomingMatchChallenges(myId: String): List<MatchChallengeDto> = runCatching {
+        supabase.from("match_challenges").select(
+            io.github.jan.supabase.postgrest.query.Columns.raw(
+                "*, challenger:users!challenger_id(username,display_name)",
+            ),
+        ) {
+            filter { eq("opponent_id", myId); eq("status", "pending") }
+            order("created_at", Order.DESCENDING); limit(20)
+        }.decodeList<MatchChallengeDto>()
+    }.getOrDefault(emptyList())
+
+    /** Challenger-side watch: my freshest challenge, any status (the VM reads the verdict). */
+    suspend fun myLatestChallenge(myId: String): MatchChallengeDto? = runCatching {
+        supabase.from("match_challenges").select {
+            filter { eq("challenger_id", myId) }
+            order("created_at", Order.DESCENDING); limit(1)
+        }.decodeList<MatchChallengeDto>().firstOrNull()
+    }.getOrNull()
+
     /** Live battle row (score updates + status transitions) as a flow. */
     fun battleFlow(battleId: String): Flow<BattleDto?> = callbackFlow {
         val channel = supabase.channel("battle-row-$battleId")

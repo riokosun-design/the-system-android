@@ -8,6 +8,7 @@ import com.thesystem.app.data.repo.SocialRepository
 import com.thesystem.app.data.repo.SystemRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -111,11 +112,42 @@ class ArenaViewModel @Inject constructor(
     fun setDuration(sec: Int) { _state.value = _state.value.copy(draftDuration = sec) }
     fun setScheduledAt(iso: String?) { _state.value = _state.value.copy(draftScheduledAt = iso) }
 
-    /** LIVE challenge — the war room opens the moment it is created. */
+    /**
+     * LIVE challenge → INVITE DISPATCH (mig 028, spec Phase 4): the opponent's
+     * bell rings; when they accept, the server spawns the battle and this
+     * watcher drops the challenger straight into the war room. Honest
+     * statuses only — declined/expired are said out loud, never faked live.
+     */
     fun challenge(opponentId: String, onBattle: (String) -> Unit) = viewModelScope.launch {
         val s = _state.value
-        arena.challengeLive(opponentId, s.draftExercise, s.draftDuration)
-            .onSuccess { battleId -> onBattle(battleId) }
+        arena.createMatchChallenge(opponentId, s.draftExercise, s.draftDuration)
+            .onSuccess { cid ->
+                _state.value = _state.value.copy(
+                    notice = "INVITE DISPATCHED — their bell is ringing. Stand by.",
+                )
+                launch {
+                    val me = system.profile()?.id ?: return@launch
+                    repeat(60) { // ~3 minutes of 3s watch, matching the invite shelf life
+                        delay(3_000)
+                        val latest = arena.myLatestChallenge(me) ?: return@repeat
+                        if (latest.id != cid) return@repeat // a newer invite took the stage
+                        when (latest.status) {
+                            "accepted" -> {
+                                val bid = latest.battleId
+                                if (bid != null) { onBattle(bid); return@launch }
+                            }
+                            "declined" -> {
+                                _state.value = _state.value.copy(error = "DECLINED — the hunter refused the war.")
+                                return@launch
+                            }
+                            "expired" -> {
+                                _state.value = _state.value.copy(error = "INVITE EXPIRED — no answer in time.")
+                                return@launch
+                            }
+                        }
+                    }
+                }
+            }
             .onFailure { _state.value = _state.value.copy(error = friendly(it.message)) }
     }
 

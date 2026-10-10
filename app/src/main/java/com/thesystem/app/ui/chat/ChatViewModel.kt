@@ -88,16 +88,49 @@ class ConversationViewModel @Inject constructor(
     val messages: StateFlow<List<MessageDto>> = _messages
     private val _myId = MutableStateFlow<String?>(null)
     val myId: StateFlow<String?> = _myId
+    private val _sendFailed = MutableStateFlow(false)
+    val sendFailed: StateFlow<Boolean> = _sendFailed
+
+    /** optimistic bubbles in flight (negative temp ids — never server rows). */
+    private val _pending = MutableStateFlow<List<MessageDto>>(emptyList())
 
     init {
         viewModelScope.launch {
             _myId.value = system.profile()?.id
-            social.dmFlow(otherId).collect { _messages.value = it }
+            social.dmFlow(otherId).collect { server ->
+                // reconcile: an optimistic bubble retires the moment its twin
+                // (same author + body) arrives as a real server row.
+                val live = _pending.value.filter { t ->
+                    server.none { it.senderId == t.senderId && it.body == t.body }
+                }
+                _pending.value = live
+                _messages.value = (server + live).sortedBy { it.createdAt }
+                // READ RECEIPTS: every incoming message this screen shows is read.
+                social.markDmRead(otherId)
+            }
         }
     }
 
     fun send(body: String) {
-        if (body.isBlank()) return
-        viewModelScope.launch { social.sendDm(otherId, body.trim()) }
+        val clean = body.trim()
+        if (clean.isEmpty()) return
+        val me = _myId.value ?: return
+        _sendFailed.value = false
+        val temp = MessageDto(
+            id = -(System.currentTimeMillis() % 1_000_000_000L),
+            senderId = me, recipientId = otherId, kind = "DM",
+            body = clean, createdAt = java.time.Instant.now().toString(),
+        )
+        _pending.value = _pending.value + temp
+        _messages.value = (_messages.value + temp).sortedBy { it.createdAt }
+        viewModelScope.launch {
+            social.sendDm(otherId, clean).onFailure {
+                _pending.value = _pending.value - temp
+                _messages.value = _messages.value - temp
+                _sendFailed.value = true
+            }
+        }
     }
+
+    fun clearSendFailed() { _sendFailed.value = false }
 }

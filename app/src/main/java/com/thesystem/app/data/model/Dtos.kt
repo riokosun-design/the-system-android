@@ -15,6 +15,8 @@ data class UserDto(
     val username: String,
     @SerialName("display_name") val displayName: String? = null,
     @SerialName("avatar_url") val avatarUrl: String? = null,
+    /** mig 029: free text ≤160 chars shown on the profile header. NULL until set. */
+    val bio: String? = null,
     val role: String = "USER",
     val level: Int = 1,
     val xp: Long = 0,
@@ -337,7 +339,30 @@ data class MessageDto(
     val kind: String, // CLAN | DM
     val body: String,
     @SerialName("created_at") val createdAt: String? = null,
+    /** DM read receipt (mig 029): recipient-stamped; sender renders ✓✓ when non-null. */
+    @SerialName("read_at") val readAt: String? = null,
 )
+
+/** mig 028: arena invite — both parties read it under RLS; writes only via RPC. */
+@Serializable
+data class MatchChallengeDto(
+    val id: String,
+    @SerialName("challenger_id") val challengerId: String,
+    @SerialName("opponent_id") val opponentId: String,
+    val exercise: String = "PUSHUP",
+    @SerialName("duration_sec") val durationSec: Int = 60,
+    val status: String = "pending", // pending | accepted | declined | expired | cancelled
+    @SerialName("battle_id") val battleId: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    val challenger: Embedded? = null,
+) {
+    @Serializable
+    data class Embedded(
+        val username: String? = null,
+        @SerialName("display_name") val displayName: String? = null,
+    )
+    val challengerLabel: String get() = challenger?.displayName ?: challenger?.username ?: "HUNTER"
+}
 
 @Serializable
 data class PaymentDto(
