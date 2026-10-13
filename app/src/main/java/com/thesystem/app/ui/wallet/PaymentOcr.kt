@@ -47,16 +47,18 @@ object PaymentOcrParser {
         )
     }
 
-    fun toJson(r: PaymentOcrResult): kotlinx.serialization.json.JsonObject =
-        kotlinx.serialization.json.buildJsonObject {
-            r.utrCandidate?.let { kotlinx.serialization.json.put("utr", it) }
-            r.amountCandidate?.let { kotlinx.serialization.json.put("amount", it) }
-            r.dateCandidate?.let { kotlinx.serialization.json.put("date", it) }
-            r.timeCandidate?.let { kotlinx.serialization.json.put("time", it) }
-            r.statusCandidate?.let { kotlinx.serialization.json.put("status", it) }
-            kotlinx.serialization.json.put("model", "mlkit-text-recognition-ondevice")
-            kotlinx.serialization.json.put("trusted", false)
-        }
+    /** Serialized UNTRUSTED hint — keys: utr/amount/date/time/status + model + trusted=false. */
+    fun toJson(r: PaymentOcrResult): kotlinx.serialization.json.JsonObject {
+        val m = LinkedHashMap<String, kotlinx.serialization.json.JsonElement>()
+        r.utrCandidate?.let { m["utr"] = kotlinx.serialization.json.JsonPrimitive(it) }
+        r.amountCandidate?.let { m["amount"] = kotlinx.serialization.json.JsonPrimitive(it) }
+        r.dateCandidate?.let { m["date"] = kotlinx.serialization.json.JsonPrimitive(it) }
+        r.timeCandidate?.let { m["time"] = kotlinx.serialization.json.JsonPrimitive(it) }
+        r.statusCandidate?.let { m["status"] = kotlinx.serialization.json.JsonPrimitive(it) }
+        m["model"] = kotlinx.serialization.json.JsonPrimitive("mlkit-text-recognition-ondevice")
+        m["trusted"] = kotlinx.serialization.json.JsonPrimitive(false)
+        return kotlinx.serialization.json.JsonObject(m)
+    }
 }
 
 suspend fun scanPaymentProof(context: Context, uri: Uri): PaymentOcrResult = runCatching {

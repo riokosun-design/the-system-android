@@ -192,10 +192,9 @@ class SystemRepository @Inject constructor(
             }.decodeList<com.thesystem.app.data.model.UserNotificationDto>()
         }.getOrDefault(emptyList())
 
+    /** Server-stamps read_at (RPC: SDK filter DSL lacks isNull here; server is cleaner anyway). */
     suspend fun markNotificationsRead(): Result<Unit> = runCatching {
-        supabase.from("user_notifications").update({
-            set("read_at", java.time.Instant.now().toString())
-        }) { filter { isNull("read_at") } }; Unit
+        supabase.postgrest.rpc("mark_notifications_read"); Unit
     }
 
     // ── SUPPORT INBOX user-side (mig 030) — one live conversation per hunter ──

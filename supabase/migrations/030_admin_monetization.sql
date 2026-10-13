@@ -593,3 +593,13 @@ begin
   perform public.require_admin_perm('ANALYTICS');
   return (select value from public.engine_config where key = p_key);
 end $$;
+
+-- ── I. NOTIFICATION READ STAMP (0.22.0 hotfix: SDK filter DSL lacks isNull) ──
+create or replace function public.mark_notifications_read()
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.user_notifications set read_at = now()
+   where user_id = auth.uid() and read_at is null;
+end $$;
+grant execute on function public.mark_notifications_read() to authenticated;
+revoke execute on function public.mark_notifications_read() from anon;

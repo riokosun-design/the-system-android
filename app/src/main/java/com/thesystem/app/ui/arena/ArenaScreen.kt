@@ -168,7 +168,7 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
                                                 style = MonoLabel, color = LabelGray,
                                             )
                                         }
-                                        GhostButton("ENTER") { haptics.tick(); nav.navigate(Routes.TOURNAMENTS) }
+                                        GhostButton("ENTER", { haptics.tick(); nav.navigate(Routes.TOURNAMENTS) })
                                     }
                                 }
                             }

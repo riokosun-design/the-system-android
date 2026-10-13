@@ -378,6 +378,7 @@ private fun ActiveOrderPanel(s: WalletState, vm: WalletViewModel, onPickProof: (
     val amount = o["price_inr"]?.jsonPrimitive?.doubleOrNull ?: 0.0
     val vc = o["vc_amount"]?.jsonPrimitive?.longOrNull ?: 0L
     val haptics = rememberSystemHaptics()
+    val ctx = LocalContext.current
     Column(
         Modifier
             .fillMaxWidth()
@@ -431,7 +432,7 @@ private fun ActiveOrderPanel(s: WalletState, vm: WalletViewModel, onPickProof: (
         Spacer(Modifier.height(8.dp))
         NeonButton(
             if (s.busy) "PROCESSING…" else "SUBMIT FOR VERIFICATION",
-            { haptics.select(); vm.submitProof(context = androidx.compose.ui.platform.LocalContext.current) },
+            { haptics.select(); vm.submitProof(context = ctx) },
             Modifier.fillMaxWidth(), color = SkyBlue,
         )
         Spacer(Modifier.height(6.dp))
