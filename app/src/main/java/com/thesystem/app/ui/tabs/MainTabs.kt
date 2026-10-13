@@ -10,7 +10,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -84,7 +86,8 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
                     .height(40.dp),
             ) {
                 NotificationBell(
-                    count = hub.incoming.size,
+                    // 0.22.0: badge = war invites + unread system notices (payments/withdrawals/support)
+                    count = hub.badgeCount,
                     onClick = { haptics.select(); hubOpen = true },
                     modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp),
                 )
@@ -119,6 +122,7 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
                     nav.navigate(Routes.battle(battleId))
                 }
             },
+            onMarkRead = { hubVm.markNoticesRead() },
             onDismiss = { hubOpen = false; hubVm.clearNotice() },
         )
     }
@@ -164,14 +168,16 @@ private fun NotificationBell(count: Int, onClick: () -> Unit, modifier: Modifier
 private fun WarInviteHub(
     state: com.thesystem.app.ui.arena.NotificationsViewModel.HubState,
     onRespond: (com.thesystem.app.data.model.MatchChallengeDto, Boolean) -> Unit,
+    onMarkRead: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val unread = state.notices.count { it.readAt == null }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = PanelGray,
         title = { Text("WAR INVITES", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 15.sp, letterSpacing = 1.sp) },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 state.answered?.let { Text(it, color = LabelGray, fontSize = 12.sp) ; Spacer(Modifier.height(6.dp)) }
                 state.error?.let { Text(it, color = LabelGray, fontSize = 12.sp); Spacer(Modifier.height(6.dp)) }
                 if (state.incoming.isEmpty()) {
@@ -208,6 +214,57 @@ private fun WarInviteHub(
                                         { onRespond(c, true) }, Modifier.fillMaxWidth(), color = SkyBlue,
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+                // ── 0.22.0 SYSTEM NOTICES — server-stamped decisions (money rail, support) ──
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "SYSTEM NOTICES",
+                        color = PaperWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (unread > 0) {
+                        Text(
+                            "MARK ALL READ",
+                            color = SkyBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.pressScale(0.9f).clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onMarkRead,
+                            ),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                if (state.notices.isEmpty()) {
+                    Text("No notices yet. Payment, withdrawal & support decisions land here.", color = LabelGray, fontSize = 11.sp, lineHeight = 16.sp)
+                } else {
+                    state.notices.forEach { n ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                                .background(
+                                    if (n.readAt == null) Color(0xFF121417) else Color(0xFF121417).copy(alpha = 0.45f),
+                                    RoundedCornerShape(8.dp),
+                                )
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (n.readAt == null) {
+                                Box(Modifier.size(6.dp).background(SkyBlue, CircleShape))
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Column {
+                                Text(n.title, color = PaperWhite, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                n.body?.let {
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(it, color = LabelGray, fontSize = 11.sp, lineHeight = 15.sp)
+                                }
+                                Text(n.createdAt?.take(16)?.replace('T', ' ') ?: "", color = FaintGray, fontSize = 9.sp)
                             }
                         }
                     }

@@ -182,6 +182,57 @@ class SystemRepository @Inject constructor(
         supabase.from("users").update({ set("display_name", displayName) }) { filter { eq("id", userId) } }
     }
 
+    // ── NOTIFICATIONS (mig 030) — payment/withdrawal/support decisions land here ──
+
+    suspend fun myNotifications(limit: Int = 30): List<com.thesystem.app.data.model.UserNotificationDto> =
+        runCatching {
+            supabase.from("user_notifications").select {
+                order("created_at", io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                limit(limit.toLong())
+            }.decodeList<com.thesystem.app.data.model.UserNotificationDto>()
+        }.getOrDefault(emptyList())
+
+    suspend fun markNotificationsRead(): Result<Unit> = runCatching {
+        supabase.from("user_notifications").update({
+            set("read_at", java.time.Instant.now().toString())
+        }) { filter { isNull("read_at") } }; Unit
+    }
+
+    // ── SUPPORT INBOX user-side (mig 030) — one live conversation per hunter ──
+
+    /** Latest conversation still alive (not RESOLVED); null = none yet. RLS scopes to own rows. */
+    suspend fun mySupportConversation(): SupportConversationDto? = runCatching {
+        supabase.from("support_conversations").select {
+            filter { neq("status", "RESOLVED") }
+            order("created_at", Order.DESCENDING)
+            limit(1)
+        }.decodeList<SupportConversationDto>().firstOrNull()
+    }.getOrNull()
+
+    suspend fun supportMessages(convId: String): List<SupportMessageDto> = runCatching {
+        supabase.from("support_messages").select {
+            filter { eq("conversation_id", convId) }
+            order("created_at", Order.ASCENDING)
+        }.decodeList<SupportMessageDto>()
+    }.getOrDefault(emptyList())
+
+    /** Open (or reuse) the live conversation + post the first message. Returns conversation id. */
+    suspend fun supportOpen(subject: String, body: String): Result<String> = runCatching {
+        supabase.postgrest.rpc("support_open", buildJsonObject {
+            put("p_subject", subject); put("p_body", body)
+        }).data.trim('"')
+    }
+
+    suspend fun supportUserReply(convId: String, body: String): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("support_user_reply", buildJsonObject {
+            put("p_conv", convId); put("p_body", body)
+        }); Unit
+    }
+
+    suspend fun supportMarkRead(convId: String): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("support_mark_read", buildJsonObject { put("p_conv", convId) }); Unit
+    }
+
     /** PROFILE IDENTITY (mig 029): bio ≤160 + avatar (system://KEY preset or storage URL). */
     suspend fun updateIdentity(userId: String, bio: String?, avatarUrl: String?) {
         supabase.from("users").update({

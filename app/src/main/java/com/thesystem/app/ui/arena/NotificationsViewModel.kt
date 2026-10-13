@@ -3,6 +3,7 @@ package com.thesystem.app.ui.arena
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thesystem.app.data.model.MatchChallengeDto
+import com.thesystem.app.data.model.UserNotificationDto
 import com.thesystem.app.data.repo.ArenaRepository
 import com.thesystem.app.data.repo.SystemRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,10 +27,15 @@ class NotificationsViewModel @Inject constructor(
 
     data class HubState(
         val incoming: List<MatchChallengeDto> = emptyList(),
+        /** mig 030 operational rail — payment/withdrawal/support decisions. */
+        val notices: List<UserNotificationDto> = emptyList(),
         val busyId: String? = null,
         val error: String? = null,
         val answered: String? = null, // transient notice ("DECLINED", "INVITE EXPIRED")
-    )
+    ) {
+        /** Badge = unanswered war invites + unread system notices. Never faked. */
+        val badgeCount: Int get() = incoming.size + notices.count { it.readAt == null }
+    }
 
     private val _state = MutableStateFlow(HubState())
     val state: StateFlow<HubState> = _state
@@ -45,7 +51,16 @@ class NotificationsViewModel @Inject constructor(
 
     private suspend fun poll() {
         val me = system.profile()?.id ?: return
-        _state.value = _state.value.copy(incoming = arena.incomingMatchChallenges(me))
+        _state.value = _state.value.copy(
+            incoming = arena.incomingMatchChallenges(me),
+            notices = system.myNotifications(20),
+        )
+    }
+
+    /** Stamp all system notices read (user opened the hub / tapped through). */
+    fun markNoticesRead() = viewModelScope.launch {
+        system.markNotificationsRead()
+        poll()
     }
 
     /** B answers the invite. onBattle fires with the spawned battle id on ACCEPT. */

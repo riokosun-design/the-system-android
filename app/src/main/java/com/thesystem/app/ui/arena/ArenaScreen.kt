@@ -156,6 +156,22 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
                                     }
                                 }
                             }
+                            // 0.22.0 — TOURNAMENTS door: server-owned brackets, VC stakes, fixtures
+                            item {
+                                GlowCard(modifier = Modifier.fillMaxWidth()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("TOURNAMENTS", style = MaterialTheme.typography.labelLarge, color = PaperWhite)
+                                            Spacer(Modifier.height(4.dp))
+                                            Text(
+                                                "Bracket wars — stake VC, climb the draw, take the pool.",
+                                                style = MonoLabel, color = LabelGray,
+                                            )
+                                        }
+                                        GhostButton("ENTER") { haptics.tick(); nav.navigate(Routes.TOURNAMENTS) }
+                                    }
+                                }
+                            }
                             if (s.myBattles.isNotEmpty()) {
                                 item { SectionTitle("MY OPEN WARS") }
                                 items(s.myBattles.take(6), key = { it.id }) { b ->

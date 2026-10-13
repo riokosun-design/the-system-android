@@ -1,5 +1,7 @@
 package com.thesystem.app.data.repo
 
+import kotlinx.serialization.builtins.serializer
+import kotlin.time.Duration.Companion.seconds
 import com.thesystem.app.data.model.*
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -126,6 +128,98 @@ class AdminRepository @Inject constructor(private val supabase: SupabaseClient) 
 
     fun paymentProofUrl(path: String): String =
         supabase.storage.from("payment-proofs").publicUrl(path)
+
+    // ── OPS COMMAND (mig 030) — metrics, finance queues, config, roles, support ──
+
+    suspend fun opsMetrics(): JsonObject? = runCatching {
+        val raw = supabase.postgrest.rpc("admin_ops_metrics").data ?: return@runCatching null
+        Json.decodeFromString(JsonObject.serializer(), raw)
+    }.getOrNull()
+
+    suspend fun paymentOrdersQueue(status: String = "SUBMITTED"): List<PaymentOrderDto> = runCatching {
+        supabase.from("payment_orders").select {
+            filter { eq("status", status) }; order("created_at", Order.ASCENDING); limit(100)
+        }.decodeList<PaymentOrderDto>()
+    }.getOrDefault(emptyList())
+
+    suspend fun reviewVcOrder(orderId: String, approve: Boolean, note: String = ""): Result<String> = runCatching {
+        val raw = supabase.postgrest.rpc("admin_review_vc_order", buildJsonObject {
+            put("p_order", orderId); put("p_approve", approve); put("p_note", note.ifBlank { null as String? })
+        }).data ?: error("no response")
+        Json.decodeFromString(String.serializer(), raw)
+    }
+
+    /** short-lived signed proof URL — private bucket, FINANCE-gated by RLS. */
+    suspend fun signedPaymentProofUrl(path: String): String? = runCatching {
+        supabase.storage.from("payment-proofs").createSignedUrl(path, 300.seconds)
+    }.getOrNull()
+
+    suspend fun withdrawalsQueue(status: String = "PENDING_REVIEW"): List<WithdrawalDto> = runCatching {
+        supabase.from("withdrawal_requests").select(
+            io.github.jan.supabase.postgrest.query.Columns.raw("*, hunter:users!user_id(username,display_name)"),
+        ) {
+            filter { eq("status", status) }; order("created_at", Order.ASCENDING); limit(100)
+        }.decodeList<WithdrawalDto>()
+    }.getOrDefault(emptyList())
+
+    suspend fun reviewWithdrawal(id: String, action: String, ref: String? = null, note: String? = null): Result<String> = runCatching {
+        val raw = supabase.postgrest.rpc("admin_review_withdrawal", buildJsonObject {
+            put("p_id", id); put("p_action", action)
+            put("p_ref", ref); put("p_note", note)
+        }).data ?: error("no response")
+        Json.decodeFromString(String.serializer(), raw)
+    }
+
+    suspend fun getConfig(key: String): JsonObject? = runCatching {
+        val raw = supabase.postgrest.rpc("admin_get_config", buildJsonObject { put("p_key", key) }).data
+            ?: return@runCatching null
+        Json.decodeFromString(JsonObject.serializer(), raw)
+    }.getOrNull()
+
+    suspend fun setConfig(key: String, value: JsonObject): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("admin_set_config", buildJsonObject {
+            put("p_key", key); put("p_value", value)
+        }); Unit
+    }
+
+    suspend fun adminPerms(): List<AdminPermDto> = runCatching {
+        supabase.from("admin_perms").select().decodeList<AdminPermDto>()
+    }.getOrDefault(emptyList())
+
+    suspend fun grantPerm(userId: String, perm: String): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("admin_grant_perm", buildJsonObject {
+            put("p_user", userId); put("p_perm", perm) }); Unit
+    }
+
+    suspend fun revokePerm(userId: String, perm: String): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("admin_revoke_perm", buildJsonObject {
+            put("p_user", userId); put("p_perm", perm) }); Unit
+    }
+
+    suspend fun auditRecent(): List<AdminAuditDto> = runCatching {
+        supabase.from("admin_audit_log").select {
+            order("created_at", Order.DESCENDING); limit(15)
+        }.decodeList<AdminAuditDto>()
+    }.getOrDefault(emptyList())
+
+    suspend fun supportQueue(status: String = ""): List<SupportConversationDto> = runCatching {
+        supabase.from("support_conversations").select(
+            io.github.jan.supabase.postgrest.query.Columns.raw("*, hunter:users!user_id(username,display_name)"),
+        ) {
+            if (status.isNotBlank()) filter { eq("status", status) } else filter { neq("status", "RESOLVED") }
+            order("updated_at", Order.DESCENDING); limit(60)
+        }.decodeList<SupportConversationDto>()
+    }.getOrDefault(emptyList())
+
+    suspend fun supportReply(convId: String, body: String): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("support_admin_reply", buildJsonObject {
+            put("p_conv", convId); put("p_body", body) }); Unit
+    }
+
+    suspend fun supportSetStatus(convId: String, status: String, reason: String = ""): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("support_admin_status", buildJsonObject {
+            put("p_conv", convId); put("p_status", status); put("p_reason", reason) }); Unit
+    }
 
     // ── Dynamic Theme Asset CMS ──────────────────────────────────────────────
     suspend fun allAssets(): List<AssetDto> = runCatching {

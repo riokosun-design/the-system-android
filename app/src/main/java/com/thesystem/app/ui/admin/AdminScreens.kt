@@ -32,16 +32,24 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /** Super Admin CMS. Every mutation is double-locked server-side by RLS + is_admin(). */
 @Composable
-fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel()) {
+fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel(), ops: AdminOpsViewModel = hiltViewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
+    val so by ops.state.collectAsStateWithLifecycle()
     val snack = remember { SnackbarHostState() }
     val haptics = rememberSystemHaptics()
     LaunchedEffect(s.notice, s.error) {
         if (s.error != null) haptics.error()
         (s.notice ?: s.error)?.let { snack.showSnackbar(it); vm.consumeNotice() }
     }
+    // OPS COMMAND notices ride the same host
+    LaunchedEffect(so.notice, so.error) {
+        if (so.error != null) haptics.error()
+        (so.notice ?: so.error)?.let { snack.showSnackbar(it); ops.consumeNotice() }
+    }
 
-    val sections = listOf("OVERVIEW", "LEGAL", "STORE", "TOURNAMENTS", "PAYMENTS", "POOLS", "ASSETS", "TRAINING")
+    // 0.22.0: OPS COMMAND sections bolted onto the rail — each gates itself by server-side permission
+    val sections = listOf("OVERVIEW", "LEGAL", "STORE", "TOURNAMENTS", "PAYMENTS", "POOLS", "ASSETS", "TRAINING",
+        "OPS", "ORDERS", "WITHDRAWALS", "SUPPORT", "CONFIG", "ROLES")
     var tab by remember { mutableIntStateOf(0) }
 
     SystemBackground(wallpaperAlpha = 0.06f) {
@@ -89,6 +97,12 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel()) {
                 5 -> PoolsTab(s, vm)
                 6 -> AssetsTab(s, vm)
                 7 -> AdminTrainingTabs(s, vm)
+                8 -> OpsTab()
+                9 -> OrdersTab()
+                10 -> WithdrawalsTab()
+                11 -> AdminSupportTab()
+                12 -> ConfigTab()
+                13 -> RolesTab()
             }
         }
         Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.BottomCenter) { SnackbarHost(snack) }

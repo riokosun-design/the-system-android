@@ -66,6 +66,13 @@ class ArenaRepository @Inject constructor(private val supabase: SupabaseClient) 
         supabase.from("battles_with_names").select { filter { eq("id", id) } }.decodeList<BattleDto>().firstOrNull()
     }.getOrNull()
 
+    /** Bracket fixtures of one tournament (gen'd server-side; ordering = round flow). */
+    suspend fun tournamentBattles(tournamentId: String): List<BattleDto> = runCatching {
+        supabase.from("battles_with_names").select {
+            filter { eq("tournament_id", tournamentId) }; order("created_at", Order.ASCENDING); limit(128)
+        }.decodeList<BattleDto>()
+    }.getOrDefault(emptyList())
+
     suspend fun challenge(opponentId: String, durationSec: Int = 60): Result<String> = runCatching {
         val res = supabase.postgrest.rpc("create_battle", buildJsonObject {
             put("p_opponent", opponentId); put("p_duration_sec", durationSec)

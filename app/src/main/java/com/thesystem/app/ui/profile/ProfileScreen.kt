@@ -57,6 +57,8 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
             contentPadding = PaddingValues(vertical = 14.dp),
         ) {
             item { Box(Modifier.enterAnim(0)) { ProfileHeader(me, vm, onOpenChat = { haptics.tick(); nav.navigate(Routes.CHAT) }, onSignOut = { haptics.select(); onSignOut() }) } }
+            // 0.22.0: VC Wallet door — purchases UPI-QR rail + withdrawals, all server-owned
+            item { Box(Modifier.enterAnim(1)) { WalletCard(me = me, onOpen = { haptics.tick(); nav.navigate(Routes.WALLET) }) } }
             if (me.isAdmin) {
                 item { GhostButton("ADMIN CONTROL PANEL", { nav.navigate(Routes.ADMIN) }, Modifier.fillMaxWidth()) }
                 item { GhostButton("AI BENCHMARK", { nav.navigate(Routes.AI_BENCHMARK) }, Modifier.fillMaxWidth()) }
@@ -68,6 +70,8 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
             item { SectionTitle("Achievement Wall") }
             item { Box(Modifier.enterAnim(4)) { FormsCard(s, me) } }
             item { SectionTitle("Account") }
+            // 0.22.0: SUPPORT door — DM-style ticket thread with the admin team
+            item { GhostButton("SUPPORT — TALK TO THE SYSTEM", { nav.navigate(Routes.SUPPORT) }, Modifier.fillMaxWidth()) }
             item { Box(Modifier.enterAnim(5)) { AccountCard(me, s, vm) } }
             item {
                 Box(Modifier.enterAnim(5)) {
@@ -216,6 +220,48 @@ private fun IdentityDialog(me: UserDto, vm: ProfileViewModel, onDismiss: () -> U
             TextButton(onClick = onDismiss) { Text("CANCEL", color = LabelGray) }
         },
     )
+}
+
+/** 0.22.0 — VC WALLET door. Balances are read-only here (server is the only
+ *  authority); the rail inside handles UPI-QR purchases + held-balance withdrawals. */
+@Composable
+private fun WalletCard(me: UserDto, onOpen: () -> Unit) {
+    GlowCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("VAULT CURRENCY", style = MonoLabel, color = SkyBlue)
+                Text(
+                    "VC WALLET",
+                    color = PaperWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono,
+                )
+            }
+            GhostButton("OPEN", onOpen)
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("BALANCE", style = MonoLabel, color = FaintGray)
+                Text(
+                    "%,d VC".format(java.util.Locale.US, me.vcBalance),
+                    color = PaperWhite, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono,
+                )
+            }
+            if (me.vcHeld > 0) {
+                Column {
+                    Text("HELD", style = MonoLabel, color = FaintGray)
+                    Text(
+                        "%,d VC".format(java.util.Locale.US, me.vcHeld),
+                        color = LabelGray, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Buy VC via UPI QR · withdraw eligible balance via manual UPI payout — every credit & debit is server-verified.",
+            style = MonoLabel, color = FaintGray,
+        )
+    }
 }
 
 /** STEP 8 — SYSTEM SUPPLY door. Extensible by design: the category row is

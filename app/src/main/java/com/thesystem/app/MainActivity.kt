@@ -119,6 +119,10 @@ object Routes {
     const val SQUAD_COMMAND = "squadCommand"
     /** STEP 8: supply is a pushed route from the Vault, no longer a tab. */
     const val MARKET = "market"
+    /** 0.22.0: VC wallet (UPI-QR purchases + withdrawals), support inbox, tournament brackets. */
+    const val WALLET = "wallet"
+    const val SUPPORT = "support"
+    const val TOURNAMENTS = "tournaments"
     const val CHESS_GAME = "chessGame/{mode}?lesson={lesson}"
     const val CHESS_PUZZLES = "chessPuzzles/{daily}"
     const val CHESS_LESSONS = "chessLessons"
@@ -232,6 +236,9 @@ fun AppNavHost(profile: RootState.Ready, onSignOut: () -> Unit) {
         composable(Routes.AI_BENCHMARK) { com.thesystem.app.ui.assistant.AiBenchmarkScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.SQUAD_COMMAND) { com.thesystem.app.ui.squad.SquadScreen(nav = nav) }
         composable(Routes.MARKET) { com.thesystem.app.ui.market.MarketScreen(nav = nav) }
+        composable(Routes.WALLET) { com.thesystem.app.ui.wallet.WalletScreen(nav = nav) }
+        composable(Routes.SUPPORT) { com.thesystem.app.ui.support.SupportScreen(nav = nav) }
+        composable(Routes.TOURNAMENTS) { com.thesystem.app.ui.tournaments.TournamentsScreen(nav = nav) }
         composable(
             route = Routes.CHESS_GAME,
             arguments = listOf(
