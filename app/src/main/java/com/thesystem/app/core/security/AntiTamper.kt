@@ -103,7 +103,7 @@ object AntiTamper {
     private val HOOK_CLASSES = arrayOf(
         "de.robv.android.xposed.XposedBridge",          // Xposed / LSPosed legacy
         "de.robv.android.xposed.XC_MethodHook",
-        "com.saurik.substrate.MS$MethodHooker",          // Substrate
+        "com.saurik.substrate.MS.MethodHooker",           // Substrate
         "org.lsposed.manager.LSPosedManager",            // LSPosed
         "re.frida.Entry",                                // Frida gadget binding
     )
