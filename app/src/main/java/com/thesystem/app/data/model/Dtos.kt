@@ -23,6 +23,8 @@ data class UserDto(
     @SerialName("vc_balance") val vcBalance: Long = 0,
     /** mig 030: VC locked in an in-flight withdrawal request. Server-owned (hold/release only in RPCs). */
     @SerialName("vc_held") val vcHeld: Long = 0,
+    /** mig 031: presence heartbeat (touch_presence RPC). Drives "Online"/"Last seen" in chat (§4.1). */
+    @SerialName("last_seen_at") val lastSeenAt: String? = null,
     @SerialName("penalty_state") val penaltyState: String = "CLEAR",
     @SerialName("missed_days") val missedDays: Int = 0,
     @SerialName("streak_days") val streakDays: Int = 0,
@@ -336,6 +338,8 @@ data class MessageDto(
     val id: Long = 0,
     @SerialName("sender_id") val senderId: String,
     @SerialName("sender_username") val senderUsername: String? = null, // joined in dm_inbox view / selected
+    /** mig 032: the hunter's chosen display name — bubbles/headers show THIS (§4.1). */
+    @SerialName("sender_display_name") val senderDisplayName: String? = null,
     @SerialName("clan_id") val clanId: String? = null,
     @SerialName("recipient_id") val recipientId: String? = null,
     val kind: String, // CLAN | DM

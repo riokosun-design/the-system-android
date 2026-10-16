@@ -80,8 +80,44 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
                     }
                 }
                 Spacer(Modifier.height(Grid.S8))
+
+                // ══ §5 HERO — 1v1 RANDOM MATCHMAKING, always on top, pulsing ══
+                val heroPulse = rememberInfiniteTransition(label = "heroPulse")
+                val heroA by heroPulse.animateFloat(
+                    0.22f, 0.85f,
+                    infiniteRepeatable(tween(1400), RepeatMode.Reverse),
+                    label = "heroA",
+                )
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Grid.Margin)
+                        .border(1.5.dp, SkyBlue.copy(alpha = heroA), RoundedCornerShape(12.dp))
+                        .padding(10.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("1v1 RANDOM MATCHMAKING", color = PaperWhite, fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp, letterSpacing = 1.5.sp, modifier = Modifier.weight(1f))
+                        Text("LIVE QUEUE", style = MonoLabel, color = SkyBlue)
+                    }
+                    Spacer(Modifier.height(Grid.S8))
+                    RandomMatchmakingPanel(
+                        s = s,
+                        onExercise = { haptics.tick(); vm.setQueueExercise(it) },
+                        onFind = { haptics.slam(); vm.findRandomOpponent() },
+                        onCancel = { haptics.tick(); vm.cancelRandomSearch() },
+                        onEnter = { battleId -> haptics.slam(); nav.navigate(Routes.battle(battleId)) },
+                        onDecline = { haptics.tick(); vm.declineRandomMatch() },
+                    )
+                }
+                Spacer(Modifier.height(Grid.CardSpace))
+
+                // ══ §5 ACTIVE TOURNAMENTS — live brackets, entry status, countdowns ══
+                ArenaTournamentsSection(nav, Modifier.padding(horizontal = Grid.Margin))
+                Spacer(Modifier.height(Grid.S8))
+
                 SystemTabBar(
-                    tabs = listOf("MATCH", "RANDOM", "PREDICT", "LIVE", "PLANNED"),
+                    tabs = listOf("MATCH", "PREDICT", "LIVE", "PLANNED"),
                     selected = section,
                     onSelect = { haptics.select(); section = it },
                 )
@@ -156,22 +192,6 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
                                     }
                                 }
                             }
-                            // 0.22.0 — TOURNAMENTS door: server-owned brackets, VC stakes, fixtures
-                            item {
-                                GlowCard(modifier = Modifier.fillMaxWidth()) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Column(Modifier.weight(1f)) {
-                                            Text("TOURNAMENTS", style = MaterialTheme.typography.labelLarge, color = PaperWhite)
-                                            Spacer(Modifier.height(4.dp))
-                                            Text(
-                                                "Bracket wars — stake VC, climb the draw, take the pool.",
-                                                style = MonoLabel, color = LabelGray,
-                                            )
-                                        }
-                                        GhostButton("ENTER", { haptics.tick(); nav.navigate(Routes.TOURNAMENTS) })
-                                    }
-                                }
-                            }
                             if (s.myBattles.isNotEmpty()) {
                                 item { SectionTitle("MY OPEN WARS") }
                                 items(s.myBattles.take(6), key = { it.id }) { b ->
@@ -187,23 +207,8 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
                             }
                         }
 
-                        // ══ 2 · RANDOM MATCHMAKING ══════════════════════════
+                        // ══ 2 · PREDICTION / SPECTATOR ══════════════════════
                         1 -> {
-                            item { SectionTitle("RANDOM MATCHMAKING", PaperWhite) }
-                            item {
-                                RandomMatchmakingPanel(
-                                    s = s,
-                                    onExercise = { haptics.tick(); vm.setQueueExercise(it) },
-                                    onFind = { haptics.slam(); vm.findRandomOpponent() },
-                                    onCancel = { haptics.tick(); vm.cancelRandomSearch() },
-                                    onEnter = { battleId -> haptics.slam(); nav.navigate(Routes.battle(battleId)) },
-                                    onDecline = { haptics.tick(); vm.declineRandomMatch() },
-                                )
-                            }
-                        }
-
-                        // ══ 3 · PREDICTION / SPECTATOR ══════════════════════
-                        2 -> {
                             item {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     SectionTitle("PREDICTION / SPECTATOR", PaperWhite)
@@ -234,8 +239,8 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
                             }
                         }
 
-                        // ══ 4 · LIVE CHALLENGES (+ daily battle blocks) ═════
-                        3 -> {
+                        // ══ 3 · LIVE CHALLENGES (+ daily battle blocks) ═════
+                        2 -> {
                             item { SectionTitle("LIVE CHALLENGES", PaperWhite) }
                             if (s.live.isEmpty()) {
                                 item {
@@ -322,11 +327,6 @@ private fun RandomMatchmakingPanel(
     val matched = q?.status == "MATCHED" && q.battleId != null
 
     GlowCard(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            "Pairs you with a real waiting hunter. No bots. No ghosts.",
-            style = MaterialTheme.typography.bodySmall, color = LabelGray,
-        )
-        Spacer(Modifier.height(Grid.S12))
         Text("BATTLE TYPE", style = MonoLabel, color = LabelGray)
         Spacer(Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
@@ -370,11 +370,6 @@ private fun RandomMatchmakingPanel(
                 NeonButton(
                     if (s.queueBusy) "ENTERING QUEUE…" else "FIND OPPONENT",
                     onFind, Modifier.fillMaxWidth(), color = PaperWhite, enabled = !s.queueBusy,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "You are matched only when a real opponent exists. Until then the panel says SEARCHING.",
-                    style = MaterialTheme.typography.bodySmall, color = FaintGray,
                 )
             }
         }
@@ -586,5 +581,86 @@ fun FilterChipPill(label: String, selected: Boolean, onClick: () -> Unit) {
             label.uppercase(), style = MonoLabel,
             color = if (selected) SkyBlue else LabelGray, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// §5 — ACTIVE TOURNAMENTS: server-owned brackets surface live inside the Arena.
+// Reads the shared TournamentsViewModel (10s poll), deep-links the full rail.
+// ════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun ArenaTournamentsSection(nav: NavHostController, modifier: Modifier = Modifier) {
+    val tvm: com.thesystem.app.ui.tournaments.TournamentsViewModel = hiltViewModel()
+    val ts by tvm.state.collectAsStateWithLifecycle()
+    // countdown ticker — re-derives labels every 30s without hammering the server
+    val tick by produceState(0) { while (true) { kotlinx.coroutines.delay(30_000); value++ } }
+    // raw ISO startsAt parsed once per tournament, label regenerated per tick
+    fun countdown(iso: String?): String {
+        @Suppress("UNUSED_EXPRESSION") tick
+        val start = iso?.let { runCatching { java.time.OffsetDateTime.parse(it).toInstant() }.getOrNull() } ?: return ""
+        val ms = start.toEpochMilli() - System.currentTimeMillis()
+        if (ms <= 0) return "LIVE NOW"
+        val m = ms / 60_000
+        return when {
+            m < 60 -> "starts in ${m}m"
+            m < 60 * 24 -> "starts in ${m / 60}h ${m % 60}m"
+            else -> "starts in ${m / (60 * 24)}d"
+        }
+    }
+
+    val live = remember(ts.tournaments, tick) {
+        (ts.tournaments.filter { it.status in listOf("OPEN", "IN_PROGRESS", "LIVE", "REGISTRATION_OPEN") }
+            .sortedBy { it.status != "OPEN" && it.status != "REGISTRATION_OPEN" }
+            .take(4))
+    }
+
+    Column(modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SectionTitle("ACTIVE TOURNAMENTS", PaperWhite)
+            Spacer(Modifier.weight(1f))
+            GhostButton("ALL", { nav.navigate(Routes.TOURNAMENTS) })
+        }
+        Spacer(Modifier.height(6.dp))
+        if (live.isEmpty()) {
+            Text("No brackets running. Watch this space.", style = MonoLabel, color = FaintGray)
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                live.forEach { t ->
+                    val registered = ts.myEntries.containsKey(t.id)
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(LineSoft.copy(alpha = 0.22f), RoundedCornerShape(8.dp))
+                            .clickable { nav.navigate(Routes.TOURNAMENTS) }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(t.title, color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                                fontFamily = SystemMono, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                buildString {
+                                    append("ENTRY ${t.entryFeeVc} VC · POOL ${t.prizePoolVc} VC")
+                                    countdown(t.startsAt).takeIf { it.isNotBlank() }?.let { append(" · ${it.uppercase()}") }
+                                },
+                                style = MonoLabel, color = LabelGray, maxLines = 1,
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            when {
+                                registered -> "REGISTERED"
+                                t.status == "OPEN" || t.status == "REGISTRATION_OPEN" -> "JOIN →"
+                                else -> t.status
+                            },
+                            style = MonoLabel,
+                            color = if (registered) SkyBlue else PaperWhite,
+                        )
+                    }
+                }
+            }
+        }
     }
 }

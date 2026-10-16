@@ -42,8 +42,12 @@ class NotificationsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            var ticks = 0
             while (true) {
                 poll()
+                // §4.1 presence heartbeat — one ultra-cheap RPC every ~50s keeps
+                // "Online"/"Last seen" honest across the chat rail (mig 031)
+                if (ticks++ % 5 == 0) system.touchPresence()
                 delay(10_000)
             }
         }

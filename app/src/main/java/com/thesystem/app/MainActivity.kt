@@ -5,9 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -113,7 +110,6 @@ object Routes {
     const val ADMIN = "admin"
     const val PROTOCOL = "protocol"
     const val ARENA_ADD = "arenaAdd"
-    const val ASSISTANT = "assistant"
     const val ROUTINE = "routine"
     const val AI_BENCHMARK = "aiBenchmark"
     const val SQUAD_COMMAND = "squadCommand"
@@ -157,20 +153,8 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // PROFESSIONAL IMMERSIVE MODE (hunter request): system nav bar swipes away
-        // on launch like pro apps; an edge-swipe pulls it up; it holds 10s, then
-        // auto-swipes back down.
-        val barsController = WindowInsetsControllerCompat(window, window.decorView)
-        barsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        barsController.hide(WindowInsetsCompat.Type.navigationBars())
-        val hideNavAgain = Runnable { barsController.hide(WindowInsetsCompat.Type.navigationBars()) }
-        ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { v, insets ->
-            v.removeCallbacks(hideNavAgain)
-            if (insets.isVisible(WindowInsetsCompat.Type.navigationBars())) {
-                v.postDelayed(hideNavAgain, 10_000L)
-            }
-            insets
-        }
+        // §1.1: NO immersive auto-hide — the Android system nav bar stays
+        // permanently visible; screens pad their own insets. (2026-10-16 spec)
         setContent {
             SystemTheme {
                 val vm: RootViewModel = hiltViewModel()
@@ -231,7 +215,6 @@ fun AppNavHost(profile: RootState.Ready, onSignOut: () -> Unit) {
             com.thesystem.app.ui.training.BlackRoomScreen(onBack = { nav.popBackStack() })
         }
         composable(Routes.QUEST_PROOF) { QuestProofScreen(onExit = { nav.popBackStack() }) }
-        composable(Routes.ASSISTANT) { com.thesystem.app.ui.assistant.AssistantScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.ROUTINE) { com.thesystem.app.ui.assistant.RoutineScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.AI_BENCHMARK) { com.thesystem.app.ui.assistant.AiBenchmarkScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.SQUAD_COMMAND) { com.thesystem.app.ui.squad.SquadScreen(nav = nav) }

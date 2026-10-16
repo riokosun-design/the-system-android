@@ -256,11 +256,6 @@ private fun WalletCard(me: UserDto, onOpen: () -> Unit) {
                 }
             }
         }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Buy VC via UPI QR · withdraw eligible balance via manual UPI payout — every credit & debit is server-verified.",
-            style = MonoLabel, color = FaintGray,
-        )
     }
 }
 
@@ -285,10 +280,7 @@ private fun MarketplaceCard(nav: androidx.navigation.NavHostController) {
             "MERCH · SUPPLEMENTS · DIGITAL — shelves grow category by category",
             style = MonoLabel, color = LabelGray,
         )
-        Text(
-            "Prices are server-set. Settlement: manual UPI rail with admin confirmation — no auto-charge, no payment SDK.",
-            style = MonoLabel, color = FaintGray,
-        )
+
     }
 }
 

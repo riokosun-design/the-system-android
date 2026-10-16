@@ -81,6 +81,10 @@ class DashboardViewModel @Inject constructor(
 
     fun refresh() = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null)
+        // §6 PENALTY ENFORCEMENT — startup catch-up BEFORE the profile read so the
+        // dashboard renders the post-penalty truth. Server: idempotent 1x/day,
+        // role-gated (admins exempt), XP decay + tier stamp + bell notice (mig 031).
+        system.syncInactivity()
         val profileD = async { system.profile() }
         val questsD = async { system.dailyQuests() }
         val formsD = async { system.myForms() }

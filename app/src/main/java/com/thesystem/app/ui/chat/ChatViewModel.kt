@@ -91,12 +91,23 @@ class ConversationViewModel @Inject constructor(
     private val _sendFailed = MutableStateFlow(false)
     val sendFailed: StateFlow<Boolean> = _sendFailed
 
+    /** §4.1 — the other hunter's live card (display name + presence). */
+    private val _other = MutableStateFlow<UserDto?>(null)
+    val other: StateFlow<UserDto?> = _other
+
     /** optimistic bubbles in flight (negative temp ids — never server rows). */
     private val _pending = MutableStateFlow<List<MessageDto>>(emptyList())
 
     init {
         viewModelScope.launch {
             _myId.value = system.profile()?.id
+            // presence stream: refresh the peer card every 15s while the thread is open
+            launch {
+                while (true) {
+                    _other.value = social.userById(otherId)
+                    kotlinx.coroutines.delay(15_000)
+                }
+            }
             social.dmFlow(otherId).collect { server ->
                 // reconcile: an optimistic bubble retires the moment its twin
                 // (same author + body) arrives as a real server row.

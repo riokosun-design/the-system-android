@@ -62,7 +62,7 @@ import javax.inject.Inject
 // SQUAD CHATS — the messenger rail (WhatsApp dark pattern, System skin).
 //
 //   · header "SQUAD CHATS" + search / menu
-//   · filter chips: ALL · GUILDS / PACKS · DIRECT MESSAGES · UNREAD
+//   · filter chips: ALL · GUILDS · DIRECT MESSAGES · UNREAD
 //   · guilds chip → persistent YOUR GUILD banner (or CREATE / BROWSE doors)
 //   · WhatsApp row: 50dp avatar · title + timestamp · preview + unread badge
 //   · FAB (cyan, 20dp above the rail) → START DIRECT CHAT / CREATE GUILD 500 VC
@@ -78,7 +78,7 @@ private val PreviewGray = Color(0xFF9CA3AF)
 private val TimeGray = Color(0xFF888888)
 private val ChipIdle = Color(0xFF262626)
 
-enum class SquadFilter(val label: String) { ALL("ALL"), GUILDS("GUILDS / PACKS"), DIRECT("DIRECT MESSAGES"), UNREAD("UNREAD") }
+enum class SquadFilter(val label: String) { ALL("ALL"), GUILDS("GUILDS"), DIRECT("DIRECT MESSAGES"), UNREAD("UNREAD") }
 
 data class SquadThreadRow(
     val id: String,          // "clan:<id>" | "dm:<userId>"
@@ -218,7 +218,7 @@ class SquadChatsViewModel @Inject constructor(
         _state.value = _state.value.copy(busy = true)
         social.createClan(name.trim(), tag.trim().uppercase())
             .onSuccess {
-                _state.value = _state.value.copy(busy = false, fabOpen = false, notice = "GUILD FORGED — your hall awaits in GUILDS / PACKS")
+                _state.value = _state.value.copy(busy = false, fabOpen = false, notice = "GUILD FORGED — your hall awaits in GUILDS")
             }
             .onFailure { _state.value = _state.value.copy(busy = false, error = it.message) }
         refresh()

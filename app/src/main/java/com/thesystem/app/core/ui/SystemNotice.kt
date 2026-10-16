@@ -3,123 +3,150 @@ package com.thesystem.app.core.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.thesystem.app.core.theme.InkBlack
 import com.thesystem.app.core.theme.LineSoft
-import com.thesystem.app.core.theme.LineStrong
 import com.thesystem.app.core.theme.PaperWhite
 import com.thesystem.app.core.theme.PanelGray
+import com.thesystem.app.core.theme.SkyBlue
 import com.thesystem.app.core.theme.SystemMono
 import java.time.LocalDate
 import kotlin.math.abs
 
 /**
- * THE SYSTEM — global notification card.
- * Dark rounded panel, hairline border, inner inset box, giveway spinner, one CTA.
+ * THE SYSTEM — global notification window (§2.2 redesign).
+ * Authentic Solo Leveling System Window: sharp cut corners, electric-blue
+ * frame, corner brackets, scanline header, cold authoritative directives.
+ * Zero motivational fluff — the System commands, it does not cheer.
  */
 data class SystemNotice(
     val title: String,
     val body: String,
-    val cta: String = "ENTER SYSTEM",
-    val spinning: Boolean = true,
+    val cta: String = "ACKNOWLEDGE",
+    val spinning: Boolean = false,
 )
+
+private val SystemCyan = Color(0xFF22D3EE)
+private val SystemCyanDim = Color(0x6622D3EE)
+private val WindowBg = Color(0xF20A0E14)
+
+/** Geometric corner brackets drawn on the window frame — the System's seal. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrameBrackets(w: Float, h: Float) {
+    val arm = 22.dp.toPx()
+    val th = 2.dp.toPx()
+    val s = Stroke(th)
+    val path = Path()
+    // ┌ ┐
+    path.moveTo(0f, arm); path.lineTo(0f, 0f); path.lineTo(arm, 0f)
+    path.moveTo(w - arm, 0f); path.lineTo(w, 0f); path.lineTo(w, arm)
+    // └ ┘
+    path.moveTo(0f, h - arm); path.lineTo(0f, h); path.lineTo(arm, h)
+    path.moveTo(w - arm, h); path.lineTo(w, h); path.lineTo(w, h - arm)
+    drawPath(path, SystemCyan, style = s)
+}
+
+/** Subtle horizontal scanlines — the holographic texture of the System window. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawScanlines(w: Float, h: Float) {
+    var y = 0f
+    val step = 5.dp.toPx()
+    while (y < h) {
+        drawLine(SystemCyan.copy(alpha = 0.05f), Offset(0f, y), Offset(w, y), strokeWidth = 1f)
+        y += step
+    }
+}
 
 @Composable
 fun SystemNoticeOverlay(notice: SystemNotice?, onDismiss: () -> Unit) {
     if (notice == null) return
+    val shape = remember { CutCornerShape(topStart = 14.dp, bottomEnd = 14.dp) }
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.72f)),
+            .background(Color.Black.copy(alpha = 0.78f)),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             Modifier
                 .fillMaxWidth(0.86f)
-                .background(PanelGray, RoundedCornerShape(22.dp))
-                .border(1.5.dp, LineStrong, RoundedCornerShape(22.dp))
-                .padding(horizontal = 22.dp, vertical = 26.dp),
+                .border(1.5.dp, Brush.verticalGradient(listOf(SystemCyan, SystemCyanDim, SystemCyan)), shape)
+                .background(WindowBg, shape)
+                .drawBehind { drawScanlines(size.width, size.height) }
+                .padding(3.dp)
+                .drawBehind { drawFrameBrackets(size.width, size.height) }
+                .padding(horizontal = 20.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Default.Info, contentDescription = null,
-                    Modifier.size(15.dp), tint = Color.White,
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    notice.title, color = PaperWhite, fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, fontFamily = SystemMono,
-                )
-            }
-            Spacer(Modifier.height(18.dp))
+            // ── header alarm bar ──
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .background(InkBlack.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
-                    .border(1.dp, LineSoft, RoundedCornerShape(14.dp))
-                    .padding(horizontal = 20.dp, vertical = 22.dp),
+                    .background(Brush.horizontalGradient(listOf(SystemCyanDim, Color.Transparent, SystemCyanDim)))
+                    .padding(vertical = 7.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        notice.body,
-                        color = PaperWhite, fontSize = 13.sp, lineHeight = 20.sp,
-                        fontWeight = FontWeight.Normal, textAlign = TextAlign.Center,
-                    )
-                    if (notice.spinning) {
-                        Spacer(Modifier.height(18.dp))
-                        SystemProcessing("THE SYSTEM IS WATCHING", compact = true)
-                    }
-                }
+                Text(
+                    "[ ! ]  ${notice.title.uppercase()}  [ ! ]",
+                    color = SystemCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp, fontFamily = SystemMono,
+                )
             }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(14.dp))
+            // ── directive body — cold, authoritative, no quotes ──
+            Text(
+                notice.body,
+                color = PaperWhite, fontSize = 13.sp, lineHeight = 21.sp,
+                fontWeight = FontWeight.Medium, textAlign = TextAlign.Center,
+                fontFamily = SystemMono, letterSpacing = 0.3.sp,
+            )
+            Spacer(Modifier.height(18.dp))
             Box(Modifier.fillMaxWidth()) {
-                NeonButton(text = notice.cta, onClick = onDismiss, enabled = true)
+                NeonButton(text = "[ ${notice.cta.uppercase()} ]", onClick = onDismiss, enabled = true, color = SystemCyan)
             }
         }
     }
 }
 
-/** Rotating copy banks — day-seeded so every login feels fresh but never random-noisy. */
+/** §2.2: cold System directives — zero motivational speeches. */
 object NoticeTemplates {
 
     private val LOGIN = listOf(
-        "Discipline isn't built when you're motivated.\nIt's built when you show up anyway.",
-        "Another day on record.\nThe System is watching — make it count.",
-        "Yesterday's effort is done.\nToday is a fresh ledger. Fill it.",
-        "No speeches today.\nOne quest, one focus, one win at a time.",
-        "You showed up. That is 90% of the battle.\nNow finish the remaining 10%.",
-        "The System does not celebrate attendance.\nIt celebrates execution. Begin.",
-        "Small wins, stacked daily,\nbecome an unstoppable rank climb.",
-        "SYSTEM ONLINE.\nBody in the arena. Mind on the board. Build.",
-        "MENTAL QUEST AVAILABLE.\nYour mind is your second weapon — draw it daily.",
+        "[NOTICE: Daily Quest parameters initialized.\nComplete all objectives before 00:00 or the penalty protocol engages.]",
+        "[DIRECTIVE: Objectives uploaded.\nExecution is mandatory. Excuses are not logged.]",
+        "[NOTICE: Streak integrity verified.\nMaintain the chain. Failure resets the counter.]",
+        "[DIRECTIVE: Today's workload assigned.\nRep count, mental training, arena conduct — all measured.]",
+        "[NOTICE: The System does not negotiate.\nComplete. Verify. Advance.]",
+        "[DIRECTIVE: Hunter status nominal.\nNew objectives queued. Deviation is penalized.]",
+        "[NOTICE: Training window open.\nUnused slots decay at midnight. No extensions exist.]",
+        "[DIRECTIVE: Two weapons sharpened daily — body and mind.\nBoth checked at 00:00.]",
     )
 
     private val MISSED = listOf(
-        "⚡ You missed a day. No dramatics —\ntoday's quest is ready. Close the gap.",
-        "🎯 A missed day is data, not defeat.\nToday's protocol is already queued.",
-        "⚔️ Streaks break. Discipline doesn't.\nStart today's quest and rebuild.",
-        "🫡 The System logged one gap.\nErase it with today's session.",
+        "[WARNING: Objective lapse detected.\nMissing another day increases the penalty tier. Resume immediately.]",
+        "[ALERT: Streak broken at quest deadline.\nXP decay protocol is armed. Today's objectives remain mandatory.]",
+        "[WARNING: The System logged your absence.\nFurther gaps trigger XP decay and rank degradation.]",
+        "[ALERT: Inactivity threshold reached.\nPenalty count active. Close today's quests to reset the clock.]",
     )
 
     private val ARENA_LOSS = listOf(
-        "You lost the war, hunter. 🫡\nTrain harder and come back stronger.",
-        "The arena keeps receipts. ⚔️\nThis one is theirs — the next one is yours.",
-        "💀 Defeat logged. No excuses filed.\nTrain. Rematch. Reclaim.",
-        "You fell short this time. 🎯\nRefine the grind — the arena is waiting.",
+        "[RESULT: Defeat recorded.\nRep differential archived. Train. Return.]",
+        "[RESULT: Objective failed.\nThe arena keeps no excuses — only records.]",
+        "[RESULT: Loss logged.\nAnalysis complete: output insufficient. RECOMMEND: training.]",
+        "[RESULT: Combat concluded. You stand second.\nRematch window open.]",
     )
 
     /** Day-seeded: same message all day, rotates across days. */

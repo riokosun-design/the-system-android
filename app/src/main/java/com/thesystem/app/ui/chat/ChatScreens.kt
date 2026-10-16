@@ -94,26 +94,60 @@ fun ChatHomeScreen(nav: NavHostController, vm: ChatViewModel = hiltViewModel()) 
 fun ConversationScreen(otherId: String, otherName: String, onBack: () -> Unit, vm: ConversationViewModel = hiltViewModel()) {
     val msgs by vm.messages.collectAsStateWithLifecycle()
     val myId by vm.myId.collectAsStateWithLifecycle()
+    val other by vm.other.collectAsStateWithLifecycle()
     val sendFailed by vm.sendFailed.collectAsStateWithLifecycle()
     val snack = remember { SnackbarHostState() }
     LaunchedEffect(sendFailed) {
         if (sendFailed) { snack.showSnackbar("TRANSMISSION FAILED — the channel dropped it. Retry."); vm.clearSendFailed() }
     }
 
+    // §4.1 — the chosen DISPLAY NAME leads; @handle stays as the quiet subtitle
+    val title = other?.displayName?.takeIf { it.isNotBlank() } ?: "@${other?.username ?: otherName}"
+    val presence = presenceLine(other?.lastSeenAt)
+
     SystemBackground(wallpaperAlpha = 0.06f) {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().statusBarsPadding()) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary) }
-                    Text("@$otherName", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+                    Column(Modifier.padding(start = 4.dp)) {
+                        Text(title, style = MaterialTheme.typography.titleLarge, color = TextPrimary, maxLines = 1)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (presence.second) {
+                                androidx.compose.foundation.Canvas(Modifier.size(7.dp)) {
+                                    drawCircle(androidx.compose.ui.graphics.Color(0xFF4ADE80))
+                                }
+                                Spacer(Modifier.width(5.dp))
+                            }
+                            Text(presence.first, style = MaterialTheme.typography.labelSmall, color = if (presence.second) androidx.compose.ui.graphics.Color(0xFF4ADE80) else TextMuted)
+                        }
+                    }
                 }
-                MessageList(msgs, myId, Modifier.weight(1f), receipts = true)
+                MessageList(msgs, myId, Modifier.weight(1f), receipts = true, datePills = true)
                 Composer(onSend = vm::send, accent = SkyBlue)
             }
             Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.BottomCenter) {
                 SnackbarHost(snack)
             }
         }
+    }
+}
+
+/** §4.1 — Online if the heartbeat is <3 min old; otherwise human last-seen. */
+private fun presenceLine(lastSeenIso: String?): Pair<String, Boolean> {
+    val seen = lastSeenIso?.let {
+        runCatching { java.time.OffsetDateTime.parse(it).toInstant() }.getOrNull()
+    } ?: return "Offline" to false
+    val ageMs = System.currentTimeMillis() - seen.toEpochMilli()
+    if (ageMs < 3 * 60_000L) return "Online" to true
+    val zone = java.time.ZoneId.systemDefault()
+    val z = seen.atZone(zone)
+    val today = java.time.LocalDate.now(zone)
+    val time = z.format(java.time.format.DateTimeFormatter.ofPattern("hh:mm a", java.util.Locale.ROOT))
+    return when (z.toLocalDate()) {
+        today -> "Last seen today at $time" to false
+        today.minusDays(1) -> "Last seen yesterday at $time" to false
+        else -> "Last seen ${z.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM", java.util.Locale.ROOT))} at $time" to false
     }
 }
 
@@ -133,6 +167,7 @@ private fun MessageList(
     myId: String?,
     modifier: Modifier = Modifier,
     receipts: Boolean = false,
+    datePills: Boolean = false,
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
@@ -142,7 +177,32 @@ private fun MessageList(
         verticalArrangement = Arrangement.spacedBy(5.dp),
         contentPadding = PaddingValues(vertical = 8.dp),
     ) {
+        var lastDay: java.time.LocalDate? = null
         items(messages, key = { it.id }) { m ->
+            // §4.1 WhatsApp law — a centered date pill whenever the day flips
+            if (datePills) {
+                val day = m.createdAt?.let {
+                    runCatching { java.time.OffsetDateTime.parse(it).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate() }.getOrNull()
+                }
+                if (day != null && day != lastDay) {
+                    lastDay = day
+                    val today = java.time.LocalDate.now()
+                    val label = when (day) {
+                        today -> "TODAY"
+                        today.minusDays(1) -> "YESTERDAY"
+                        else -> day.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy", java.util.Locale.ROOT)).uppercase()
+                    }
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.Center) {
+                        Text(
+                            label,
+                            color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp,
+                            modifier = Modifier
+                                .background(androidx.compose.ui.graphics.Color(0xFF1A1F24), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                        )
+                    }
+                }
+            }
             val mine = m.senderId == myId
             Row(
                 Modifier.fillMaxWidth().animateItem(),
@@ -162,8 +222,8 @@ private fun MessageList(
                         )
                         .padding(horizontal = 12.dp, vertical = 7.dp),
                 ) {
-                    if (!mine) m.senderUsername?.let {
-                        Text("@$it", style = MaterialTheme.typography.labelSmall, color = SkyBlue)
+                    if (!mine) (m.senderDisplayName ?: m.senderUsername)?.let {
+                        Text(it, style = MaterialTheme.typography.labelSmall, color = SkyBlue)
                     }
                     Text(m.body, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.height(2.dp))

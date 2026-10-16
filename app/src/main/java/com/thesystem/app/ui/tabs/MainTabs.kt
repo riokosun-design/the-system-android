@@ -60,7 +60,9 @@ enum class SystemTab(val label: String, val icon: ImageVector) {
 
 @Composable
 fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
-    var tab by remember { mutableStateOf(SystemTab.DASHBOARD) }
+    // §1.2: rememberSaveable — popping back from a pushed screen (chess game,
+    // puzzle, wallet…) restores the SAME tab, never resets to STATUS.
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(SystemTab.DASHBOARD) }
     val haptics = rememberSystemHaptics()
     val hubVm: com.thesystem.app.ui.arena.NotificationsViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val hub by hubVm.state.collectAsStateWithLifecycle()
@@ -76,21 +78,31 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            // ── GLOBAL COMMAND HEADER (spec Phase 4) — the war-invite bell is
-            //    persistent across every tab; badge = pending challenges. ────
-            Box(
+            // ── GLOBAL COMMAND HEADER (§1.3) — a dedicated padded top bar:
+            //    brand mark left, bell right, hairline under. Content below
+            //    never clips because the bar owns its own height (48dp). ────
+            Column(
                 Modifier
                     .fillMaxWidth()
                     .background(InkBlack)
-                    .statusBarsPadding()
-                    .height(40.dp),
+                    .statusBarsPadding(),
             ) {
-                NotificationBell(
-                    // 0.22.0: badge = war invites + unread system notices (payments/withdrawals/support)
-                    count = hub.badgeCount,
-                    onClick = { haptics.select(); hubOpen = true },
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp),
-                )
+                Row(
+                    Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "THE SYSTEM",
+                        color = PaperWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    NotificationBell(
+                        // 0.22.0: badge = war invites + unread system notices (payments/withdrawals/support)
+                        count = hub.badgeCount,
+                        onClick = { haptics.select(); hubOpen = true },
+                    )
+                }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(LineSoft))
             }
             AnimatedContent(
                 targetState = tab,

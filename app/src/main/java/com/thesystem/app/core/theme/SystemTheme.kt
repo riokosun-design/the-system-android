@@ -28,7 +28,7 @@ val TrackGray  = Color(0xFF262626)  // progress tracks, inactive fills
 val LineStrong = Color(0x33FFFFFF)  // explicit hairline (≈ #555 on black)
 val LineSoft   = Color(0x1AFFFFFF)  // divider between groups
 val LabelGray  = Color(0xFF888888)  // secondary text / labels (spec #888)
-val FaintGray  = Color(0xFF555555)  // tertiary / disabled text
+val FaintGray  = Color(0xFF6E6E6E)  // tertiary / disabled text (§2.1: contrast-boosted for legibility)
 val PaperWhite = Color(0xFFFFFFFF)  // primary text + primary actions
 
 // Phase-2 TRAINING accent — sky-blue is intentionally restricted to the
@@ -123,7 +123,7 @@ private val SystemTypography = Typography(
 val MonoDisplay = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 30.sp, letterSpacing = 0.sp, color = PaperWhite)
 val MonoTitle   = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = 0.sp, color = PaperWhite)
 val MonoData    = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 0.sp, color = PaperWhite)
-val MonoLabel   = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Normal, fontSize = 10.sp, letterSpacing = 0.5.sp, color = LabelGray)
+val MonoLabel   = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Medium, fontSize = 11.5.sp, letterSpacing = 0.4.sp, color = LabelGray) // §2.1: micro-labels made readable
 
 @Composable
 fun SystemTheme(content: @Composable () -> Unit) {

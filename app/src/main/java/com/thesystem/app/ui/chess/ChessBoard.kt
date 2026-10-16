@@ -46,6 +46,9 @@ import com.thesystem.app.core.theme.SkyBlue
 private val LIGHT_SQ = Color(0xFFF0D9B5)
 private val DARK_SQ = Color(0xFFB58863)
 
+/** §3.3 — the check frame is ALWAYS this red, never white. */
+val CHECK_RED = Color(0xFFFF1744)
+
 /**
  * THE CBURNETT PIECE SET (Wikipedia standard) — bundled 120px PNGs, zero
  * runtime network, identical art to chessboardjs.com/img/chesspieces/wikipedia.
@@ -195,14 +198,20 @@ fun ChessBoard(
                         style = Stroke(1.1f),
                     )
                 }
-                // checked king frame — royal pulse
+                // checked king frame — §3.3: bold glowing RED (#FF1744), never white
                 if (sq == checkSquare) {
-                    drawRect(Color.White.copy(alpha = 0.16f * checkA), Offset(left, top), androidx.compose.ui.geometry.Size(cell, cell))
+                    drawRect(CHECK_RED.copy(alpha = 0.18f * checkA), Offset(left, top), androidx.compose.ui.geometry.Size(cell, cell))
                     drawRect(
-                        Color.White.copy(alpha = 0.55f + 0.45f * checkA),
+                        CHECK_RED.copy(alpha = 0.45f + 0.55f * checkA),
                         Offset(left + 2f, top + 2f),
                         androidx.compose.ui.geometry.Size(cell - 4f, cell - 4f),
-                        style = Stroke(2.4f),
+                        style = Stroke(2.8f),
+                    )
+                    drawRect(
+                        CHECK_RED.copy(alpha = 0.30f + 0.30f * checkA),
+                        Offset(left - 2f, top - 2f),
+                        androidx.compose.ui.geometry.Size(cell + 4f, cell + 4f),
+                        style = Stroke(1.4f),
                     )
                 }
                 // legal targets

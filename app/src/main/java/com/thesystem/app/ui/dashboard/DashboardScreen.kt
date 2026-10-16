@@ -122,7 +122,7 @@ fun DashboardScreen(
         } else {
             com.thesystem.app.core.ui.SystemNotice(
                 title = "SYSTEM MESSAGE",
-                body = "TODAY'S OBJECTIVE\n\n\"${com.thesystem.app.core.ui.NoticeTemplates.dailyLogin()}\"\n\n+ DAILY QUEST READY",
+                body = com.thesystem.app.core.ui.NoticeTemplates.dailyLogin(),
             )
         }
         haptics.select()
@@ -340,40 +340,19 @@ private fun SystemStatusHeader(s: DashboardState) {
     }
 }
 
-// ── 2.5 SYSTEM AI MODULE — doorways to ASSISTANT (§12) and ROUTINE (§14) ────
+// ── 2.5 SYSTEM ROUTINE (§2.3) — its own dedicated card; Assistant removed. ────
 
 @Composable
 private fun SystemAiModule(nav: NavHostController, haptics: com.thesystem.app.core.ui.SystemHaptics) {
     GlowCard(modifier = Modifier.fillMaxWidth()) {
-        Text("SYSTEM AI", style = MonoLabel, color = LabelGray)
-        Spacer(Modifier.height(Grid.S8))
-        Row(horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
-            Column(
-                Modifier
-                    .weight(1.3f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(TrackGray)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { haptics.select(); nav.navigate(com.thesystem.app.Routes.ASSISTANT) }
-                    .padding(14.dp),
-            ) {
-                Text("AI ASSISTANT", color = PaperWhite, style = MonoData, fontSize = 14.sp)
-            }
-            Column(
-                Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(TrackGray)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { haptics.select(); nav.navigate(com.thesystem.app.Routes.ROUTINE) }
-                    .padding(14.dp),
-            ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
                 Text("SYSTEM ROUTINE", color = PaperWhite, style = MonoData, fontSize = 14.sp)
             }
+            com.thesystem.app.core.ui.GhostButton(
+                "ENTER",
+                { haptics.select(); nav.navigate(com.thesystem.app.Routes.ROUTINE) },
+            )
         }
     }
 }

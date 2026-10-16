@@ -20,8 +20,8 @@ android {
         applicationId = "com.thesystem.app"
         minSdk = 26 // low-end / older Android first
         targetSdk = 35
-        versionCode = 38
-        versionName = "0.22.0"
+        versionCode = 39
+        versionName = "0.23.0"
 
         // 2GB-first install weight: drop emulator-only native ABIs (MediaPipe+
         // ML Kit ship x86/x86_64 .so blobs nobody's phone uses ≈60MB unpacked).
@@ -31,6 +31,10 @@ android {
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${backendProp("SUPABASE_ANON_KEY", "YOUR_PUBLIC_ANON_KEY")}\"")
         buildConfigField("String", "GOOGLE_SERVER_CLIENT_ID", "\"${backendProp("GOOGLE_SERVER_CLIENT_ID", "YOUR_WEB_OAUTH_CLIENT_ID")}\"")
         buildConfigField("String", "OFFERWALL_URL", "\"${backendProp("OFFERWALL_URL", "https://YOUR_CPA_OFFERWALL_URL")}\"")
+        // §7 ANTI-MOD: official release cert SHA-256 (colons stripped, lowercase).
+        // Empty here = dev/nightly builds skip the check; release CI injects the real
+        // hash when keystore/thesystem-release.keystore goes live (AntiTamper.kt).
+        buildConfigField("String", "EXPECTED_CERT_SHA256", "\"${backendProp("EXPECTED_CERT_SHA256", "")}\"")
     }
 
     // ── Signing: committed debug keystore keeps SHA-1 identical on ANY machine

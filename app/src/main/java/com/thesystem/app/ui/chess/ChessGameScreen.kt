@@ -131,7 +131,12 @@ fun ChessGameScreen(
     fun finish(res: String, reason: String) {
         if (result != null) return
         result = res; resultReason = reason
-        if (res == "WIN") haptics.slam() else if (res == "LOSS") haptics.error()
+        // §3.3 — audio + vibration law: mate jingle + long thud on every conclusion
+        when (res) {
+            "WIN" -> { haptics.slam(); ChessSfx.play(ChessSfx.Sfx.VICTORY); ChessSfx.buzz(appContext, 90, 200) }
+            "LOSS" -> { haptics.error(); ChessSfx.play(ChessSfx.Sfx.CHECKMATE); ChessSfx.buzz(appContext, 70, 170) }
+            else -> ChessSfx.play(ChessSfx.Sfx.CHECKMATE)
+        }
     }
 
     fun pushMove(m: Move) {
@@ -161,7 +166,14 @@ fun ChessGameScreen(
             Board.Status.STALEMATE -> finish("DRAW", "STALEMATE")
             Board.Status.DRAW_50 -> finish("DRAW", "FIFTY-MOVE RULE")
             Board.Status.DRAW_MATERIAL -> finish("DRAW", "INSUFFICIENT MATERIAL")
-            Board.Status.ONGOING -> {}
+            Board.Status.ONGOING -> {
+                // §3.3 — move audio law: capture crack > check chime > plain click
+                when {
+                    board.inCheck(board.whiteToMove) -> { ChessSfx.play(ChessSfx.Sfx.CHECK); ChessSfx.buzz(appContext, 45, 150) }
+                    cap != EMPTY -> ChessSfx.play(ChessSfx.Sfx.CAPTURE)
+                    else -> ChessSfx.play(ChessSfx.Sfx.MOVE)
+                }
+            }
         }
     }
 
@@ -535,21 +547,6 @@ private fun PlayAiConfigSheet(
 ) {
     Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
         Text("PLAY vs AI", color = PaperWhite, fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
-        Spacer(Modifier.height(10.dp))
-
-        // honesty card (spec §6/§7): what engine REALLY computes the moves
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .border(1.dp, LineSoft, RoundedCornerShape(8.dp))
-                .padding(horizontal = 12.dp, vertical = 9.dp),
-        ) {
-            Text("AI ENGINE — SYSTEM ENGINE α-β v1 · ON-DEVICE SEARCH", style = MonoLabel, color = SkyBlue)
-            Text("NEGAMAX + PST EVAL · NO CLOUD MODEL", style = MonoLabel, color = LabelGray)
-            Text("COACH — SYSTEM CORE RULES · NO LLM CONNECTED", style = MonoLabel, color = LabelGray)
-        }
-        Spacer(Modifier.height(6.dp))
-        Text("PRACTICE ELO $practiceElo · COMPETITIVE TRACK = MENTAL WAR", style = MonoLabel, color = PaperWhite)
         Spacer(Modifier.height(14.dp))
 
         Text("DIFFICULTY", style = MonoLabel, color = LabelGray)
@@ -572,9 +569,9 @@ private fun PlayAiConfigSheet(
         }
 
         Spacer(Modifier.height(14.dp))
-        ConfigToggle("ALLOW UNDO", "take back your last move + the engine reply", allowUndo) { onUndo(it) }
+        ConfigToggle("ALLOW UNDO", allowUndo) { onUndo(it) }
         Spacer(Modifier.height(6.dp))
-        ConfigToggle("SHOW MOVE HINTS", "engine whispers its best line on your turn", hintsOn) { onHints(it) }
+        ConfigToggle("SHOW MOVE HINTS", hintsOn) { onHints(it) }
 
         // TIMED COMBAT — the clock modes live HERE now (moved off the hub
         // home per the seven-card spec); every one launches the same shipped
@@ -629,7 +626,7 @@ private fun ConfigChip(label: String, on: Boolean, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun ConfigToggle(title: String, sub: String, on: Boolean, onChange: (Boolean) -> Unit) {
+private fun ConfigToggle(title: String, on: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -638,10 +635,10 @@ private fun ConfigToggle(title: String, sub: String, on: Boolean, onChange: (Boo
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, color = PaperWhite, fontSize = 11.sp, fontFamily = SystemMono, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            Text(sub, style = MonoLabel, color = LabelGray)
-        }
+        Text(
+            title, color = PaperWhite, fontSize = 12.sp, fontFamily = SystemMono,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(1f),
+        )
         Box(
             Modifier
                 .size(30.dp, 16.dp)

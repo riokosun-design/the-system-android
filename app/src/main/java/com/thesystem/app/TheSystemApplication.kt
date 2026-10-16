@@ -10,6 +10,9 @@ class TheSystemApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // §7 ANTI-MOD PERIMETER — debugger/root/emulator/hooks/patchers/signature.
+        // A breached process never reaches a single screen or network call.
+        com.thesystem.app.core.security.AntiTamper.enforce(this)
         // Notification rail: quest events use the SYSTEM channel (dark glass,
         // blue border, HUD typography). Tracking is silent + ongoing; reminders
         // wake the hunter for scheduled wars.

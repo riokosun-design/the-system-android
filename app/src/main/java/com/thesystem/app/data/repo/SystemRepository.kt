@@ -197,6 +197,18 @@ class SystemRepository @Inject constructor(
         supabase.postgrest.rpc("mark_notifications_read"); Unit
     }
 
+    // ── PENALTY CATCH-UP (mig 031 §6) — idempotent once/day; admins exempt server-side ──
+
+    suspend fun syncInactivity(): String? = runCatching {
+        supabase.postgrest.rpc("sync_inactivity").data
+    }.getOrNull()
+
+    // ── PRESENCE (mig 031) — heartbeat while the app breathes ──
+
+    suspend fun touchPresence(): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("touch_presence"); Unit
+    }
+
     // ── SUPPORT INBOX user-side (mig 030) — one live conversation per hunter ──
 
     /** Latest conversation still alive (not RESOLVED); null = none yet. RLS scopes to own rows. */

@@ -74,6 +74,12 @@ fun ChessPuzzleScreen(
     val practiceElo = chessUi.profile?.practiceElo ?: 400
     val epochDay = remember { LocalDate.now().toEpochDay() }
 
+    // §3.2 — every slot draws a random difficulty 1–10; bands map onto pack
+    // tiers I–III for rising tactical complexity. The DIRECTOR still owns
+    // anti-repeat inside the drawn band.
+    fun bandOf(t: Int) = when { t <= 4 -> 1; t <= 7 -> 2; else -> 3 }
+    var tierDraw by remember { mutableIntStateOf(0) }
+
     // The verdict is served ONCE per slot — never recomposed out from under an
     // in-progress attempt (profile arriving late must not swap the position).
     var verdict by remember { mutableStateOf<PuzzleDirector.Verdict?>(null) }
@@ -83,14 +89,16 @@ fun ChessPuzzleScreen(
                 val p = PuzzlePack.daily(epochDay)
                 PuzzleDirector.Verdict(p, p.diff, "DAILY SEED · ONE SHOT PER DAY", 1, 1, false)
             } else {
-                director.next(currentId = null, practiceElo = practiceElo)
+                tierDraw = kotlin.random.Random.nextInt(1, 11)
+                director.nextInTier(bandOf(tierDraw), currentId = null, reason = "DIFFICULTY $tierDraw/10")
             }
         }
     }
 
     fun next() {
         haptics.select()
-        verdict = director.next(currentId = verdict?.puzzle?.id, practiceElo = practiceElo)
+        tierDraw = kotlin.random.Random.nextInt(1, 11)
+        verdict = director.nextInTier(bandOf(tierDraw), currentId = verdict?.puzzle?.id, reason = "DIFFICULTY $tierDraw/10")
     }
 
     var dailyDone by remember { mutableStateOf(false) }
@@ -107,7 +115,7 @@ fun ChessPuzzleScreen(
                 Column(Modifier.weight(1f)) {
                     Text(if (daily) "DAILY CHALLENGE" else "PUZZLE TRAINING", color = PaperWhite, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                     Text(
-                        verdict?.let { "TIER ${roman(it.tier)} · ${it.puzzle.motif}" } ?: "LOADING",
+                        verdict?.let { if (daily) "TIER ${roman(it.tier)} · ${it.puzzle.motif}" else "DIFFICULTY $tierDraw/10 · ${it.puzzle.motif}" } ?: "LOADING",
                         style = MonoLabel, color = SkyBlue,
                     )
                 }
@@ -187,6 +195,7 @@ private fun PuzzleBoard(
     daily: Boolean,
 ) {
     val haptics = rememberSystemHaptics()
+    val context = LocalContext.current
     val puzzle = key
 
     var fen by remember(puzzle) { mutableStateOf(puzzle.fen) }
@@ -232,6 +241,7 @@ private fun PuzzleBoard(
             board.play(m)
             fen = board.toFen()
             haptics.tick()
+            ChessSfx.play(if (pre.sq[m.to] != com.thesystem.app.chess.EMPTY) ChessSfx.Sfx.CAPTURE else ChessSfx.Sfx.MOVE)
             if (m.promo != 0 || ply + 1 >= puzzle.line.size) {
                 ply += 1
             } else {
@@ -240,11 +250,16 @@ private fun PuzzleBoard(
             if (ply >= puzzle.line.size) {
                 outcome = "SOLVED"
                 haptics.slam()
+                ChessSfx.play(ChessSfx.Sfx.VICTORY)
+                ChessSfx.buzz(context, 90, 190)
                 onOutcome(true, System.currentTimeMillis() - shownAt)
             }
         } else {
+            // §3.2 strict law: ANY deviation from the exact line = instant fail
             outcome = "FAILED"
             haptics.error()
+            ChessSfx.play(ChessSfx.Sfx.PUZZLE_FAIL)
+            ChessSfx.buzz(context, 130, 200)
             onOutcome(false, System.currentTimeMillis() - shownAt)
         }
         selected = -1

@@ -105,13 +105,27 @@ class PuzzleDirector(
     }
 
     /**
+     * §3.2 — pick the next puzzle pinned to an explicit tier (the 1–10 random
+     * difficulty rail maps to pack tiers I–III). Same anti-repeat law as [next]:
+     * quarantine + full-cycle before any revisit.
+     */
+    fun nextInTier(t: Int, currentId: String? = null, reason: String = "SPECIFIED DIFFICULTY"): Verdict {
+        val tier = t.coerceIn(1, 3)
+        val rec = records()
+        return selectFrom(pool = pack.filter { it.diff == tier }.ifEmpty { pack }, rec = rec, currentId = currentId, t = tier, why = reason)
+    }
+
+    /**
      * Pick the next puzzle. Deterministic given history — rotation emerges
      * from recording, never from a clock.
      */
     fun next(currentId: String? = null, practiceElo: Int = 400): Verdict {
         val rec = records()
         val (t, why) = tier(rec, practiceElo)
-        val pool = pack.filter { it.diff == t }.ifEmpty { pack }
+        return selectFrom(pool = pack.filter { it.diff == t }.ifEmpty { pack }, rec = rec, currentId = currentId, t = t, why = why)
+    }
+
+    private fun selectFrom(pool: List<Puzzle>, rec: List<Record>, currentId: String?, t: Int, why: String): Verdict {
         val quarantine = rec.takeLast(QUARANTINE).map { it.id }.toSet()
 
         // this tier's cycle = attempts since the tier pool was last exhausted
