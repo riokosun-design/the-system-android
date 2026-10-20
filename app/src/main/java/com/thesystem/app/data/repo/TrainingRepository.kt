@@ -98,15 +98,8 @@ class TrainingRepository @Inject constructor(private val supabase: SupabaseClien
         Json.decodeFromString(BlackRoomEligibilityDto.serializer(), raw)
     }.getOrNull()
 
-    /** APPLY → manual UPI rail (UTR + screenshot) → Super Admin review. */
-    suspend fun applyBlackRoom(utr: String, screenshotPath: String?, country: String = "IN"): Result<String> = runCatching {
-        val raw = supabase.postgrest.rpc("apply_black_room", buildJsonObject {
-            put("p_utr", utr)
-            if (screenshotPath != null) put("p_screenshot_path", screenshotPath)
-            put("p_country", country)
-        }).data ?: error("no response")
-        Json.decodeFromString(String.serializer(), raw)
-    }
+    // §4 (v0.24.0): the manual payment application rail is removed. Enrollment
+    // returns through the official Razorpay gateway (PaymentGateways seam).
 
     suspend fun blackRoomProgram(): List<BlackRoomProgramDto> = runCatching {
         val raw = supabase.postgrest.rpc("black_room_program").data ?: return emptyList()

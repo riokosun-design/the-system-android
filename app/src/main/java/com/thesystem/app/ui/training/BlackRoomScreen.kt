@@ -7,7 +7,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,21 +42,15 @@ import javax.inject.Inject
  * · Gate: level 50, ≥1 unlocked form, ≥5 historical missed/penalty events,
  *   primary muscle course ≥50%, 3 performance tracks completed — all live
  *   answers from `black_room_eligibility()`.
- * · Price: server-computed (₹149–699 India rail, $10–30 international rail;
- *   mig 024 seed+consistency bands, mig 025 user-selected country). Never
- *   hardcoded in the client.
- * · APPLY: manual UPI rail — UTR + screenshot → Super Admin review.
- * · Approved hunters receive a program the admin built row by row.
+ * · §4 (v0.24.0): the manual reference-number payment rail is REMOVED.
+ *   Eligibility you earned is banked forever; enrollment reopens through the
+ *   official Razorpay gateway. Approved hunters keep their program below.
  */
 data class BlackRoomState(
     val loading: Boolean = true,
     val course: CourseDto? = null,
     val eligibility: BlackRoomEligibilityDto? = null,
     val program: List<BlackRoomProgramDto> = emptyList(),
-    val utr: String = "",
-    val screenshotPath: String? = null,
-    val submitting: Boolean = false,
-    val applied: Boolean = false,
     val notice: String? = null,
     val error: String? = null,
 )
@@ -85,42 +78,12 @@ class BlackRoomViewModel @Inject constructor(
         _state.value = _state.value.copy(loading = false, course = course, eligibility = elig, program = program)
     }
 
-    fun setUtr(v: String) { _state.value = _state.value.copy(utr = v) }
-    fun setScreenshot(path: String?) { _state.value = _state.value.copy(screenshotPath = path) }
-
-    fun apply() = viewModelScope.launch {
-        val s = _state.value
-        if (s.utr.trim().length < 8) {
-            _state.value = s.copy(error = "Enter the UPI reference (UTR) — at least 8 characters.")
-            return@launch
-        }
-        _state.value = s.copy(submitting = true, error = null)
-        training.applyBlackRoom(s.utr.trim(), s.screenshotPath, country ?: "IN")
-            .onSuccess {
-                _state.value = _state.value.copy(
-                    submitting = false, applied = true,
-                    notice = "Application filed. The Super Admin reviews it and builds your program.",
-                )
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(
-                    submitting = false,
-                    error = when {
-                        e.message?.contains("not_eligible") == true -> "The gate is not satisfied yet."
-                        e.message?.contains("bad_utr") == true -> "That UTR looks too short."
-                        else -> "Application failed: ${e.message}"
-                    },
-                )
-            }
-    }
-
     fun claimNotice() { _state.value = _state.value.copy(notice = null, error = null) }
 }
 
 @Composable
 fun BlackRoomScreen(onBack: () -> Unit, vm: BlackRoomViewModel = hiltViewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
-    val haptics = rememberSystemHaptics()
     val snack = remember { androidx.compose.material3.SnackbarHostState() }
 
     LaunchedEffect(s.notice, s.error) {
@@ -193,45 +156,24 @@ fun BlackRoomScreen(onBack: () -> Unit, vm: BlackRoomViewModel = hiltViewModel()
                     }
                 }
 
-                // ── price + apply ────────────────────────────────────────────
+                // ── enrollment status — §4: manual rail removed, Razorpay pending ──
                 item {
                     GlowCard {
-                        SectionTitle("PROGRAM FEE", PaperWhite)
-                        Spacer(Modifier.height(4.dp))
-                        val upi = s.eligibility?.upi
-                        val usd = s.eligibility?.usd
-                        Text(
-                            if (upi != null) "₹%.0f".format(upi) else usd?.let { "$%.0f".format(it) } ?: "—",
-                            color = PaperWhite, fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 30.sp,
-                        )
-                        Text(
-                            "Server-priced by your potential index. Manual UPI settlement: pay, then file the UTR below — " +
-                                "an admin verifies and unlocks the room.",
-                            style = MaterialTheme.typography.bodySmall, color = LabelGray,
-                        )
-                        // STEP 9 · REASON LAW — the two pricing factors, in the
-                        // server's own words (deterministic, stable per hunter)
-                        s.eligibility?.reasons?.filter { it.startsWith("PRICE FACTOR") }?.forEach { r ->
-                            Text(r, style = MonoLabel, color = FaintGray)
-                        }
-                        Spacer(Modifier.height(Grid.S12))
+                        SectionTitle("ENROLLMENT", PaperWhite)
+                        Spacer(Modifier.height(Grid.S8))
                         if (s.eligibility?.eligible == true) {
-                            OutlinedTextField(
-                                value = s.utr,
-                                onValueChange = vm::setUtr,
-                                label = { Text("UPI REFERENCE / UTR", style = MonoLabel) },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
+                            Text(
+                                "GATE SATISFIED — your eligibility is banked forever.",
+                                style = MonoLabel, color = SkyBlue,
                             )
+                            Spacer(Modifier.height(6.dp))
+                        }
+                        Text(
+                            com.thesystem.app.data.gateway.PaymentGateways.OFFLINE_NOTICE,
+                            style = MaterialTheme.typography.bodySmall, color = LabelGray, lineHeight = 18.sp,
+                        )
+                        if (s.eligibility?.eligible != true) {
                             Spacer(Modifier.height(Grid.S8))
-                            NeonButton(
-                                if (s.applied) "APPLICATION FILED" else if (s.submitting) "FILING…" else "APPLY TO THE BLACK ROOM",
-                                { haptics.select(); vm.apply() },
-                                Modifier.fillMaxWidth(),
-                                color = SkyBlue,
-                                enabled = !s.submitting && !s.applied,
-                            )
-                        } else {
                             RestrictionBanner(
                                 "The gate is not satisfied. The Black Room opens only after the full ledger is earned.",
                                 SkyBlue,

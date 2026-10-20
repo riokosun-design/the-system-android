@@ -52,13 +52,15 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
 
     SystemBackground(wallpaperAlpha = 0.18f) {
         LazyColumn(
-            Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin),
+            Modifier.fillMaxSize().padding(horizontal = Grid.Margin),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(vertical = 14.dp),
         ) {
             item { Box(Modifier.enterAnim(0)) { ProfileHeader(me, vm, onOpenChat = { haptics.tick(); nav.navigate(Routes.CHAT) }, onSignOut = { haptics.select(); onSignOut() }) } }
-            // 0.22.0: VC Wallet door — purchases UPI-QR rail + withdrawals, all server-owned
+            // 0.22.0: VC Wallet door — balance + ledger, rail offline pending gateway (0.24.0)
             item { Box(Modifier.enterAnim(1)) { WalletCard(me = me, onOpen = { haptics.tick(); nav.navigate(Routes.WALLET) }) } }
+            // 0.24.0: DISCIPLINE ENGINE — quest lock, porn shield, anti-uninstall guards
+            item { Box(Modifier.enterAnim(1)) { DisciplineCard(onOpen = { haptics.tick(); nav.navigate(Routes.DISCIPLINE) }) } }
             if (me.isAdmin) {
                 item { GhostButton("ADMIN CONTROL PANEL", { nav.navigate(Routes.ADMIN) }, Modifier.fillMaxWidth()) }
                 item { GhostButton("AI BENCHMARK", { nav.navigate(Routes.AI_BENCHMARK) }, Modifier.fillMaxWidth()) }
@@ -80,7 +82,7 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
             }
             item { Spacer(Modifier.height(90.dp)) }
         }
-        Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.BottomCenter) { SnackbarHost(snack) }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) { SnackbarHost(snack) }
     }
 }
 
@@ -222,8 +224,30 @@ private fun IdentityDialog(me: UserDto, vm: ProfileViewModel, onDismiss: () -> U
     )
 }
 
-/** 0.22.0 — VC WALLET door. Balances are read-only here (server is the only
- *  authority); the rail inside handles UPI-QR purchases + held-balance withdrawals. */
+/** 0.24.0 — VAULT CREDITS door. Balances are read-only here (server is the only
+ *  authority); the screen inside shows the immutable ledger. Gateway: Razorpay pending. */
+/** 0.24.0 — DISCIPLINE ENGINE door: the on-device wards (§5/§6/§7). */
+@Composable
+private fun DisciplineCard(onOpen: () -> Unit) {
+    GlowCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("SELF-CONTROL PROTOCOL", style = MonoLabel, color = SkyBlue)
+                Text(
+                    "DISCIPLINE ENGINE",
+                    color = PaperWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    "Quest-locked social media · always-on porn shield · anti-uninstall guard.",
+                    style = MaterialTheme.typography.bodySmall, color = LabelGray,
+                )
+            }
+            GhostButton("OPEN", onOpen)
+        }
+    }
+}
+
 @Composable
 private fun WalletCard(me: UserDto, onOpen: () -> Unit) {
     GlowCard {
@@ -261,7 +285,7 @@ private fun WalletCard(me: UserDto, onOpen: () -> Unit) {
 
 /** STEP 8 — SYSTEM SUPPLY door. Extensible by design: the category row is
  *  data-shaped (MERCH/SUPPLEMENT/DIGITAL today), and every number inside is
- *  server-priced. Settlement stays the manual UPI rail — no IAP, ever. */
+ *  server-priced. Checkout: official Razorpay gateway when wired (spec §4). */
 @Composable
 private fun MarketplaceCard(nav: androidx.navigation.NavHostController) {
     GlowCard {
@@ -541,7 +565,7 @@ private fun AccountCard(me: UserDto, s: ProfileState, vm: ProfileViewModel) {
         }
         AccountRow(
             "REGION",
-            (me.country ?: "IN — default") + " · settles your price rail (₹ UPI / \$ international)",
+            (me.country ?: "IN — default") + " · sets your region for content and pricing",
         ) { countryOpen = !countryOpen }
         if (countryOpen) {
             Spacer(Modifier.height(2.dp))

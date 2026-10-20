@@ -95,10 +95,20 @@ class DashboardViewModel @Inject constructor(
         val bestsD = async { system.verifiedBests() }
         val profile = profileD.await()
         val wall = wallD.await()
+        val questsLoaded = questsD.await()
+        // §5 QUEST LOCK — stamp the server-confirmed verdict for the on-device
+        // guardian: mandatory = today's non-trial quests. 0 open → social lifts.
+        run {
+            val today = java.time.LocalDate.now().toString()
+            val openMandatory = questsLoaded.count {
+                it.questDate == today && it.source != "PENALTY_TRIAL" && !it.isDone
+            }
+            system.stampQuestLock(today, openMandatory)
+        }
         _state.value = DashboardState(
             loading = false,
             profile = profile,
-            quests = questsD.await(),
+            quests = questsLoaded,
             forms = formsD.await(),
             wallpaper = wall?.first,
             wallpaperAlpha = wall?.second ?: 0.22f,

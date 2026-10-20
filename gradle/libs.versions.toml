@@ -16,8 +16,6 @@ ktor = "3.0.1"
 coil = "3.0.4"
 datastore = "1.1.1"
 mlkitPose = "17.0.0"
-mlkitText = "16.0.1"
-zxing = "3.5.3"
 tensorflowLite = "2.17.0"   # 2.17.1 never shipped — 2.17.0 is the final org.tensorflow release
 mediapipeGenai = "0.10.35"
 profileinstaller = "1.4.1"
@@ -60,8 +58,6 @@ coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" 
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 androidx-datastore = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 mlkit-pose = { module = "com.google.mlkit:pose-detection", version.ref = "mlkitPose" }
-mlkit-text = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitText" }
-zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 tensorflow-lite = { module = "org.tensorflow:tensorflow-lite", version.ref = "tensorflowLite" }
 mediapipe-tasks-genai = { module = "com.google.mediapipe:tasks-genai", version.ref = "mediapipeGenai" }
 camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }

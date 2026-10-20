@@ -59,10 +59,15 @@ enum class SystemTab(val label: String, val icon: ImageVector) {
 }
 
 @Composable
-fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
+fun MainTabs(
+    profile: UserDto,
+    nav: NavHostController,
+    onSignOut: () -> Unit,
+    initialTab: SystemTab = SystemTab.DASHBOARD,
+) {
     // §1.2: rememberSaveable — popping back from a pushed screen (chess game,
     // puzzle, wallet…) restores the SAME tab, never resets to STATUS.
-    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(SystemTab.DASHBOARD) }
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(initialTab) }
     val haptics = rememberSystemHaptics()
     val hubVm: com.thesystem.app.ui.arena.NotificationsViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val hub by hubVm.state.collectAsStateWithLifecycle()
@@ -78,26 +83,30 @@ fun MainTabs(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit) {
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            // ── GLOBAL COMMAND HEADER (§1.3) — a dedicated padded top bar:
-            //    brand mark left, bell right, hairline under. Content below
-            //    never clips because the bar owns its own height (48dp). ────
+            // ── GLOBAL COMMAND HEADER (2026-10-20 spec §2) — one unified,
+            //    compact row: statusBarsPadding + exactly 56.dp, brand left,
+            //    bell right on the same horizontal plane, hairline under.
+            //    Child screens carry NO duplicate statusBarsPadding. ────────
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .background(InkBlack)
-                    .statusBarsPadding(),
+                    .background(InkBlack),
             ) {
                 Row(
-                    Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 16.dp),
+                    Modifier
+                        .statusBarsPadding()
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         "THE SYSTEM",
-                        color = PaperWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp,
+                        color = PaperWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp,
                         modifier = Modifier.weight(1f),
                     )
                     NotificationBell(
-                        // 0.22.0: badge = war invites + unread system notices (payments/withdrawals/support)
+                        // badge = war invites + unread system notices (server-stamped)
                         count = hub.badgeCount,
                         onClick = { haptics.select(); hubOpen = true },
                     )

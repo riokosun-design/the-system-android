@@ -46,24 +46,20 @@ import kotlinx.serialization.json.put
 import javax.inject.Inject
 
 /** 0.22.0 — OPS COMMAND state: metrics, finance queues, support inbox, config, roles. */
+/** 0.22.0 → 0.24.0 — OPS COMMAND state: metrics, support inbox, roles.
+ *  §4: finance queues & monetization config removed from the client. */
 data class AdminOpsState(
     val loading: Boolean = true,
     val metrics: JsonObject? = null,
     val metricsDenied: Boolean = false,
     val audit: List<AdminAuditDto> = emptyList(),
-    val orders: List<PaymentOrderDto> = emptyList(),
-    val orderFilter: String = "SUBMITTED",
-    val withdrawals: List<WithdrawalDto> = emptyList(),
-    val wdFilter: String = "PENDING_REVIEW",
     val supportQueue: List<SupportConversationDto> = emptyList(),
     val supportFilter: String = "WAITING_FOR_SUPPORT",
     val activeConv: String? = null,
     val activeMessages: List<SupportMessageDto> = emptyList(),
-    val config: JsonObject? = null,
     val perms: List<AdminPermDto> = emptyList(),
     val userQuery: String = "",
     val userResults: List<UserDto> = emptyList(),
-    val proofUrl: String? = null,
     val busy: Boolean = false,
     val notice: String? = null,
     val error: String? = null,
@@ -83,67 +79,17 @@ class AdminOpsViewModel @Inject constructor(
 
     fun refreshAll() = viewModelScope.launch {
         val m = admin.opsMetrics()
-        val o = async { admin.paymentOrdersQueue(_state.value.orderFilter) }
-        val w = async { admin.withdrawalsQueue(_state.value.wdFilter) }
         val sq = async { admin.supportQueue(_state.value.supportFilter) }
-        val c = async { admin.getConfig("monetization") }
         val p = async { admin.adminPerms() }
         val a = async { admin.auditRecent() }
         _state.value = _state.value.copy(
             loading = false, metrics = m, metricsDenied = m == null,
-            orders = o.await(), withdrawals = w.await(), supportQueue = sq.await(),
-            config = c.await(), perms = p.await(), audit = a.await(),
+            supportQueue = sq.await(), perms = p.await(), audit = a.await(),
         )
     }
 
-    // ── ORDERS ──
-    fun setOrderFilter(f: String) = viewModelScope.launch {
-        _state.value = _state.value.copy(orderFilter = f)
-        _state.value = _state.value.copy(orders = admin.paymentOrdersQueue(f))
-    }
-
-    fun reviewOrder(order: PaymentOrderDto, approve: Boolean, note: String) = viewModelScope.launch {
-        _state.value = _state.value.copy(busy = true)
-        admin.reviewVcOrder(order.id, approve, note).fold(
-            onSuccess = {
-                _state.value = _state.value.copy(
-                    notice = if (approve) "CREDITED — ${order.vcAmount} VC landed in the hunter's wallet."
-                    else "Order REJECTED — hunter notified.",
-                )
-                _state.value = _state.value.copy(orders = admin.paymentOrdersQueue(_state.value.orderFilter))
-                refreshMetricsAudit()
-            },
-            onFailure = { _state.value = _state.value.copy(error = cleanErr(it.message)) },
-        )
-        _state.value = _state.value.copy(busy = false)
-    }
-
-    fun viewProof(path: String) = viewModelScope.launch {
-        val url = admin.signedPaymentProofUrl(path)
-        _state.value = url?.let { _state.value.copy(proofUrl = it) }
-            ?: _state.value.copy(error = "Proof not found — it may have been removed from storage.")
-    }
-
-    fun closeProof() { _state.value = _state.value.copy(proofUrl = null) }
-
-    // ── WITHDRAWALS ──
-    fun setWdFilter(f: String) = viewModelScope.launch {
-        _state.value = _state.value.copy(wdFilter = f)
-        _state.value = _state.value.copy(withdrawals = admin.withdrawalsQueue(f))
-    }
-
-    fun reviewWithdrawal(w: WithdrawalDto, action: String, ref: String? = null, note: String? = null) = viewModelScope.launch {
-        _state.value = _state.value.copy(busy = true)
-        admin.reviewWithdrawal(w.id, action, ref, note).fold(
-            onSuccess = { newStatus ->
-                _state.value = _state.value.copy(notice = "Withdrawal → $newStatus")
-                _state.value = _state.value.copy(withdrawals = admin.withdrawalsQueue(_state.value.wdFilter))
-                refreshMetricsAudit()
-            },
-            onFailure = { _state.value = _state.value.copy(error = cleanErr(it.message)) },
-        )
-        _state.value = _state.value.copy(busy = false)
-    }
+    // §4 (v0.24.0): orders / withdrawals / monetization-config client rails are
+    // REMOVED. Server tables & audited functions remain for financial history.
 
     // ── SUPPORT ──
     fun setSupportFilter(f: String) = viewModelScope.launch {
@@ -186,19 +132,6 @@ class AdminOpsViewModel @Inject constructor(
         )
     }
 
-    // ── CONFIG ──
-    fun saveConfig(cfg: JsonObject) = viewModelScope.launch {
-        _state.value = _state.value.copy(busy = true)
-        admin.setConfig("monetization", cfg).fold(
-            onSuccess = {
-                _state.value = _state.value.copy(notice = "MONETIZATION CONFIG SAVED — audited.", config = admin.getConfig("monetization"))
-                refreshMetricsAudit()
-            },
-            onFailure = { _state.value = _state.value.copy(error = cleanErr(it.message)) },
-        )
-        _state.value = _state.value.copy(busy = false)
-    }
-
     // ── ROLES ──
     fun onUserQuery(q: String) = viewModelScope.launch {
         _state.value = _state.value.copy(userQuery = q)
@@ -230,8 +163,6 @@ class AdminOpsViewModel @Inject constructor(
         msg.contains("forbidden") || msg.contains("unauthorized") -> "DENIED — your admin role lacks this permission."
         msg.contains("bad_transition") -> "Stale state — this item was already handled. Refreshing."
         msg.contains("rejection_reason_required") -> "A reason is REQUIRED to reject."
-        msg.contains("payout_ref_required") -> "Payout reference (UTR/txn id) is REQUIRED to mark PAID."
-        msg.contains("already") || msg.contains("ux_payment_orders_utr") -> "This UTR is already linked to another order."
         msg.contains("resolution_reason_required") -> "Resolution reason is REQUIRED."
         else -> "Action failed: ${msg.take(120)}"
     }
@@ -289,7 +220,7 @@ fun OpsTab(ops: AdminOpsViewModel = hiltViewModel()) {
                 AnimatedStatTile("Held", m.num("vc_held") ?: 0, HunterGold, Modifier.weight(1f))
             }
         }
-        item { SectionTitle("Money Rail") }
+        item { SectionTitle("Money Rail — ARCHIVE (manual rail removed 0.24.0)") }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 AnimatedStatTile("Orders Paid", m.num("orders_credited") ?: 0, ElectricBlue, Modifier.weight(1f))
@@ -329,277 +260,9 @@ fun OpsTab(ops: AdminOpsViewModel = hiltViewModel()) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ORDERS TAB — VC purchase review queue (FINANCE perm, server-enforced)
+// §4 (v0.24.0): ORDERS & WITHDRAWALS queues — REMOVED. The manual money rail
+// is dead in the client; immutable history stays on the server (mig 033).
 // ════════════════════════════════════════════════════════════════════════════
-
-@Composable
-fun OrdersTab(ops: AdminOpsViewModel = hiltViewModel()) {
-    val s by ops.state.collectAsStateWithLifecycle()
-    val filters = listOf("SUBMITTED", "CREDITED", "REJECTED", "EXPIRED")
-    var rejectTarget by remember { mutableStateOf<PaymentOrderDto?>(null) }
-    var approveTarget by remember { mutableStateOf<PaymentOrderDto?>(null) }
-
-    Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            filters.forEach { f ->
-                FilterChip(selected = s.orderFilter == f, onClick = { ops.setOrderFilter(f) }, label = { Text(f) })
-            }
-        }
-        if (s.orders.isEmpty()) EmptyState("No ${s.orderFilter} orders.")
-        else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(16.dp)) {
-            items(s.orders, key = { it.id }) { o ->
-                OrderCard(
-                    order = o,
-                    busy = s.busy,
-                    onProof = { o.screenshotPath?.let(ops::viewProof) },
-                    onApprove = { approveTarget = o },
-                    onReject = { rejectTarget = o },
-                )
-            }
-        }
-    }
-
-    // approve confirm — server re-checks everything; client is just a trigger
-    approveTarget?.let { o ->
-        AlertDialog(
-            onDismissRequest = { approveTarget = null },
-            title = { Text("CREDIT ${o.vcAmount} VC?", color = PaperWhite) },
-            text = {
-                Text(
-                    "Verify first:\n· UTR %s matches your bank/UPI statement\n· Amount ₹%.2f & timestamp line up\n\nThe server re-validates before the ledger moves. This is a REAL credit."
-                        .format(java.util.Locale.US, o.upiUtr ?: "—", o.priceInr),
-                    color = LabelGray,
-                )
-            },
-            confirmButton = { TextButton(onClick = { ops.reviewOrder(o, approve = true, note = ""); approveTarget = null }) { Text("VERIFY & CREDIT", color = ElectricBlue) } },
-            dismissButton = { TextButton(onClick = { approveTarget = null }) { Text("BACK", color = LabelGray) } },
-        )
-    }
-    rejectTarget?.let { o ->
-        var reason by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { rejectTarget = null },
-            title = { Text("REJECT ${o.orderRef}?", color = PaperWhite) },
-            text = {
-                Column {
-                    Text("Reason is REQUIRED and goes to the hunter.", color = LabelGray)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = reason, onValueChange = { reason = it.take(200) },
-                        placeholder = { Text("e.g. UTR not found in statement", color = TextMuted) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CrimsonRed, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { if (reason.isNotBlank()) { ops.reviewOrder(o, approve = false, note = reason.trim()); rejectTarget = null } },
-                    enabled = reason.isNotBlank(),
-                ) { Text("REJECT", color = CrimsonRed) }
-            },
-            dismissButton = { TextButton(onClick = { rejectTarget = null }) { Text("BACK", color = LabelGray) } },
-        )
-    }
-
-    // proof viewer — the UNTRUSTED screenshot (evidence, never proof of settlement)
-    s.proofUrl?.let { url ->
-        Dialog(onDismissRequest = ops::closeProof) {
-            Column(Modifier.background(VoidBlack, RoundedCornerShape(8.dp)).padding(10.dp)) {
-                Text("SUBMITTED SCREENSHOT — EVIDENCE ONLY, NOT PROOF OF SETTLEMENT", style = MonoLabel, color = HunterGold)
-                Spacer(Modifier.height(8.dp))
-                AsyncImage(
-                    model = url, contentDescription = "Payment proof",
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp), contentScale = ContentScale.Fit,
-                )
-                Spacer(Modifier.height(8.dp))
-                TextButton(onClick = ops::closeProof, modifier = Modifier.align(Alignment.End)) { Text("CLOSE", color = LabelGray) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun OrderCard(order: PaymentOrderDto, busy: Boolean, onProof: () -> Unit, onApprove: () -> Unit, onReject: () -> Unit) {
-    val ocr = order.ocr
-    Column(Modifier.fillMaxWidth().background(LineSoft.copy(alpha = 0.25f), RoundedCornerShape(8.dp)).padding(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(order.orderRef, color = PaperWhite, fontWeight = FontWeight.Bold, fontFamily = SystemMono, fontSize = 14.sp)
-                Text("${order.vcAmount} VC · ₹%.2f".format(java.util.Locale.US, order.priceInr), style = MonoLabel, color = HunterGold)
-            }
-            Text(order.status, style = MonoLabel, color = statusColor(order.status))
-        }
-        Spacer(Modifier.height(6.dp))
-        Text("UTR: ${order.upiUtr ?: "—"}", style = MonoLabel, color = LabelGray)
-        Text("Filed: ${order.createdAt?.take(16)?.replace('T', ' ') ?: "—"}", style = MonoLabel, color = FaintGray)
-        ocr?.let { hint ->
-            val amt = hint["amount"]?.jsonPrimitive?.doubleOrNull
-            val utr = hint["utr"]?.jsonPrimitive?.contentOrNull
-            val status = hint["status"]?.jsonPrimitive?.contentOrNull
-            val date = hint["date"]?.jsonPrimitive?.contentOrNull
-            val time = hint["time"]?.jsonPrimitive?.contentOrNull
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "OCR HINT (untrusted): " + listOfNotNull(
-                    amt?.let { "₹$it" }, utr?.let { "UTR≈$it" }, status,
-                    listOfNotNull(date, time).joinToString(" ").ifBlank { null },
-                ).joinToString(" · ").ifBlank { "no readable fields" },
-                style = MonoLabel, color = FaintGray,
-            )
-        }
-        if (order.status == "SUBMITTED") {
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (order.screenshotPath != null) {
-                    OutlinedButton(onClick = onProof, enabled = !busy) {
-                        Icon(Icons.Default.Image, null, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)); Text("PROOF")
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onReject, enabled = !busy) { Text("REJECT", color = CrimsonRed) }
-                TextButton(onClick = onApprove, enabled = !busy) { Text("VERIFY & CREDIT", color = ElectricBlue) }
-            }
-        }
-    }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// WITHDRAWALS TAB — held-balance payout queue (FINANCE perm, server-enforced)
-// ════════════════════════════════════════════════════════════════════════════
-
-@Composable
-fun WithdrawalsTab(ops: AdminOpsViewModel = hiltViewModel()) {
-    val s by ops.state.collectAsStateWithLifecycle()
-    val filters = listOf("PENDING_REVIEW", "APPROVED", "PROCESSING", "PAID", "REJECTED", "FAILED")
-    var paidTarget by remember { mutableStateOf<WithdrawalDto?>(null) }
-    var rejectTarget by remember { mutableStateOf<WithdrawalDto?>(null) }
-    var approveTarget by remember { mutableStateOf<WithdrawalDto?>(null) }
-
-    Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            filters.forEach { f -> FilterChip(selected = s.wdFilter == f, onClick = { ops.setWdFilter(f) }, label = { Text(f) }) }
-        }
-        if (s.withdrawals.isEmpty()) EmptyState("No ${s.wdFilter} withdrawals.")
-        else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(16.dp)) {
-            items(s.withdrawals, key = { it.id }) { w ->
-                WithdrawalCard(
-                    w = w, busy = s.busy,
-                    onApprove = { approveTarget = w },
-                    onProcess = { ops.reviewWithdrawal(w, "process") },
-                    onPaid = { paidTarget = w },
-                    onReject = { rejectTarget = w },
-                    onFail = { rejectTarget = w },
-                )
-            }
-        }
-    }
-
-    // APPROVE — must NOT imply money moved (spec law)
-    approveTarget?.let { w ->
-        AlertDialog(
-            onDismissRequest = { approveTarget = null },
-            title = { Text("APPROVE REQUEST?", color = PaperWhite) },
-            text = {
-                Text(
-                    "Approving only marks this request as OK-to-pay. NO MONEY HAS MOVED.\n\nNext: send ₹%.2f to %s from your own UPI app, then MARK PAID with the real UTR."
-                        .format(java.util.Locale.US, w.payoutInr, w.maskedUpi),
-                    color = LabelGray,
-                )
-            },
-            confirmButton = { TextButton(onClick = { ops.reviewWithdrawal(w, "approve"); approveTarget = null }) { Text("APPROVE", color = ElectricBlue) } },
-            dismissButton = { TextButton(onClick = { approveTarget = null }) { Text("BACK", color = LabelGray) } },
-        )
-    }
-    paidTarget?.let { w ->
-        var ref by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { paidTarget = null },
-            title = { Text("MARK PAID — ₹%.2f".format(java.util.Locale.US, w.payoutInr), color = PaperWhite) },
-            text = {
-                Column {
-                    Text("Enter the REAL UPI transaction reference (UTR) from YOUR payout. The hold is consumed — the VC leaves the system permanently.", color = LabelGray)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = ref, onValueChange = { ref = it.take(32) },
-                        placeholder = { Text("Payout UTR / txn ref", color = TextMuted) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = HunterGold, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { if (ref.isNotBlank()) { ops.reviewWithdrawal(w, "paid", ref = ref.trim()); paidTarget = null } },
-                    enabled = ref.isNotBlank(),
-                ) { Text("CONFIRM PAID", color = HunterGold) }
-            },
-            dismissButton = { TextButton(onClick = { paidTarget = null }) { Text("BACK", color = LabelGray) } },
-        )
-    }
-    rejectTarget?.let { w ->
-        var reason by remember { mutableStateOf("") }
-        val failing = w.status !in listOf("PENDING_REVIEW")
-        AlertDialog(
-            onDismissRequest = { rejectTarget = null },
-            title = { Text(if (failing) "MARK FAILED?" else "REJECT WITHDRAWAL?", color = PaperWhite) },
-            text = {
-                Column {
-                    Text("The held ${w.vcAmount} VC returns to the hunter's balance. Reason is REQUIRED and goes to the hunter.", color = LabelGray)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = reason, onValueChange = { reason = it.take(200) },
-                        placeholder = { Text("e.g. UPI handle rejected the transfer", color = TextMuted) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CrimsonRed, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { if (reason.isNotBlank()) { ops.reviewWithdrawal(w, if (failing) "fail" else "reject", note = reason.trim()); rejectTarget = null } },
-                    enabled = reason.isNotBlank(),
-                ) { Text(if (failing) "MARK FAILED" else "REJECT", color = CrimsonRed) }
-            },
-            dismissButton = { TextButton(onClick = { rejectTarget = null }) { Text("BACK", color = LabelGray) } },
-        )
-    }
-}
-
-@Composable
-private fun WithdrawalCard(w: WithdrawalDto, busy: Boolean, onApprove: () -> Unit, onProcess: () -> Unit, onPaid: () -> Unit, onReject: () -> Unit, onFail: () -> Unit) {
-    Column(Modifier.fillMaxWidth().background(LineSoft.copy(alpha = 0.25f), RoundedCornerShape(8.dp)).padding(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("@${w.hunterLabel}", color = PaperWhite, fontWeight = FontWeight.Bold, fontFamily = SystemMono, fontSize = 14.sp)
-                Text("${w.vcAmount} VC → ₹%.2f".format(java.util.Locale.US, w.payoutInr), style = MonoLabel, color = HunterGold)
-            }
-            Text(w.status, style = MonoLabel, color = statusColor(w.status))
-        }
-        Spacer(Modifier.height(6.dp))
-        Text("UPI: ${w.maskedUpi}", style = MonoLabel, color = LabelGray)
-        w.payoutRef?.let { Text("Paid ref: $it", style = MonoLabel, color = ElectricBlue) }
-        w.reviewNote?.let { Text("Note: $it", style = MonoLabel, color = FaintGray) }
-        Text("Filed: ${w.createdAt?.take(16)?.replace('T', ' ') ?: "—"}", style = MonoLabel, color = FaintGray)
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Spacer(Modifier.weight(1f))
-            when (w.status) {
-                "PENDING_REVIEW" -> {
-                    TextButton(onClick = onReject, enabled = !busy) { Text("REJECT", color = CrimsonRed) }
-                    TextButton(onClick = onApprove, enabled = !busy) { Text("APPROVE", color = ElectricBlue) }
-                }
-                "APPROVED" -> {
-                    TextButton(onClick = onFail, enabled = !busy) { Text("FAILED", color = CrimsonRed) }
-                    TextButton(onClick = onProcess, enabled = !busy) { Text("PROCESSING", color = LabelGray) }
-                    TextButton(onClick = onPaid, enabled = !busy) { Text("MARK PAID", color = HunterGold) }
-                }
-                "PROCESSING" -> {
-                    TextButton(onClick = onFail, enabled = !busy) { Text("FAILED", color = CrimsonRed) }
-                    TextButton(onClick = onPaid, enabled = !busy) { Text("MARK PAID", color = HunterGold) }
-                }
-                else -> Unit // terminal states carry no actions
-            }
-        }
-    }
-}
 
 // ════════════════════════════════════════════════════════════════════════════
 // SUPPORT TAB — admin side of the ticket rail (SUPPORT perm, server-enforced)
@@ -701,90 +364,6 @@ fun AdminSupportTab(ops: AdminOpsViewModel = hiltViewModel()) {
                 ) { Text("RESOLVE", color = ElectricBlue) }
             },
             dismissButton = { TextButton(onClick = { resolveTarget = false }) { Text("BACK", color = LabelGray) } },
-        )
-    }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// CONFIG TAB — monetization knobs (FINANCE perm, server-enforced + audited)
-// ════════════════════════════════════════════════════════════════════════════
-
-@Composable
-fun ConfigTab(ops: AdminOpsViewModel = hiltViewModel()) {
-    val s by ops.state.collectAsStateWithLifecycle()
-    val cfg = s.config
-    if (cfg == null) {
-        Column(Modifier.padding(20.dp)) {
-            Text("MONETIZATION CONFIG — " + if (s.loading) "LOADING…" else "ACCESS CONTROLLED", style = MonoLabel, color = if (s.loading) LabelGray else CrimsonRed)
-            if (!s.loading) {
-                Spacer(Modifier.height(6.dp))
-                Text("Requires the FINANCE permission. Ask a SUPER_ADMIN — grants are audited.", color = LabelGray, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-        return
-    }
-    var upiId by remember(cfg) { mutableStateOf(cfg["upi_id"]?.jsonPrimitive?.contentOrNull ?: "") }
-    var payee by remember(cfg) { mutableStateOf(cfg["payee_name"]?.jsonPrimitive?.contentOrNull ?: "") }
-    var instructions by remember(cfg) { mutableStateOf(cfg["instructions"]?.jsonPrimitive?.contentOrNull ?: "") }
-    var minVc by remember(cfg) { mutableStateOf((cfg["withdrawal_min_vc"]?.jsonPrimitive?.longOrNull ?: 1000).toString()) }
-    var maxVc by remember(cfg) { mutableStateOf((cfg["withdrawal_max_vc"]?.jsonPrimitive?.longOrNull ?: 100000).toString()) }
-    var vcPerInr by remember(cfg) { mutableStateOf((cfg["vc_per_inr"]?.jsonPrimitive?.longOrNull ?: 2).toString()) }
-    var expiry by remember(cfg) { mutableStateOf((cfg["order_expiry_min"]?.jsonPrimitive?.longOrNull ?: 30).toString()) }
-    var purchaseOn by remember(cfg) { mutableStateOf(cfg["purchase_enabled"]?.jsonPrimitive?.booleanOrNull ?: true) }
-    var withdrawOn by remember(cfg) { mutableStateOf(cfg["withdrawal_enabled"]?.jsonPrimitive?.booleanOrNull ?: true) }
-
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(16.dp)) {
-        item {
-            Text("MONETIZATION SWITCHBOARD", style = MonoLabel, color = HunterGold)
-            Text("Every save is audited with old + new values. Client reads these live — server enforces them.", style = MonoLabel, color = FaintGray)
-        }
-        item { CfgField("DESTINATION UPI ID", upiId) { upiId = it } }
-        item { CfgField("PAYEE NAME (shown in QR)", payee) { payee = it } }
-        item { CfgField("WITHDRAWAL MIN VC", minVc) { minVc = it.filter(Char::isDigit).take(9) } }
-        item { CfgField("WITHDRAWAL MAX VC", maxVc) { maxVc = it.filter(Char::isDigit).take(9) } }
-        item { CfgField("VC PER ₹1 (display rate)", vcPerInr) { vcPerInr = it.filter(Char::isDigit).take(4) } }
-        item { CfgField("ORDER EXPIRY (minutes)", expiry) { expiry = it.filter(Char::isDigit).take(4) } }
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("PURCHASES ENABLED", style = MonoLabel, color = PaperWhite, modifier = Modifier.weight(1f))
-                Switch(checked = purchaseOn, onCheckedChange = { purchaseOn = it })
-            }
-        }
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("WITHDRAWALS ENABLED", style = MonoLabel, color = PaperWhite, modifier = Modifier.weight(1f))
-                Switch(checked = withdrawOn, onCheckedChange = { withdrawOn = it })
-            }
-        }
-        item { CfgField("PAYMENT INSTRUCTIONS (shown at order)", instructions, singleLine = false) { instructions = it.take(500) } }
-        item {
-            GhostButton("SAVE & AUDIT", {
-                ops.saveConfig(buildJsonObject {
-                    put("upi_id", upiId.trim())
-                    put("payee_name", payee.trim().ifBlank { "THE SYSTEM" })
-                    put("purchase_enabled", purchaseOn)
-                    put("withdrawal_enabled", withdrawOn)
-                    put("withdrawal_min_vc", minVc.toLongOrNull() ?: 1000)
-                    put("withdrawal_max_vc", maxVc.toLongOrNull() ?: 100000)
-                    put("vc_per_inr", vcPerInr.toLongOrNull() ?: 2)
-                    put("order_expiry_min", expiry.toLongOrNull() ?: 30)
-                    put("instructions", instructions.trim())
-                })
-            }, Modifier.fillMaxWidth())
-        }
-        item { Spacer(Modifier.height(60.dp)) }
-    }
-}
-
-@Composable
-private fun CfgField(label: String, value: String, singleLine: Boolean = true, onChange: (String) -> Unit) {
-    Column {
-        Text(label, style = MonoLabel, color = LabelGray)
-        Spacer(Modifier.height(4.dp))
-        OutlinedTextField(
-            value = value, onValueChange = onChange, singleLine = singleLine,
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = HunterGold, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary),
         )
     }
 }

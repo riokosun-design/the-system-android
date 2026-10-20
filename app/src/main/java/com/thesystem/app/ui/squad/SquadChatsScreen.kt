@@ -243,7 +243,7 @@ fun SquadChatsScreen(nav: NavHostController, vm: SquadChatsViewModel = hiltViewM
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        Column(Modifier.fillMaxSize()) {
 
             // ── top app bar ──────────────────────────────────────────────
             Row(

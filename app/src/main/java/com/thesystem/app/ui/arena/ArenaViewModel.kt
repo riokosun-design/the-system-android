@@ -41,6 +41,8 @@ data class ArenaState(
     val draftScheduledAt: String? = null,
     // ── SECTION 2 — random matchmaking queue ─────────────────────────────────
     val queueExercise: String = "PUSHUP",
+    /** §3.3: stakes of time — selectable before entering the queue. */
+    val queueDuration: Int = 60,
     val queue: RandomQueueDto? = null,       // null = not asked yet / offline
     val queueBusy: Boolean = false,
     val notice: String? = null,
@@ -216,11 +218,16 @@ class ArenaViewModel @Inject constructor(
         _state.value = _state.value.copy(queueExercise = kind)
     }
 
+    fun setQueueDuration(seconds: Int) {
+        if (_state.value.queue?.status == "WAITING") return  // never retune mid-search
+        _state.value = _state.value.copy(queueDuration = seconds)
+    }
+
     fun findRandomOpponent() {
         if (_state.value.queueBusy) return
         _state.value = _state.value.copy(queueBusy = true)
         viewModelScope.launch {
-            val q = arena.randomQueueEnter(_state.value.queueExercise, 60)
+            val q = arena.randomQueueEnter(_state.value.queueExercise, _state.value.queueDuration)
             _state.value = _state.value.copy(queue = q, queueBusy = false)
             if (q?.status == "WAITING") startQueuePolling()
         }

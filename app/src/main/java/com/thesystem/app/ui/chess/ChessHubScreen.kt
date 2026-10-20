@@ -109,7 +109,7 @@ fun ChessHubScreen(nav: NavHostController, vm: ChessViewModel = hiltViewModel())
     SystemBackground(wallpaperAlpha = 0.15f) {
         Box(Modifier.fillMaxSize()) {
             LazyColumn(
-                Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin),
+                Modifier.fillMaxSize().padding(horizontal = Grid.Margin),
                 verticalArrangement = Arrangement.spacedBy(Grid.S12),
                 contentPadding = PaddingValues(vertical = Grid.S16),
             ) {
@@ -164,7 +164,7 @@ fun ChessHubScreen(nav: NavHostController, vm: ChessViewModel = hiltViewModel())
                 }
                 item { Spacer(Modifier.height(96.dp)) }
             }
-            Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.BottomCenter) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                 SnackbarHost(snack)
             }
         }

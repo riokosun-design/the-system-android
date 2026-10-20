@@ -203,6 +203,24 @@ class SystemRepository @Inject constructor(
         supabase.postgrest.rpc("sync_inactivity").data
     }.getOrNull()
 
+    // ── PENALTY VERDICT (mig 033 §8) — audit + full penalty status, one server call ──
+
+    /** Runs the missed-day audit server-side first, then returns the complete
+     *  penalty verdict: state, tier, trial flags, XP burned. Admins → EXEMPT. */
+    suspend fun penaltyStatus(): JsonObject? = runCatching {
+        val raw = supabase.postgrest.rpc("penalty_status").data ?: return@runCatching null
+        Json.decodeFromString(JsonObject.serializer(), raw)
+    }.getOrNull()
+
+    // ── DISCIPLINE CACHE (v0.24.0 §5) — server-confirmed quest verdict for the
+    //    on-device guardian. Called after every quest sync / completion. ──
+
+    /** Stamps TODAY's mandatory-quest verdict. [mandatoryIncomplete] = count of
+     *  today's non-trial daily quests still open. 0 → the social seal lifts. */
+    fun stampQuestLock(todayIso: String, mandatoryIncomplete: Int) {
+        com.thesystem.app.core.discipline.DisciplinePrefs.setQuestsDone(app, todayIso, mandatoryIncomplete == 0)
+    }
+
     // ── PRESENCE (mig 031) — heartbeat while the app breathes ──
 
     suspend fun touchPresence(): Result<Unit> = runCatching {
@@ -259,7 +277,7 @@ class SystemRepository @Inject constructor(
         supabase.storage.from("avatars").publicUrl(path) + "?v=" + System.currentTimeMillis()
     }.getOrNull()
 
-    // ── System config (UPI id, offerwall, etc. — admin editable) ────────────
+    // ── System config (offerwall, etc. — admin editable) ──────────────────
     suspend fun config(key: String): String? = runCatching {
         supabase.from("system_config").select { filter { eq("key", key) } }
             .decodeSingle<SystemConfigDto>().value

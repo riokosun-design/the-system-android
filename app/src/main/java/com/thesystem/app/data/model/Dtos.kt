@@ -370,69 +370,8 @@ data class MatchChallengeDto(
     val challengerLabel: String get() = challenger?.displayName ?: challenger?.username ?: "HUNTER"
 }
 
-/** mig 030 — server-priced VC package (never client-priced). */
-@Serializable
-data class VcPackageDto(
-    val id: String,
-    val label: String,
-    @SerialName("vc_amount") val vcAmount: Long,
-    @SerialName("price_inr") val priceInr: Double,
-    val active: Boolean = true,
-    val sort: Int = 0,
-)
-
-/** mig 030 — QR purchase order; status machine is server-owned. */
-@Serializable
-data class PaymentOrderDto(
-    val id: String,
-    @SerialName("order_ref") val orderRef: String,
-    @SerialName("user_id") val userId: String,
-    @SerialName("package_id") val packageId: String,
-    @SerialName("vc_amount") val vcAmount: Long,
-    @SerialName("price_inr") val priceInr: Double,
-    val status: String = "AWAITING_PAYMENT",
-    @SerialName("upi_utr") val upiUtr: String? = null,
-    @SerialName("screenshot_path") val screenshotPath: String? = null,
-    val ocr: JsonObject? = null,
-    @SerialName("review_note") val reviewNote: String? = null,
-    @SerialName("created_at") val createdAt: String? = null,
-    @SerialName("expires_at") val expiresAt: String? = null,
-) {
-    /** paymentproof view embed (admin queues): reporter's handle. */
-    @kotlinx.serialization.Transient val reporterName: String? = null
-}
-
-/** mig 030 — withdrawal request; payout jsonb is masked client-side in queues. */
-@Serializable
-data class WithdrawalDto(
-    val id: String,
-    @SerialName("user_id") val userId: String,
-    @SerialName("vc_amount") val vcAmount: Long,
-    @SerialName("payout_inr") val payoutInr: Double,
-    val method: String = "UPI",
-    val payout: JsonObject? = null,
-    val status: String = "PENDING_REVIEW",
-    @SerialName("payout_ref") val payoutRef: String? = null,
-    @SerialName("review_note") val reviewNote: String? = null,
-    @SerialName("created_at") val createdAt: String? = null,
-    /** FK embed for admin queues: requester username/display name. */
-    val hunter: UserEmbed? = null,
-) {
-    @Serializable
-    data class UserEmbed(
-        val username: String? = null,
-        @SerialName("display_name") val displayName: String? = null,
-    )
-    val hunterLabel: String get() = hunter?.displayName ?: hunter?.username ?: userId.take(8)
-    /** masked UPI for list views — full reveal only happens behind FINANCE tooling. */
-    val maskedUpi: String get() {
-        val u = payout?.get("upi")?.toString()?.trim('"') ?: return "—"
-        val at = u.indexOf('@')
-        return if (u.length > 4) u.take(2) + "•••" + u.takeLast(2) + if (at >= 0) u.substring(at) else "" else "•••"
-    }
-}
-
-/** mig 030 — operational rail notice (payment/withdrawal/support/decisions). */
+/** mig 030 — operational rail notice (support/penalty/decisions).
+ *  §4 (0.24.0): the manual payment order/withdrawal DTOs were removed with the rail. */
 @Serializable
 data class UserNotificationDto(
     val id: Long,
@@ -452,8 +391,13 @@ data class SupportConversationDto(
     val status: String = "OPEN",
     val priority: String = "NORMAL",
     @SerialName("updated_at") val updatedAt: String? = null,
-    val hunter: WithdrawalDto.UserEmbed? = null,
+    val hunter: HunterEmbed? = null,
 ) {
+    @Serializable
+    data class HunterEmbed(
+        val username: String? = null,
+        @SerialName("display_name") val displayName: String? = null,
+    )
     val hunterLabel: String get() = hunter?.displayName ?: hunter?.username ?: userId.take(8)
 }
 
@@ -482,21 +426,6 @@ data class AdminAuditDto(
     val target: String? = null,
     val outcome: String = "OK",
     @SerialName("created_at") val createdAt: String? = null,
-)
-
-@Serializable
-data class PaymentDto(
-    val id: String,
-    @SerialName("user_id") val userId: String,
-    @SerialName("item_type") val itemType: String, // BLACK_ROOM_PASS | MERCH | VC_TOPUP
-    @SerialName("item_ref") val itemRef: String? = null,
-    @SerialName("amount_inr") val amountInr: Double,
-    @SerialName("upi_utr") val upiUtr: String,
-    @SerialName("screenshot_path") val screenshotPath: String? = null,
-    val status: String = "PENDING", // PENDING | APPROVED | REJECTED
-    @SerialName("review_note") val reviewNote: String? = null,
-    @SerialName("created_at") val createdAt: String? = null,
-    val username: String? = null, // joined for admin list
 )
 
 @Serializable

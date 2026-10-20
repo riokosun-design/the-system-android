@@ -132,14 +132,14 @@ fun DashboardScreen(
         Box(Modifier.fillMaxSize()) {
             if (s.loading && s.profile == null) {
                 Column(
-                    Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin, vertical = Grid.S16),
+                    Modifier.fillMaxSize().padding(horizontal = Grid.Margin, vertical = Grid.S16),
                     verticalArrangement = Arrangement.spacedBy(Grid.CardSpace),
                 ) { SkeletonCards(4) }
             } else {
                 PullToRefreshBox(
                     isRefreshing = s.loading,
                     onRefresh = { haptics.tick(); vm.refresh(); trainingVm.refresh() },
-                    modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
                     LazyColumn(
                         Modifier.fillMaxSize().padding(horizontal = Grid.Margin),

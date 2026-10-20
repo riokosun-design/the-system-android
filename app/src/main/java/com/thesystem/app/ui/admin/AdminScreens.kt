@@ -47,9 +47,11 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel(), ops: A
         (so.notice ?: so.error)?.let { snack.showSnackbar(it); ops.consumeNotice() }
     }
 
-    // 0.22.0: OPS COMMAND sections bolted onto the rail — each gates itself by server-side permission
-    val sections = listOf("OVERVIEW", "LEGAL", "STORE", "TOURNAMENTS", "PAYMENTS", "POOLS", "ASSETS", "TRAINING",
-        "OPS", "ORDERS", "WITHDRAWALS", "SUPPORT", "CONFIG", "ROLES")
+    // OPS COMMAND sections bolted onto the rail — each gates itself by server-side permission.
+    // §4 (v0.24.0): PAYMENTS / ORDERS / WITHDRAWALS / CONFIG (the manual money
+    // rail) are gone from the console; history stays server-side.
+    val sections = listOf("OVERVIEW", "LEGAL", "STORE", "TOURNAMENTS", "POOLS", "ASSETS", "TRAINING",
+        "OPS", "SUPPORT", "ROLES")
     var tab by remember { mutableIntStateOf(0) }
 
     SystemBackground(wallpaperAlpha = 0.06f) {
@@ -93,16 +95,12 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel(), ops: A
                 1 -> LegalTab(s, vm)
                 2 -> StoreCmsTab(s, vm)
                 3 -> TournamentTab(s, vm)
-                4 -> PaymentsTab(s, vm)
-                5 -> PoolsTab(s, vm)
-                6 -> AssetsTab(s, vm)
-                7 -> AdminTrainingTabs(s, vm)
-                8 -> OpsTab()
-                9 -> OrdersTab()
-                10 -> WithdrawalsTab()
-                11 -> AdminSupportTab()
-                12 -> ConfigTab()
-                13 -> RolesTab()
+                4 -> PoolsTab(s, vm)
+                5 -> AssetsTab(s, vm)
+                6 -> AdminTrainingTabs(s, vm)
+                7 -> OpsTab()
+                8 -> AdminSupportTab()
+                9 -> RolesTab()
             }
         }
         Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.BottomCenter) { SnackbarHost(snack) }
@@ -118,7 +116,6 @@ private fun OverviewTab(s: AdminState) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     AnimatedStatTile("Hunters", o?.get("users")?.jsonPrimitive?.content?.toLongOrNull() ?: 0, ElectricBlue, Modifier.weight(1f))
                     AnimatedStatTile("Guilds", o?.get("clans")?.jsonPrimitive?.content?.toLongOrNull() ?: 0, NeonPurple, Modifier.weight(1f))
-                    AnimatedStatTile("Pending ₹", o?.get("pending_payments")?.jsonPrimitive?.content?.toLongOrNull() ?: 0, CrimsonRed, Modifier.weight(1f))
                 }
             }
         }
@@ -300,28 +297,8 @@ private fun TournamentTab(s: AdminState, vm: AdminViewModel) {
     }
 }
 
-// ── Manual payment approvals (UPI QR → UTR → screenshot) ────────────────────
-@Composable
-private fun PaymentsTab(s: AdminState, vm: AdminViewModel) {
-    val haptics = rememberSystemHaptics()
-    val uriHandler = LocalUriHandler.current
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (s.payments.isEmpty()) item { EmptyState("No pending UPI payments. The treasury sleeps.") }
-        items(s.payments, key = { it.id }) { p ->
-            GlowCard(glow = WarningAmber, pulse = true) {
-                Text("@${p.username ?: p.userId.take(8)} — ${p.itemType}", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
-                Text("₹${p.amountInr.toInt()} · UTR ${p.upiUtr}", style = MaterialTheme.typography.bodyMedium)
-                p.screenshotPath?.let { path ->
-                    vm.proofUrl(path)?.let { url -> TextButton(onClick = { uriHandler.openUri(url) }) { Text("View screenshot", color = ElectricBlue) } }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NeonButton("APPROVE", { haptics.success(); vm.reviewPayment(p.id, true) }, Modifier.weight(1f), color = VenomGreen, enabled = !s.busy)
-                    NeonButton("REJECT", { haptics.error(); vm.reviewPayment(p.id, false) }, Modifier.weight(1f), color = CrimsonRed, enabled = !s.busy)
-                }
-            }
-        }
-    }
-}
+// §4 (v0.24.0): manual payment verification is REMOVED — no approval queues
+// anywhere in the client. Money movement returns via the official gateway.
 
 // ── Prediction pool settlement (solo + clan use the same engine) ─────────────
 @Composable

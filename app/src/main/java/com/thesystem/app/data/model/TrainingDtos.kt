@@ -106,9 +106,8 @@ data class QuestTemplateDto(
 @Serializable
 data class BlackRoomEligibilityDto(
     val eligible: Boolean = false,
+    // §4 (0.24.0): server still answers pricing for history; client ignores it.
     val checks: JsonObject? = null,
-    val upi: Double? = null,
-    val usd: Double? = null,
     @SerialName("potential_index") val potentialIndex: Int = 0,
     /** STEP 9 (mig 024): server-authored reason lines — gates + price factors. */
     val reasons: List<String> = emptyList(),
@@ -127,20 +126,6 @@ data class BlackRoomProgramDto(
     @SerialName("duration_sec") val durationSec: Int = 0,
     @SerialName("rest_sec") val restSec: Int = 150,
     val notes: String = "",
-)
-
-/** `black_room_applications_with_user` — admin review queue row. */
-@Serializable
-data class BlackRoomApplicationDto(
-    val id: String,
-    @SerialName("user_id") val userId: String,
-    val status: String = "PENDING",
-    @SerialName("price_inr") val priceInr: Double = 0.0,
-    @SerialName("price_usd") val priceUsd: Double = 0.0,
-    val criteria: JsonObject? = null,
-    val regiment: String = "",
-    @SerialName("created_at") val createdAt: String? = null,
-    val username: String? = null,
 )
 
 /** `arena_live()` row — the LIVE section of the Arena (spectate + war room). */

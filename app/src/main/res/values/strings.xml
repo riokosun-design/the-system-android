@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">THE SYSTEM</string>
+    <string name="discipline_service_desc">THE SYSTEM enforces the discipline you signed up for: social media stays locked until your Daily Quests are done, adult content is intercepted, and quitting requires a confession. It never reads your messages, passwords or screens beyond these judgments.</string>
+    <string name="dns_guard_label">THE SYSTEM DNS GUARD</string>
+    <string name="device_guard_desc">Anchors the anti-uninstall law of THE SYSTEM.</string>
 </resources>

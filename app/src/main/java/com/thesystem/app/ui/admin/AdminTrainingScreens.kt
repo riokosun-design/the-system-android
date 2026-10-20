@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
-import com.thesystem.app.data.model.BlackRoomApplicationDto
+
 import com.thesystem.app.data.model.CourseDto
 import com.thesystem.app.data.model.CourseQuestDto
 import com.thesystem.app.data.model.QuestTemplateDto
@@ -45,7 +45,9 @@ fun AdminTrainingTabs(state: AdminState, vm: AdminViewModel) {
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("COURSES", "COURSE QUESTS", "DAILY QUESTS", "BLACK ROOM").forEachIndexed { i, label ->
+            // §4 (v0.24.0): the BLACK ROOM application queue rode the manual
+            // payment rail — removed from the console with it.
+            listOf("COURSES", "COURSE QUESTS", "DAILY QUESTS").forEachIndexed { i, label ->
                 FilterChipPill(label, tab == i) { tab = i }
             }
         }
@@ -54,7 +56,6 @@ fun AdminTrainingTabs(state: AdminState, vm: AdminViewModel) {
             0 -> CoursesTab(state, vm)
             1 -> CourseQuestsTab(state, vm)
             2 -> DailyQuestsTab(state, vm)
-            3 -> BlackRoomAdminTab(state, vm)
         }
     }
 }
@@ -358,87 +359,6 @@ private fun DailyQuestsTab(s: AdminState, vm: AdminViewModel) {
                     editing = null
                 }, Modifier.fillMaxWidth(), color = SkyBlue)
                 GhostButton("CANCEL", { editing = null }, Modifier.fillMaxWidth())
-            }
-        }
-    }
-}
-
-@Composable
-private fun BlackRoomAdminTab(s: AdminState, vm: AdminViewModel) {
-    var openBuilderFor by remember { mutableStateOf<BlackRoomApplicationDto?>(null) }
-    Column(Modifier.fillMaxWidth()) {
-        Text("APPLICATIONS · gate answers + manual payment", style = MonoLabel, color = LabelGray)
-        Spacer(Modifier.height(Grid.S8))
-        if (s.blackRooms.isEmpty()) EmptyState("No Black Room applications yet.")
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(s.blackRooms, key = { it.id }) { a ->
-                GlowCard(modifier = Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("@${a.username ?: a.userId.take(8)}", color = PaperWhite, style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "₹%.0f / $%.0f · ${a.status} · ${a.createdAt?.take(10) ?: ""}",
-                                style = MaterialTheme.typography.bodySmall, color = LabelGray,
-                            )
-                            a.criteria?.let { c ->
-                                Text(
-                                    "ledger: ${c["checks"]?.let { ch -> ch.toString().take(120) } ?: ""}",
-                                    style = MaterialTheme.typography.bodySmall, color = FaintGray,
-                                )
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(Grid.S8))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (a.status == "PENDING") {
-                            NeonButton("APPROVE", { vm.reviewBlackRoom(a.id, true) }, color = SkyBlue)
-                            NeonButton("REJECT", { vm.reviewBlackRoom(a.id, false) }, color = LabelGray)
-                        }
-                        GhostButton("BUILD PROGRAM", { openBuilderFor = a })
-                    }
-                }
-            }
-        }
-    }
-
-    openBuilderFor?.let { a ->
-        var week by remember { mutableStateOf("0") }
-        var day by remember { mutableStateOf("0") }
-        var title by remember { mutableStateOf("") }
-        var exercise by remember { mutableStateOf("GENERAL") }
-        var sets by remember { mutableStateOf("3") }
-        var reps by remember { mutableStateOf("10") }
-        var duration by remember { mutableStateOf("0") }
-        var rest by remember { mutableStateOf("150") }
-        var notes by remember { mutableStateOf("") }
-        OverlaySheet({ openBuilderFor = null }) {
-            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(Grid.S8)) {
-                SectionTitle("BLACK ROOM PROGRAM · @${a.username ?: ""}", SkyBlue)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Field(week, { week = it }, "WEEK", Modifier.weight(1f))
-                    Field(day, { day = it }, "DAY 0-6", Modifier.weight(1f))
-                }
-                Field(title, { title = it }, "SESSION TITLE")
-                Field(exercise, { exercise = it }, "PRIMARY EXERCISE")
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Field(sets, { sets = it }, "SETS", Modifier.weight(1f))
-                    Field(reps, { reps = it }, "REPS", Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Field(duration, { duration = it }, "DURATION s", Modifier.weight(1f))
-                    Field(rest, { rest = it }, "REST s", Modifier.weight(1f))
-                }
-                Field(notes, { notes = it }, "PROGRESSION / RECOVERY NOTES")
-                NeonButton("SAVE ROW", {
-                    vm.saveBlackRoomProgram(
-                        a.id, week.toIntOrNull() ?: 0, day.toIntOrNull() ?: 0, title, exercise,
-                        sets.toIntOrNull() ?: 3, reps, duration.toIntOrNull() ?: 0,
-                        rest.toIntOrNull() ?: 150, notes,
-                    )
-                    openBuilderFor = null
-                }, Modifier.fillMaxWidth(), color = SkyBlue)
-                GhostButton("CLOSE", { openBuilderFor = null }, Modifier.fillMaxWidth())
             }
         }
     }

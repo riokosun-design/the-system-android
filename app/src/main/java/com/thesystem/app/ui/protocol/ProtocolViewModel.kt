@@ -1,12 +1,9 @@
 package com.thesystem.app.ui.protocol
 
-import android.content.Context
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thesystem.app.core.SystemMath
 import com.thesystem.app.data.model.*
-import com.thesystem.app.data.repo.CommerceRepository
 import com.thesystem.app.data.repo.SocialRepository
 import com.thesystem.app.data.repo.SystemRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,12 +17,8 @@ import javax.inject.Inject
 data class ProtocolState(
     val loading: Boolean = true,
     val profile: UserDto? = null,
-    // Black Room
+    // Black Room (access flag only — §4: the manual payment rail is gone)
     val blackRoomUnlocked: Boolean = false,
-    val blackRoomPrice: Double = 499.0,
-    val upiId: String = "thesystem@upi",
-    val upiQrUrl: String? = null,
-    val myPayments: List<PaymentDto> = emptyList(),
     // Arcs
     val arcs: List<ArcDto> = emptyList(),
     val arcProgress: Map<String, ArcProgressDto> = emptyMap(),
@@ -35,7 +28,6 @@ data class ProtocolState(
     val myClan: ClanDto? = null,
     val clanMembers: List<ClanMemberDto> = emptyList(),
     // UX
-    val paying: Boolean = false,
     val notice: String? = null,
     val error: String? = null,
 )
@@ -44,7 +36,6 @@ data class ProtocolState(
 class ProtocolViewModel @Inject constructor(
     private val system: SystemRepository,
     private val social: SocialRepository,
-    private val commerce: CommerceRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProtocolState())
@@ -54,12 +45,8 @@ class ProtocolViewModel @Inject constructor(
 
     fun refresh() = viewModelScope.launch {
         val profile = system.profile()
-        val upi = async { system.config("upi_id") }
-        val price = async { system.config("black_room_price_inr") }
-        val qr = async { system.config("upi_qr_url") }
         val arcs = async { system.arcs() }
         val progress = async { system.myArcProgress() }
-        val pays = async { commerce.myPayments() }
         val clans = async { social.clans() }
         val member = async { social.myMembership() }
         val membership = member.await()
@@ -71,10 +58,6 @@ class ProtocolViewModel @Inject constructor(
             blackRoomUnlocked = profile?.blackRoomUntil?.let { until ->
                 runCatching { OffsetDateTime.parse(until).isAfter(OffsetDateTime.now()) }.getOrDefault(false)
             } == true,
-            blackRoomPrice = price.await()?.toDoubleOrNull() ?: 499.0,
-            upiId = upi.await() ?: "thesystem@upi",
-            upiQrUrl = qr.await(),
-            myPayments = pays.await(),
             arcs = arcs.await(),
             arcProgress = progress.await().associateBy { it.arcId },
             clans = clans.await(),
@@ -82,22 +65,6 @@ class ProtocolViewModel @Inject constructor(
             myClan = myClan,
             clanMembers = members,
         )
-    }
-
-    // ── Black Room manual UPI purchase ───────────────────────────────────────
-    fun submitBlackRoomPayment(utr: String, screenshotUri: Uri?, context: Context) = viewModelScope.launch {
-        if (utr.isBlank()) { _state.value = _state.value.copy(error = "UTR / UPI reference ID is required."); return@launch }
-        _state.value = _state.value.copy(paying = true)
-        val path = screenshotUri?.let { uri ->
-            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            bytes?.let { commerce.uploadPaymentProof(it).getOrNull() }
-        }
-        commerce.submitManualPayment("BLACK_ROOM_PASS", null, _state.value.blackRoomPrice, utr, path)
-            .onSuccess {
-                _state.value = _state.value.copy(paying = false, notice = "Payment submitted for admin verification. The Black Room opens on approval.")
-                refresh()
-            }
-            .onFailure { _state.value = _state.value.copy(paying = false, error = it.message) }
     }
 
     // ── Arcs (progression lock: finish base conditioning to unlock others) ───

@@ -1,8 +1,5 @@
 package com.thesystem.app.ui.protocol
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,9 +8,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -65,56 +62,25 @@ private fun RoomsTab(s: ProtocolState, vm: ProtocolViewModel, nav: NavHostContro
     }
 }
 
+/** §4 (v0.24.0): the manual payment rail is gone. Access you already own is
+ *  honored; new enrollments wait for the official Razorpay gateway. */
 @Composable
 private fun BlackRoomCard(s: ProtocolState, vm: ProtocolViewModel) {
-    var showPay by remember { mutableStateOf(false) }
     GlowCard(glow = CrimsonRed) {
         Text("THE BLACK ROOM", style = MaterialTheme.typography.titleLarge, color = PaperWhite)
-        Text("Elite routines, dark arcs, shadow mentorship. Paywalled. Verified manually — no chargebacks, no mercy.",
+        Text("Elite routines, dark arcs, shadow mentorship.",
             style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.height(8.dp))
         if (s.blackRoomUnlocked) {
             Text("ACCESS GRANTED", color = VenomGreen, style = MaterialTheme.typography.labelLarge)
             Text("Black arc library unlocked — see ARCS tab for your shadow routines.", style = MaterialTheme.typography.bodyMedium)
         } else {
-            val pending = s.myPayments.any { it.status == "PENDING" && it.itemType == "BLACK_ROOM_PASS" }
-            if (pending) Text("VERIFICATION PENDING — an admin is reviewing your UPI payment.", color = WarningAmber, style = MaterialTheme.typography.labelSmall)
-            else NeonButton("UNLOCK ₹${s.blackRoomPrice.toInt()}", { showPay = true }, color = CrimsonRed)
+            Text(
+                com.thesystem.app.data.gateway.PaymentGateways.OFFLINE_NOTICE,
+                color = TextMuted, style = MaterialTheme.typography.bodySmall, lineHeight = 18.sp,
+            )
         }
     }
-    if (showPay) UpiPaymentSheet(s, onDismiss = { showPay = false }, onSubmit = { utr, uri, ctx -> vm.submitBlackRoomPayment(utr, uri, ctx); showPay = false })
-}
-
-/** Manual gateway: QR → pay → UTR ID → screenshot → submit for admin approval. */
-@Composable
-fun UpiPaymentSheet(s: ProtocolState, onDismiss: () -> Unit, onSubmit: (String, Uri?, android.content.Context) -> Unit) {
-    var utr by remember { mutableStateOf("") }
-    var screenshot by remember { mutableStateOf<Uri?>(null) }
-    val context = LocalContext.current
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { screenshot = it }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = SurfaceDark,
-        title = { Text("MANUAL UPI GATEWAY", color = CrimsonRed) },
-        text = {
-            Column {
-                Text("1. Pay ₹${s.blackRoomPrice.toInt()} to UPI ID:", style = MaterialTheme.typography.bodyMedium)
-                Text(s.upiId, color = HunterGold, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                s.upiQrUrl?.let { Text("QR available in the vault instructions.", style = MaterialTheme.typography.labelSmall) }
-                Text("2. Paste the UTR / UPI reference ID from your payment app.", style = MaterialTheme.typography.bodyMedium)
-                OutlinedTextField(
-                    value = utr, onValueChange = { utr = it.take(22) },
-                    label = { Text("UTR ID") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CrimsonRed, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary),
-                )
-                Spacer(Modifier.height(8.dp))
-                Text("3. Attach the payment screenshot.", style = MaterialTheme.typography.bodyMedium)
-                NeonButton(if (screenshot == null) "ATTACH SCREENSHOT" else "SCREENSHOT ATTACHED ✓", { picker.launch("image/*") }, color = if (screenshot == null) ElectricBlue else VenomGreen)
-            }
-        },
-        confirmButton = { NeonButton("SUBMIT FOR REVIEW", { onSubmit(utr, screenshot, context) }, color = CrimsonRed, enabled = utr.length >= 8) },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = TextMuted) } },
-    )
 }
 
 @Composable

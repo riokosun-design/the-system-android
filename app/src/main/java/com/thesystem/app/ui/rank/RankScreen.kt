@@ -138,7 +138,7 @@ fun RankScreen(vm: RankViewModel = hiltViewModel()) {
 
             // LAYER 3 — the ladder interface itself
             LazyColumn(
-                Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin),
+                Modifier.fillMaxSize().padding(horizontal = Grid.Margin),
                 verticalArrangement = Arrangement.spacedBy(Grid.CardSpace),
                 contentPadding = PaddingValues(vertical = Grid.S16),
             ) {

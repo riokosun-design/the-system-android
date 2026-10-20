@@ -43,9 +43,9 @@ import javax.inject.Inject
 /**
  * MARKET — one counter for everything the System sells:
  *   VC top-up · affiliate products · training courses · Black Room · digital goods.
- * Existing economy untouched: VC stays server-authoritative, every price is
- * admin/server-controlled, and settlement is the manual UPI rail (UTR + proof
- * → admin approval). No payment SDK, no in-app purchase.
+ * Existing economy untouched: VC stays server-authoritative, and every price
+ * is admin/server-controlled. §4 (0.24.0): the manual payment rail is removed;
+ * checkout returns through the official Razorpay gateway (PaymentGateways seam).
  */
 data class MarketState(
     val loading: Boolean = true,
@@ -94,7 +94,7 @@ class MarketViewModel @Inject constructor(
     }
 
     // ── AI ENGINE (spec §9): plan → validate vs REAL inventory → hunter reviews ──
-    // NEVER purchases: confirmation is an acknowledgement, settlement stays manual UPI.
+    // NEVER purchases: confirmation is an acknowledgement, settlement stays server-owned.
     fun planNutrition(budgetInr: Double) = viewModelScope.launch {
         if (_state.value.nutritionBusy) return@launch
         _state.value = _state.value.copy(nutritionBusy = true, nutritionNote = null)
@@ -218,8 +218,7 @@ fun MarketScreen(nav: NavHostController, vm: MarketViewModel = hiltViewModel()) 
 
             item {
                 Text(
-                    "All prices are set server-side by the operator. Purchases settle through the manual UPI rail " +
-                        "(UTR + screenshot → admin approval).",
+                    com.thesystem.app.data.gateway.PaymentGateways.OFFLINE_NOTICE,
                     style = MaterialTheme.typography.bodySmall, color = FaintGray,
                 )
             }

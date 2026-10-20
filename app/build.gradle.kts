@@ -20,8 +20,8 @@ android {
         applicationId = "com.thesystem.app"
         minSdk = 26 // low-end / older Android first
         targetSdk = 35
-        versionCode = 39
-        versionName = "0.23.0"
+        versionCode = 40
+        versionName = "0.24.0"
 
         // 2GB-first install weight: drop emulator-only native ABIs (MediaPipe+
         // ML Kit ship x86/x86_64 .so blobs nobody's phone uses ≈60MB unpacked).
@@ -119,8 +119,6 @@ dependencies {
     implementation(libs.androidx.datastore)
     implementation(libs.lifecycle.service)
     implementation(libs.mlkit.pose)
-    implementation(libs.mlkit.text)      // payment proof OCR hint (on-device, free)
-    implementation(libs.zxing.core)      // UPI QR rendering (encode only)
     implementation(libs.tensorflow.lite)
     implementation(libs.mediapipe.tasks.genai) // on-device LLM runtime (AI engine §6) — models download on demand, never bundled
     implementation(libs.androidx.profileinstaller)

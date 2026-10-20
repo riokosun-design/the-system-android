@@ -55,13 +55,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
 
 /** App entry gate: splash → onboarding/auth → 5-tab shell. */
 sealed interface RootState {
     data object Booting : RootState
     data object NeedsOnboarding : RootState
-    data class Ready(val profile: UserDto) : RootState
+    /** §8: [gated] = an uncleared penalty trial stands — the app opens in the crimson zone. */
+    data class Ready(val profile: UserDto, val gated: Boolean = false) : RootState
     data class Error(val message: String) : RootState
 }
 
@@ -86,14 +89,35 @@ class RootViewModel @Inject constructor(
         }
     }
 
-    /** Re-pull the profile and decide which gate applies. */
+    /** Re-pull the profile and decide which gate applies. §8: the server-owned
+     *  penalty audit runs here too — an uncleared trial gates the entire app. */
     fun resolve() = viewModelScope.launch {
         _state.value = RootState.Booting
         val profile = auth.myProfile()
         _state.value = when {
             profile == null -> RootState.NeedsOnboarding
             !profile.onboardingCompleted || profile.username.startsWith("hunter_") -> RootState.NeedsOnboarding
-            else -> RootState.Ready(profile)
+            else -> {
+                lastPenaltySyncAt = System.currentTimeMillis()
+                val gated = system.penaltyStatus()
+                    ?.get("trial_active")?.jsonPrimitive?.booleanOrNull == true
+                RootState.Ready(profile, gated)
+            }
+        }
+    }
+
+    /** §8.1 — foreground-resume audit (throttled): if the penalty gate flipped
+     *  since the last sync, re-resolve so the hunter lands in the right world. */
+    private var lastPenaltySyncAt = 0L
+    fun resyncPenaltyIfStale() = viewModelScope.launch {
+        val now = System.currentTimeMillis()
+        if (now - lastPenaltySyncAt < 120_000) return@launch
+        lastPenaltySyncAt = now
+        val cur = _state.value
+        if (cur is RootState.Ready) {
+            val gated = system.penaltyStatus()
+                ?.get("trial_active")?.jsonPrimitive?.booleanOrNull == true
+            if (gated != cur.gated) resolve()
         }
     }
 
@@ -115,7 +139,7 @@ object Routes {
     const val SQUAD_COMMAND = "squadCommand"
     /** STEP 8: supply is a pushed route from the Vault, no longer a tab. */
     const val MARKET = "market"
-    /** 0.22.0: VC wallet (UPI-QR purchases + withdrawals), support inbox, tournament brackets. */
+    /** 0.22.0→0.24.0: VC vault (balance + immutable ledger), support inbox, tournament brackets. */
     const val WALLET = "wallet"
     const val SUPPORT = "support"
     const val TOURNAMENTS = "tournaments"
@@ -124,6 +148,8 @@ object Routes {
     const val CHESS_LESSONS = "chessLessons"
     const val CHESS_RANKINGS = "chessRankings"
     const val CHESS_SETTINGS = "chessSettings"
+    /** 0.24.0: discipline engine control room (quest lock, porn shield, guards). */
+    const val DISCIPLINE = "discipline"
     /** Verified proof session: every field is server content, not a client guess. */
     const val QUEST_PROOF =
         "quest/{questId}/{mode}/{exercise}/{target}/{seq}/{unit}/{rest}/{xp}/{title}"
@@ -147,12 +173,28 @@ object Routes {
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    companion object {
+        /** Discipline overlays deep-link here: "quests" → daily quest dashboard. */
+        const val EXTRA_OPEN = "open"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Paints the white system mark on black at process start — first frame
         // is no longer a multi-second dead black screen on cold launch.
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // §1.1 (2026-10-20 spec): the Android system nav bar can never render a
+        // solid white slab again — fully transparent, contrast enforcement off,
+        // icons stay light over our pitch-black bottom bar. App content is laid
+        // out edge-to-edge; the outermost bottom rail pads the nav inset.
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        window.isNavigationBarContrastEnforced = false
+        androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
+            .isAppearanceLightNavigationBars = false
         // §1.1: NO immersive auto-hide — the Android system nav bar stays
         // permanently visible; screens pad their own insets. (2026-10-16 spec)
         setContent {
@@ -166,7 +208,19 @@ class MainActivity : ComponentActivity() {
                 when (val s = state) {
                     RootState.Booting -> DynamicSplash(variants = splashVariants)
                     RootState.NeedsOnboarding -> AwakeningFlowScreen(onDone = { vm.resolve() })
-                    is RootState.Ready -> AppNavHost(profile = s, onSignOut = { vm.signOut() })
+                    is RootState.Ready -> {
+                        // §8.1: every foreground resume re-audits the penalty ledger (throttled)
+                        androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+                            vm.resyncPenaltyIfStale()
+                            onPauseOrDispose { }
+                        }
+                        if (s.gated) {
+                            // §8.4 — while a trial stands, this crimson gate IS the app
+                            PenaltyGateHost(onLifted = { vm.resolve() })
+                        } else {
+                            AppNavHost(profile = s, onSignOut = { vm.signOut() })
+                        }
+                    }
                     is RootState.Error -> {
                         // offline tolerance: brand screen stays alive; the tap re-resolves
                         val err = s
@@ -254,5 +308,21 @@ fun AppNavHost(profile: RootState.Ready, onSignOut: () -> Unit) {
         composable(Routes.CHESS_SETTINGS) {
             com.thesystem.app.ui.chess.ChessSettingsScreen(nav = nav)
         }
+        composable(Routes.DISCIPLINE) {
+            com.thesystem.app.ui.discipline.DisciplineScreen(nav = nav)
+        }
+    }
+}
+
+/** §8 — while a penalty trial stands, this tiny two-destination world replaces
+ *  the whole app: the crimson gate + the camera-verified execution chamber. */
+@Composable
+private fun PenaltyGateHost(onLifted: () -> Unit) {
+    val nav: NavHostController = rememberNavController()
+    NavHost(navController = nav, startDestination = "penaltyZone") {
+        composable("penaltyZone") {
+            com.thesystem.app.ui.penalty.PenaltyGateScreen(nav = nav, onLifted = onLifted)
+        }
+        composable(Routes.QUEST_PROOF) { QuestProofScreen(onExit = { nav.popBackStack() }) }
     }
 }
