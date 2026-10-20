@@ -128,7 +128,7 @@ private val ProtocolCyan = Color(0xFF22D3EE)
 
 /** Kills the selection toolbar — no copy, no paste, no select-all menu. */
 private object EmptyTextToolbar : TextToolbar {
-    override val status: TextToolbarStatus = TextToolbarStatus.Hide
+    override val status: TextToolbarStatus = TextToolbarStatus.Hidden
     override fun showMenu(
         rect: androidx.compose.ui.geometry.Rect,
         onCopyRequested: (() -> Unit)?,
