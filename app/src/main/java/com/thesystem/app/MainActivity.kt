@@ -33,6 +33,8 @@ import com.thesystem.app.ui.splash.DynamicSplash
 import com.thesystem.app.ui.splash.SplashVariant
 import com.thesystem.app.ui.tabs.MainTabs
 import com.thesystem.app.core.theme.SystemTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Box
