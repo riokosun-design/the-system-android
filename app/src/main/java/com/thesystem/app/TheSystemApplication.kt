@@ -10,12 +10,20 @@ class TheSystemApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // §7 ANTI-MOD PERIMETER — debugger/root/emulator/hooks/patchers/signature.
-        // A breached process never reaches a single screen or network call.
-        com.thesystem.app.core.security.AntiTamper.enforce(this)
-        // 0.25.1 — forensic hook: the next launch can say exactly why this one died.
-        // Installed AFTER the perimeter so system denials stay silent by design.
+        // 0.25.1 — forensic hook goes FIRST: whatever dies after this line leaves
+        // written testimony for the next launch (nightly panel, release silence).
         com.thesystem.app.core.CrashTrace.install(this)
+        // §7 ANTI-MOD PERIMETER — 0.25.2 §2.1 hotfix: the execution warrant only
+        // stands in RELEASE builds. The nightly (debug) lane must NEVER self-kill
+        // at launch: budget-ROM false positives (test-keys build tags, stale su
+        // stubs, vendor /system mounts) were executing honest hunters at frame 0.
+        // Debug = sweep, NOTE the verdict, and let the hunter in. Release = enforce.
+        if (BuildConfig.DEBUG) {
+            com.thesystem.app.core.security.AntiTamper.sweep(this)
+                ?.let { android.util.Log.w("AntiTamper", "nightly perimeter note: $it") }
+        } else {
+            com.thesystem.app.core.security.AntiTamper.enforce(this)
+        }
         // Notification rail: quest events use the SYSTEM channel (dark glass,
         // blue border, HUD typography). Tracking is silent + ongoing; reminders
         // wake the hunter for scheduled wars.

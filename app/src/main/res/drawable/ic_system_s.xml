@@ -1,0 +1,34 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="240dp"
+    android:viewportWidth="240"
+    android:viewportHeight="240">
+    <!--
+      THE SYSTEM — S-MARK (0.25.2, spec §1). The launcher's sovereign S glyph,
+      ported to vector for the native cold-start splash. The old watch-bezel
+      "clock" mark is permanently DELETED.
+
+      Android 12+ masks splash icons to the central 2/3 circle (~160/240 →
+      radius 80 of centre); every point stays within radius ~75.4 — nothing
+      clips. Pitch white S with the sovereign teal accents, no other hue.
+    -->
+    <!-- S spine — single bold stroke, top-right head to bottom-left tail -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="24"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M168,78 C148,54 108,50 88,66 C70,80 72,102 92,113 C108,122 140,122 154,134 C170,146 170,170 148,182 C126,195 92,192 74,172" />
+    <!-- sovereign teal — top-left cut sliver -->
+    <path
+        android:fillColor="#35E0D4"
+        android:pathData="M80,66 L106,50 L113,61 L87,77 Z" />
+    <!-- sovereign teal — bottom-right cut sliver (centre-mirror of the top) -->
+    <path
+        android:fillColor="#35E0D4"
+        android:pathData="M160,174 L134,190 L127,179 L153,163 Z" />
+    <!-- sovereign teal — hunter's eye dot, upper hollow of the S -->
+    <path
+        android:fillColor="#35E0D4"
+        android:pathData="M156,86 m-6.5,0 a6.5,6.5 0 1 0 13,0 a6.5,6.5 0 1 0 -13,0" />
+</vector>

@@ -1,5 +1,6 @@
 package com.thesystem.app
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -126,8 +127,12 @@ class RootViewModel @Inject constructor(
         lastPenaltySyncAt = now
         val cur = _state.value
         if (cur is RootState.Ready) {
-            val gated = system.penaltyStatus()
-                ?.get("trial_active")?.jsonPrimitive?.booleanOrNull == true
+            // 0.25.2 §2.6 — resume-audits never execute the process either:
+            // any transport/parse wobble degrades to "not gated", never a crash.
+            val gated = runCatching {
+                system.penaltyStatus()
+                    ?.get("trial_active")?.jsonPrimitive?.booleanOrNull == true
+            }.getOrDefault(false)
             if (gated != cur.gated) resolve()
         }
     }
@@ -144,7 +149,6 @@ object Routes {
     const val BLACK_ROOM = "blackroom"
     const val ADMIN = "admin"
     const val PROTOCOL = "protocol"
-    const val ARENA_ADD = "arenaAdd"
     const val ROUTINE = "routine"
     const val AI_BENCHMARK = "aiBenchmark"
     const val SQUAD_COMMAND = "squadCommand"
@@ -203,7 +207,12 @@ class MainActivity : ComponentActivity() {
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         @Suppress("DEPRECATION")
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        window.isNavigationBarContrastEnforced = false
+        // HOTFIX 0.25.2 §2.2 — setNavigationBarContrastEnforced exists only on
+        // API 29+. Called raw on Android 8/9 it throws NoSuchMethodError INSIDE
+        // onCreate → the launch auto-back hunters reported. SDK-gated now.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
         androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
             .isAppearanceLightNavigationBars = false
         // §1.1: NO immersive auto-hide — the Android system nav bar stays
