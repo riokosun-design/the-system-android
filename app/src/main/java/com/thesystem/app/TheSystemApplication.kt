@@ -13,6 +13,9 @@ class TheSystemApplication : Application() {
         // §7 ANTI-MOD PERIMETER — debugger/root/emulator/hooks/patchers/signature.
         // A breached process never reaches a single screen or network call.
         com.thesystem.app.core.security.AntiTamper.enforce(this)
+        // 0.25.1 — forensic hook: the next launch can say exactly why this one died.
+        // Installed AFTER the perimeter so system denials stay silent by design.
+        com.thesystem.app.core.CrashTrace.install(this)
         // Notification rail: quest events use the SYSTEM channel (dark glass,
         // blue border, HUD typography). Tracking is silent + ongoing; reminders
         // wake the hunter for scheduled wars.

@@ -414,6 +414,9 @@ fun SystemMasterIntroCinematics(
         ) {
             val w = size.width
             val h = size.height
+            // 0.25.1 guard: zero/transient-size frames (first layout, transitions)
+            // never touch the draw math — kills the NaN/infinite-loop crash class.
+            if (w < 4f || h < 4f || !w.isFinite() || !h.isFinite()) return@Canvas
             val cx = w * 0.5f
             val cy = h * 0.5f
 
@@ -1085,6 +1088,8 @@ fun RankDisciplinaryMotionBackground(
         ) {
             val w = size.width
             val h = size.height
+            // 0.25.1 guard: tiny/transient cells never enter the draw math.
+            if (w < 4f || h < 4f || !w.isFinite() || !h.isFinite()) return@Canvas
             val cx = w * 0.5f
             val cy = h * 0.5f
 
@@ -1793,6 +1798,8 @@ fun DisciplinaryTrajectoryGraph(
         ) {
             val w = size.width
             val h = size.height
+            // 0.25.1 guard: zero/transient-size frames never touch the draw math.
+            if (w < 4f || h < 4f || !w.isFinite() || !h.isFinite()) return@Canvas
             val scale = min(w, h) * 0.0011f
 
             val padLeft = w * 0.10f

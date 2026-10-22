@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
@@ -90,19 +91,26 @@ class RootViewModel @Inject constructor(
     }
 
     /** Re-pull the profile and decide which gate applies. §8: the server-owned
-     *  penalty audit runs here too — an uncleared trial gates the entire app. */
+     *  penalty audit runs here too — an uncleared trial gates the entire app.
+     *  0.25.1: the whole pipeline is wrapped — a thrown network/parse failure
+     *  can no longer execute the process; it degrades to the retryable
+     *  "SIGNAL LOST" screen instead of an uncaught-coroutine death. */
     fun resolve() = viewModelScope.launch {
         _state.value = RootState.Booting
-        val profile = auth.myProfile()
-        _state.value = when {
-            profile == null -> RootState.NeedsOnboarding
-            !profile.onboardingCompleted || profile.username.startsWith("hunter_") -> RootState.NeedsOnboarding
-            else -> {
-                lastPenaltySyncAt = System.currentTimeMillis()
-                val gated = system.penaltyStatus()
-                    ?.get("trial_active")?.jsonPrimitive?.booleanOrNull == true
-                RootState.Ready(profile, gated)
+        _state.value = runCatching {
+            val profile = auth.myProfile()
+            when {
+                profile == null -> RootState.NeedsOnboarding
+                !profile.onboardingCompleted || profile.username.startsWith("hunter_") -> RootState.NeedsOnboarding
+                else -> {
+                    lastPenaltySyncAt = System.currentTimeMillis()
+                    val gated = system.penaltyStatus()
+                        ?.get("trial_active")?.jsonPrimitive?.booleanOrNull == true
+                    RootState.Ready(profile, gated)
+                }
             }
+        }.getOrElse { e ->
+            RootState.Error("SIGNAL LOST — ${(e.message ?: "resync required").take(80)}")
         }
     }
 
@@ -199,6 +207,7 @@ class MainActivity : ComponentActivity() {
         // permanently visible; screens pad their own insets. (2026-10-16 spec)
         setContent {
             SystemTheme {
+            Box(Modifier.fillMaxSize()) {
                 val vm: RootViewModel = hiltViewModel()
                 val state by vm.state.collectAsStateWithLifecycle()
                 // §2 (v0.25.0): first-ever launch opens with the glowing camera-tracked
@@ -253,6 +262,47 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 } // §2 master-intro else-gate
+
+                // 0.25.1 — CRASH FORENSICS (debug nightly only): if the previous
+                // launch died fatally, the captured stack surfaces HERE once —
+                // screenshot it, report it, clear it. Release builds never see this.
+                if (BuildConfig.DEBUG) {
+                    var fatalTrace by remember { mutableStateOf(com.thesystem.app.core.CrashTrace.peek(appContext)) }
+                    val trace = fatalTrace
+                    if (trace != null) {
+                        Column(
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .padding(12.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                                .background(androidx.compose.ui.graphics.Color(0xF00A0404))
+                                .border(1.dp, com.thesystem.app.core.theme.CrimsonRed, androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                                .padding(12.dp),
+                        ) {
+                            Text("LAST FATAL — REPORT THEN CLEAR", color = com.thesystem.app.core.theme.CrimsonRed, style = MonoLabel)
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                trace.take(1400),
+                                color = PaperWhite,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                fontSize = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp),
+                                maxLines = 14,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "CLEAR & CONTINUE ▸",
+                                color = PaperWhite, style = MonoLabel,
+                                modifier = Modifier.clickable {
+                                    com.thesystem.app.core.CrashTrace.clear(appContext)
+                                    fatalTrace = null
+                                },
+                            )
+                        }
+                    }
+                }
+            } // forensics Box
             }
         }
     }
