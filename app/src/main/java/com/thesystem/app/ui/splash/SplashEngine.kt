@@ -1,5 +1,6 @@
 package com.thesystem.app.ui.splash
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -7,6 +8,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -29,35 +32,33 @@ import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.Scanlines
 import com.thesystem.app.core.ui.SystemMotion
 import kotlinx.coroutines.delay
+import com.thesystem.app.core.ui.OnboardingVideoBackdrop
 
 /**
  * The launch sequence — trimmed to the three marks the product actually stands
- * on: RANK → BLACK ROOM → TERRITORY.
+ * on: RANK → BLACK ROOM → GROWTH.
  *
- * Radar, combat, quest-donut, limit-break and battle-split animations are
- * DELETED from the rotation (they advertised removed or secondary systems).
- * The Territory card is a pure visual: territory gameplay no longer exists.
- * Their canvas implementations remain unreferenced in SplashCanvases.kt.
+ * Radar, combat, quest-donut, limit-break, battle-split and arena animations are
+ * DELETED from the rotation AND the codebase (0.26.0 §2: the quest/arena
+ * "slides" read as leftover onboarding pages — executed, not archived).
+ * The Territory canvas stays compiled but out of rotation (β decision: dead
+ * gameplay never advertises on the first frame a hunter sees).
  */
 enum class SplashVariant(val label: String) {
     RANK_BARS("RANKS"),
     BLACK_ROOM_SCAN("BLACK ROOM"),
+    GROWTH_CURVE("GROWTH"),
     TERRITORY_GRID("TERRITORY"),   // legacy canvas — kept out of the rotation (gameplay sunset)
-    QUEST_DONUT("DAILY PROTOCOL"),
-    BATTLE_SPLIT("ARENA"),
 }
 
 /**
- * HONEST ROTATION — only marks the product actually stands on TODAY:
- * Ranks, the Black Room, the Daily Protocol, the Arena. Territory canvases
- * stay compiled but out of rotation (β decision: dead gameplay never
- * advertises on the first frame a hunter sees).
+ * HONEST ROTATION (0.26.0 §2) — exactly three slides: Ranks, the Black Room,
+ * the Growth curve. Nothing else plays on the first frame, ever.
  */
 val HONEST_SPLASH_ROTATION: List<SplashVariant> = listOf(
     SplashVariant.RANK_BARS,
     SplashVariant.BLACK_ROOM_SCAN,
-    SplashVariant.QUEST_DONUT,
-    SplashVariant.BATTLE_SPLIT,
+    SplashVariant.GROWTH_CURVE,
 )
 
 /**
@@ -86,21 +87,33 @@ fun DynamicSplash(
     LaunchedEffect(Unit) { booted = true }
     val brandScale by animateFloatAsState(if (booted) 1f else 0.82f, SystemMotion.springPunch, label = "brandPop")
 
-    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF0D0D0D), InkBlack)))) {
+    // 0.26.0 §1 — the S-mark owns ONLY the opening beat. It was floating over
+    // the RANKS / BLACK ROOM slides, covering their art; now it fades out and
+    // UNMOUNTS after the handoff moment and never returns during this launch.
+    var emblemOn by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) { delay(2600); emblemOn = false }
+
+    Box(Modifier.fillMaxSize().background(InkBlack)) {
+        // 0.26.0 §4 — the hunter's faded cinematic underlay (res/raw seam:
+        // silent vignette until onboarding_bg_video.mp4 arrives)
+        OnboardingVideoBackdrop(Modifier.fillMaxSize(), visibility = 0.30f)
         Crossfade(targetState = variants[index % variants.size], animationSpec = tween(450), label = "splashXfade") { v ->
             Box(Modifier.fillMaxSize()) { SplashGraph(v, Modifier.fillMaxSize()) }
         }
         // CRT scanline texture — sells the "you are inside THE SYSTEM" fantasy
         Scanlines(Modifier.matchParentSize())
-        // 0.25.2 §1.3 — the native splash's S-logo never "ends"... it just walks
-        // straight into the app. Same mark, now glowing live over the motion
-        // graphs — zero black gap between OS splash and our launch flow.
-        SystemSEmblem(
-            Modifier
-                .align(Alignment.Center)
-                .size(132.dp)
-                .graphicsLayer { scaleX = brandScale; scaleY = brandScale },
-        )
+        AnimatedVisibility(
+            visible = emblemOn,
+            modifier = Modifier.align(Alignment.Center),
+            enter = fadeIn(tween(280)),
+            exit = fadeOut(tween(420)),
+        ) {
+            SystemSEmblem(
+                Modifier
+                    .size(132.dp)
+                    .graphicsLayer { scaleX = brandScale; scaleY = brandScale },
+            )
+        }
         if (showBranding) {
             Column(
                 Modifier.align(Alignment.BottomCenter).padding(bottom = 56.dp),
@@ -109,7 +122,8 @@ fun DynamicSplash(
                 Text(
                     "THE SYSTEM",
                     style = MaterialTheme.typography.displayMedium,
-                    color = ElectricBlue,
+                    // 0.26.0 §4.3 — high-luminance crisp white over the dark video aura
+                    color = Color(0xFFF0F4F8),
                     fontWeight = FontWeight.Black,
                     modifier = Modifier.graphicsLayer { scaleX = brandScale; scaleY = brandScale },
                 )
@@ -118,7 +132,8 @@ fun DynamicSplash(
                     Text(
                         label,
                         style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
+                        // §4.3 — bright silver-cyan accent, lightning-matched
+                        color = Color(0xFFE0FBFC),
                         fontSize = 11.sp,
                     )
                 }
@@ -212,8 +227,7 @@ fun SplashGraph(variant: SplashVariant, modifier: Modifier = Modifier) {
     when (variant) {
         SplashVariant.RANK_BARS -> RankBarsGraph(modifier)
         SplashVariant.BLACK_ROOM_SCAN -> BlackRoomScanGraph(modifier)
+        SplashVariant.GROWTH_CURVE -> GrowthCurveGraph(modifier)
         SplashVariant.TERRITORY_GRID -> TerritoryGridGraph(modifier)
-        SplashVariant.QUEST_DONUT -> QuestDonutGraph(modifier)
-        SplashVariant.BATTLE_SPLIT -> BattleSplitGraph(modifier)
     }
 }

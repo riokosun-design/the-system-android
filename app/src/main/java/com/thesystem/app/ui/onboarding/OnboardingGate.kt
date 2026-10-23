@@ -127,6 +127,9 @@ fun SystemBackdrop(
     particleCount: Int = 26,
     accentA: Color = ElectricBlue,
     accentB: Color = NeonPurple,
+    /** 0.26.0 §4 — lay the faded cinematic video under the mana field (splash
+     *  + awakening ritual only; resource-seamed, silent vignette when absent). */
+    videoBackdrop: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val motes = remember(particleCount) {
@@ -150,6 +153,10 @@ fun SystemBackdrop(
         label = "manaT",
     )
     Box(Modifier.fillMaxSize().background(GateBlack)) {
+        // §4 (0.26.0): the hunter's faded loop lives between the void and the mana
+        if (videoBackdrop) {
+            com.thesystem.app.core.ui.OnboardingVideoBackdrop(Modifier.fillMaxSize(), visibility = 0.28f)
+        }
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width; val h = size.height
             for (m in motes) {

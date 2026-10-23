@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import kotlin.math.*
 import com.thesystem.app.core.theme.*
 
@@ -84,45 +85,67 @@ fun TerritoryGridGraph(modifier: Modifier = Modifier) {
     }
 }
 
-// ── 3. QUEST_DONUT ───────────────────────────────────────────────────────────
+// ── 3. GROWTH_CURVE (0.26.0 §2/§3 — quest-donut & battle-split EXECUTED; only
+// the marks the product stands on remain: ranks, the black room, growth) ─────
 @Composable
-fun QuestDonutGraph(modifier: Modifier = Modifier) {
-    val p = rememberPhase(2600)
-    val segments = listOf(0.34f to ElectricBlue, 0.26f to NeonPurple, 0.22f to VenomGreen, 0.18f to HunterGold)
+fun GrowthCurveGraph(modifier: Modifier = Modifier) {
+    val p = rememberPhase(3400)
+    val paint = rememberNativePaint(30f, 0xFFFFFFFF.toInt(), Typeface.MONOSPACE)
     Canvas(modifier) {
-        val stroke = Stroke(width = size.minDimension * 0.07f)
-        var start = -90f
-        val fill = min(1f, p * 1.25f)
-        segments.forEach { (frac, color) ->
-            val sweep = 360f * frac * fill
-            drawArc(color, startAngle = start, sweepAngle = sweep - 4f, useCenter = false, style = stroke,
-                topLeft = Offset(size.minDimension * 0.1f, size.minDimension * 0.1f),
-                size = androidx.compose.ui.geometry.Size(size.minDimension * 0.8f, size.minDimension * 0.8f))
-            start += 360f * frac
+        val w = size.width; val h = size.height
+        if (w < 4f || h < 4f) return@Canvas
+        // quiet ledger grid
+        for (i in 0..8) {
+            val y = h * i / 8f
+            drawLine(Color(0x12FFFFFF), Offset(0f, y), Offset(w, y), 1f)
         }
-        drawCircle(VoidBlack, radius = size.minDimension * 0.24f, center = Offset(size.width / 2, size.height / 2))
+        // monotone discipline rise — fixed waypoints, smooth cubic joints
+        val depths = listOf(0.06f, 0.16f, 0.30f, 0.46f, 0.62f, 0.80f)
+        val letters = listOf("F", "E", "D", "C", "B", "A")
+        val padX = w * 0.07f
+        val nodes = depths.mapIndexed { i, d ->
+            Offset(padX + (w - 2 * padX) * i / (depths.size - 1), h * (1f - d * 0.82f) - h * 0.06f)
+        }
+        val reveal = (p * 1.55f).coerceAtMost(1f)        // draws in, holds, loops
+        val curve = Path().apply {
+            moveTo(nodes.first().x, nodes.first().y)
+            for (i in 1 until nodes.size) {
+                val a = nodes[i - 1]; val b = nodes[i]
+                cubicTo(
+                    a.x + (b.x - a.x) * 0.5f, a.y,
+                    a.x + (b.x - a.x) * 0.5f, b.y,
+                    b.x, b.y,
+                )
+            }
+        }
+        clipRect(0f, 0f, w * reveal, h) {
+            drawPath(curve, ElectricBlue, style = Stroke(width = 5f, cap = StrokeCap.Round))
+            // soft area under the rise — one gradient, no glow stack
+            val area = Path().apply {
+                addPath(curve)
+                lineTo(nodes.last().x, h); lineTo(nodes.first().x, h); close()
+            }
+            drawPath(
+                area,
+                Brush.verticalGradient(
+                    listOf(ElectricBlue.copy(alpha = 0.20f), Color.Transparent),
+                    startY = h * 0.25f, endY = h,
+                ),
+            )
+        }
+        // waypoint seals + ladder letters
+        nodes.forEachIndexed { i, n ->
+            if (n.x <= w * reveal) {
+                val isNewest = i == nodes.indexOfLast { it.x <= w * reveal }
+                drawCircle(ElectricBlue, radius = if (isNewest) 9f else 6f, center = n)
+                drawCircle(PaperWhite.copy(alpha = 0.7f), radius = if (isNewest) 12f else 9f, center = n, style = Stroke(2f))
+                paint.alpha = if (isNewest) 235 else 150
+                drawContext.canvas.nativeCanvas.drawText(letters[i], n.x, (n.y + 46f).coerceAtMost(h - 8f), paint)
+            }
+        }
     }
 }
 
-// ── 4. BATTLE_SPLIT ──────────────────────────────────────────────────────────
-@Composable
-fun BattleSplitGraph(modifier: Modifier = Modifier) {
-    val p = rememberPhase(1400)
-    Canvas(modifier) {
-        val w = size.width; val h = size.height
-        val clash = sin(p * PI).toFloat() // 0→1→0 approach
-        val bluePath = Path().apply {
-            moveTo(0f, 0f); lineTo(w * (0.35f + 0.15f * clash), 0f); lineTo(w * (0.65f - 0.15f * clash), h); lineTo(0f, h); close()
-        }
-        val redPath = Path().apply {
-            moveTo(w, 0f); lineTo(w * (0.85f - 0.12f * clash), 0f); lineTo(w * (0.35f + 0.12f * clash), h); lineTo(w, h); close()
-        }
-        drawPath(bluePath, Brush.linearGradient(listOf(PaperWhite.copy(alpha = 0.45f), Color(0x11FFFFFF))))
-        drawPath(redPath, Brush.linearGradient(listOf(Color(0x11FFFFFF), LabelGray.copy(alpha = 0.5f))))
-        // clash seam
-        drawLine(Color.White.copy(alpha = clash), Offset(w * 0.5f, 0f), Offset(w * 0.5f, h), strokeWidth = 2f + 6f * clash)
-    }
-}
 
 // ── 5. BLACK_ROOM_SCAN ───────────────────────────────────────────────────────
 @Composable

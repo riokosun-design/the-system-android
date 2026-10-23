@@ -2,7 +2,6 @@ package com.thesystem.app.ui.onboarding
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -51,7 +50,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -65,9 +63,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.ColorFilter
@@ -92,6 +93,7 @@ import com.thesystem.app.core.theme.CrimsonRed
 import com.thesystem.app.core.theme.ElectricBlue
 import com.thesystem.app.core.theme.HunterGold
 import com.thesystem.app.core.theme.NeonPurple
+import com.thesystem.app.core.theme.PaperWhite
 import com.thesystem.app.core.theme.SurfaceDark
 import com.thesystem.app.core.theme.SurfaceHigh
 import com.thesystem.app.core.theme.TextMuted
@@ -100,8 +102,6 @@ import com.thesystem.app.core.theme.VenomGreen
 import com.thesystem.app.core.ui.AnimatedCounter
 import com.thesystem.app.core.ui.SystemHaptics
 import com.thesystem.app.core.ui.rememberSystemHaptics
-import com.thesystem.app.ui.motion.DisciplinaryTrajectoryGraph
-import com.thesystem.app.ui.motion.RankDisciplinaryMotionBackground
 import com.thesystem.app.ui.motion.SystemPalette
 import kotlinx.coroutines.delay
 import kotlin.math.PI
@@ -189,7 +189,7 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
         if (ui.signedInProfile != null) vm.finish(onDone, activityName)
     }
 
-    SystemBackdrop {
+    SystemBackdrop(videoBackdrop = true) {
         AnimatedContent(
             targetState = page,
             transitionSpec = {
@@ -673,7 +673,7 @@ private fun P07_Trajectory(clock: Float, advance: () -> Unit) {
         Spacer(Modifier.height(56.dp))
         Text(
             "PROGRESS CALCULATION", fontFamily = FontFamily.Default, fontSize = 10.sp,
-            color = ElectricBlue, letterSpacing = 3.sp,
+            color = Color(0xFFE0FBFC), letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)),
         )
         Spacer(Modifier.height(8.dp))
@@ -683,7 +683,8 @@ private fun P07_Trajectory(clock: Float, advance: () -> Unit) {
             modifier = Modifier.appear(seg(clock, 0.18f)),
         )
         Spacer(Modifier.height(18.dp))
-        // the living graph — camera-tracked lens on every milestone node
+        // the living graph — 0.26.0 §3.3: clean lightweight curve, zero camera
+        // rig, zero glow stack — 60fps even on the weakest vessel
         Box(
             Modifier
                 .popIn(seg(clock, 0.22f, 0.2f))
@@ -692,7 +693,7 @@ private fun P07_Trajectory(clock: Float, advance: () -> Unit) {
                 .clip(CutCornerShape(14.dp))
                 .border(1.dp, SystemPalette.ElectricCyan.copy(alpha = 0.45f), CutCornerShape(14.dp)),
         ) {
-            DisciplinaryTrajectoryGraph(
+            CleanTrajectoryGraph(
                 modifier = Modifier.fillMaxSize(),
                 onComplete = { graphDone = true },
             )
@@ -710,21 +711,104 @@ private fun P07_Trajectory(clock: Float, advance: () -> Unit) {
     }
 }
 
-// ── PAGE 08 · RANKS SHOWCASE (spec §3.2 + §4 — every rank rides its own
-// disciplinary motion background; the visible rank owns the screen layer) ────
+/**
+ * CLEAN TRAJECTORY GRAPH (0.26.0 §3.3) — the growth curve in the old smooth
+ * style: ONE fill animation, pure Canvas, zero camera rig, zero glow stack.
+ * A monotone discipline rise across F→S waypoints with faint ledger grid and
+ * sealed nodes; fires onComplete when the ink settles so COMMIT can arm.
+ * 60fps on the weakest vessel — nothing here allocates per frame.
+ */
+@Composable
+private fun CleanTrajectoryGraph(modifier: Modifier = Modifier, onComplete: () -> Unit) {
+    val prog = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        prog.animateTo(1f, tween(4200, easing = FastOutSlowInEasing))
+        onComplete()
+    }
+    val axisPaint = remember {
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = 30f
+            color = android.graphics.Color.WHITE
+            typeface = android.graphics.Typeface.MONOSPACE
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+    }
+    Canvas(modifier.background(Color(0xFF07090C))) {
+        val w = size.width; val h = size.height
+        if (w < 8f || h < 8f || !w.isFinite() || !h.isFinite()) return@Canvas
+        val padX = w * 0.09f
+        val padTop = h * 0.10f
+        val padBot = h * 0.16f
+        // faint ledger grid
+        for (i in 0..6) {
+            val y = padTop + (h - padTop - padBot) * i / 6f
+            drawLine(Color(0x14FFFFFF), Offset(padX, y), Offset(w - padX * 0.5f, y), 1f)
+        }
+        // the rise — seven waypoints, smooth cubic joints, F rooted low to S apex
+        val depths = listOf(0.04f, 0.15f, 0.28f, 0.43f, 0.58f, 0.75f, 0.93f)
+        val letters = listOf("F", "E", "D", "C", "B", "A", "S")
+        val nodes = depths.mapIndexed { i, d ->
+            Offset(
+                padX + (w - padX - padX * 0.5f) * i / (depths.size - 1),
+                padTop + (h - padTop - padBot) * (1f - d),
+            )
+        }
+        val reveal = prog.value
+        val revealX = (w * reveal).coerceIn(0f, w)
+        val curve = Path().apply {
+            moveTo(nodes.first().x, nodes.first().y)
+            for (i in 1 until nodes.size) {
+                val a = nodes[i - 1]; val b = nodes[i]
+                cubicTo(
+                    a.x + (b.x - a.x) * 0.5f, a.y,
+                    a.x + (b.x - a.x) * 0.5f, b.y,
+                    b.x, b.y,
+                )
+            }
+        }
+        clipRect(0f, 0f, revealX, h) {
+            // soft fill under the rise first, then the ink line
+            val area = Path().apply {
+                addPath(curve)
+                lineTo(nodes.last().x, h - padBot); lineTo(nodes.first().x, h - padBot); close()
+            }
+            drawPath(
+                area,
+                Brush.verticalGradient(
+                    listOf(SystemPalette.ElectricCyan.copy(alpha = 0.16f), Color.Transparent),
+                    startY = padTop, endY = h - padBot,
+                ),
+            )
+            drawPath(
+                curve, SystemPalette.ElectricCyan,
+                style = Stroke(width = 5f, cap = StrokeCap.Round),
+            )
+        }
+        // waypoint seals — last revealed seal carries the apex gold
+        nodes.forEachIndexed { i, n ->
+            if (n.x <= revealX) {
+                val isApex = i == nodes.lastIndex
+                val core = if (isApex) SystemPalette.SovereignGold else SystemPalette.ElectricCyan
+                drawCircle(core, radius = if (isApex) 10f else 7f, center = n)
+                drawCircle(PaperWhite.copy(alpha = 0.75f), radius = if (isApex) 14f else 10f, center = n, style = Stroke(2f))
+            }
+            // ladder letters sit under every seal, revealed or not
+            axisPaint.alpha = if (n.x <= revealX) 225 else 70
+            drawContext.canvas.nativeCanvas.drawText(
+                letters[i], n.x, (h - padBot + 44f).coerceAtMost(h - 10f), axisPaint,
+            )
+        }
+    }
+}
+
+// ── PAGE 08 · RANKS SHOWCASE (spec §3.2 — 0.26.0 §3: heavy motion signatures
+// EXECUTED; the ladder reads clean over the shared cinematic underlay) ────────
 @Composable
 private fun P08_Ranks(clock: Float, advance: () -> Unit) {
     val tiers = SystemMath.HunterTier.entries
     val listState = rememberLazyListState()
-    val visibleRank by remember {
-        derivedStateOf { tiers[listState.firstVisibleItemIndex.coerceIn(0, tiers.lastIndex)].letter }
-    }
 
     Box(Modifier.fillMaxSize()) {
-        // screen layer — the rank under inspection projects its signature behind everything
-        Crossfade(targetState = visibleRank, animationSpec = tween(600), label = "rankScreenBg") { r ->
-            RankDisciplinaryMotionBackground(rank = r, modifier = Modifier.fillMaxSize())
-        }
         // readability scrim — foreground typography wins, always
         Box(
             Modifier.fillMaxSize().background(
@@ -742,7 +826,7 @@ private fun P08_Ranks(clock: Float, advance: () -> Unit) {
             Spacer(Modifier.height(56.dp))
             Text(
                 "HUNTER RANK LADDER", fontFamily = FontFamily.Default, fontSize = 10.sp,
-                color = ElectricBlue, letterSpacing = 3.sp,
+                color = Color(0xFFE0FBFC), letterSpacing = 3.sp,
                 modifier = Modifier.appear(seg(clock, 0.1f)),
             )
             Spacer(Modifier.height(10.dp))
@@ -759,7 +843,7 @@ private fun P08_Ranks(clock: Float, advance: () -> Unit) {
             )
             Spacer(Modifier.height(20.dp))
 
-            // the ladder — each card rides its own camera-tracked motion signature
+            // the ladder — each card carries a quiet tier-accent gradient (0.26.0 §3)
             LazyRow(
                 state = listState,
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -782,7 +866,8 @@ private fun P08_Ranks(clock: Float, advance: () -> Unit) {
     }
 }
 
-/** One ladder card: rank motion background + scrim + sharp mono type. */
+/** One ladder card: quiet tier-accent gradient + sharp mono type (0.26.0 §3 —
+ *  the camera-tracked motion plates were executed for lag; color does the job). */
 @Composable
 private fun RankShowcaseCard(tier: SystemMath.HunterTier, isStart: Boolean) {
     val accent = when (tier.letter) {
@@ -812,14 +897,12 @@ private fun RankShowcaseCard(tier: SystemMath.HunterTier, isStart: Boolean) {
             .clip(RoundedCornerShape(18.dp))
             .border(1.5.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(18.dp)),
     ) {
-        // §4: this rank's dedicated disciplinary motion background
-        RankDisciplinaryMotionBackground(rank = tier.letter, modifier = Modifier.fillMaxSize())
-        // bottom-anchored scrim — type stays 100% readable over the storm
+        // §3 (0.26.0): tier-accent gradient — smooth, static, zero per-frame cost
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
-                    0f to GateBlack.copy(alpha = 0.30f),
-                    0.45f to GateBlack.copy(alpha = 0.45f),
+                    0f to accent.copy(alpha = 0.16f),
+                    0.5f to GateBlack.copy(alpha = 0.42f),
                     1f to GateBlack.copy(alpha = 0.88f),
                 ),
             ),
@@ -869,8 +952,17 @@ private fun RankShowcaseCard(tier: SystemMath.HunterTier, isStart: Boolean) {
 @Composable
 private fun P09_BlackRoom(clock: Float, advance: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
-        // the sovereign eclipse aura — only the apex signature can guard this door
-        RankDisciplinaryMotionBackground(rank = "SS", modifier = Modifier.fillMaxSize())
+        // 0.26.0 §3 — static sovereign-gold aura replaces the heavy SS eclipse
+        // motion plate: one radial gradient, zero per-frame cost, same gravity
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.radialGradient(
+                    0f to SystemPalette.SovereignGold.copy(alpha = 0.15f),
+                    0.55f to SystemPalette.SovereignGold.copy(alpha = 0.05f),
+                    1f to GateBlack,
+                ),
+            ),
+        )
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
