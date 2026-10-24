@@ -240,7 +240,7 @@ class MainActivity : ComponentActivity() {
                 // ROUND 7: cinematic launch flow — unregistered vessels walk the full
                 // intake → awakening → contract → evaluation → auth gate ritual.
                 // Signed-in hunters get the shuffled brand splash and go straight in.
-                val splashVariants = remember { com.thesystem.app.ui.splash.HONEST_SPLASH_ROTATION.shuffled() }
+                val splashVariants = remember { com.thesystem.app.ui.splash.HONEST_SPLASH_ROTATION }
                 when (val s = state) {
                     RootState.Booting -> DynamicSplash(variants = splashVariants)
                     RootState.NeedsOnboarding -> AwakeningFlowScreen(onDone = { vm.resolve() })

@@ -233,8 +233,11 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
             )
             Spacer(Modifier.weight(1f))
             Text(
-                "PAGE %02d/$LAST_PAGE".format(page),
-                fontFamily = FontFamily.Default, fontSize = 9.sp, color = TextMuted.copy(alpha = 0.6f), letterSpacing = 2.sp,
+                // BUILD-PROOF WATERMARK (verification directive §3): this string
+                // ships ONLY with the fixed splash/onboarding code — if the
+                // screen shows it, the device runs THIS build, no debate.
+                "BUILD 0.23-LIVE • PAGE %02d".format(page),
+                fontFamily = FontFamily.Default, fontSize = 9.sp, color = Color(0xFFE0FBFC).copy(alpha = 0.85f), letterSpacing = 2.sp,
             )
         }
     }

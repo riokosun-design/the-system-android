@@ -1,6 +1,5 @@
 package com.thesystem.app.ui.splash
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -8,8 +7,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -52,12 +49,13 @@ enum class SplashVariant(val label: String) {
 }
 
 /**
- * HONEST ROTATION (0.26.0 §2) — exactly three slides: Ranks, the Black Room,
- * the Growth curve. Nothing else plays on the first frame, ever.
+ * HONEST ROTATION (0.23.0-LIVE proof build) — FIXED deterministic order per
+ * the verification directive: BLACK ROOM first, then RANKS, then GROWTH.
+ * No shuffle — the field must be able to time-stamp every frame.
  */
 val HONEST_SPLASH_ROTATION: List<SplashVariant> = listOf(
-    SplashVariant.RANK_BARS,
     SplashVariant.BLACK_ROOM_SCAN,
+    SplashVariant.RANK_BARS,
     SplashVariant.GROWTH_CURVE,
 )
 
@@ -73,7 +71,14 @@ fun DynamicSplash(
     onFinished: (() -> Unit)? = null,
 ) {
     var index by remember { mutableIntStateOf(0) }
-    LaunchedEffect(variants) {
+    // BUILD LAW (field report 0.26.x: the S was still floating over RESTRICTED).
+    // The S-mark now owns the FIRST 1.8s ABSOLUTELY ALONE — no graph renders
+    // beneath it. The millisecond the slide rotation begins, the emblem is
+    // unmounted from the tree. They never share a single frame. Ever.
+    var flashDone by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { delay(1800); flashDone = true }
+    LaunchedEffect(flashDone) {
+        if (!flashDone) return@LaunchedEffect
         val cycles = variants.size
         while (true) {
             delay(variantMillis)
@@ -87,32 +92,24 @@ fun DynamicSplash(
     LaunchedEffect(Unit) { booted = true }
     val brandScale by animateFloatAsState(if (booted) 1f else 0.82f, SystemMotion.springPunch, label = "brandPop")
 
-    // 0.26.0 §1 — the S-mark owns ONLY the opening beat. It was floating over
-    // the RANKS / BLACK ROOM slides, covering their art; now it fades out and
-    // UNMOUNTS after the handoff moment and never returns during this launch.
-    var emblemOn by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) { delay(2600); emblemOn = false }
-
     Box(Modifier.fillMaxSize().background(InkBlack)) {
-        // 0.26.0 §4 — the hunter's faded cinematic underlay (res/raw seam:
-        // silent vignette until onboarding_bg_video.mp4 arrives)
+        // 0.26.0 §4 — the hunter's faded cinematic underlay (always on)
         OnboardingVideoBackdrop(Modifier.fillMaxSize(), visibility = 0.30f)
-        Crossfade(targetState = variants[index % variants.size], animationSpec = tween(450), label = "splashXfade") { v ->
-            Box(Modifier.fillMaxSize()) { SplashGraph(v, Modifier.fillMaxSize()) }
-        }
         // CRT scanline texture — sells the "you are inside THE SYSTEM" fantasy
         Scanlines(Modifier.matchParentSize())
-        AnimatedVisibility(
-            visible = emblemOn,
-            modifier = Modifier.align(Alignment.Center),
-            enter = fadeIn(tween(280)),
-            exit = fadeOut(tween(420)),
-        ) {
+        if (!flashDone) {
+            // PHASE A — the S flash: sovereign, alone, over the aura only
             SystemSEmblem(
                 Modifier
+                    .align(Alignment.Center)
                     .size(132.dp)
                     .graphicsLayer { scaleX = brandScale; scaleY = brandScale },
             )
+        } else {
+            // PHASE B — the slide rotation; the emblem is OUT of the tree now
+            Crossfade(targetState = variants[index % variants.size], animationSpec = tween(450), label = "splashXfade") { v ->
+                Box(Modifier.fillMaxSize()) { SplashGraph(v, Modifier.fillMaxSize()) }
+            }
         }
         if (showBranding) {
             Column(
