@@ -193,7 +193,9 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
     }
 
     SystemBackground(wallpaperAlpha = 0.08f) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
+        Column(Modifier
+            .fillMaxSize()
+            .navigationBarsPadding().statusBarsPadding().padding(16.dp)) {
             Text(
                 (if (s.battle?.exerciseType == "SQUAT") "SQUAT WAR" else "PUSH-UP WAR") +
                     if (spectating) " · SPECTATOR" else "",

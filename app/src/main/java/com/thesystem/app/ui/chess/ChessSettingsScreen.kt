@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -91,7 +92,9 @@ fun ChessSettingsScreen(nav: NavHostController) {
     }
 
     SystemBackground {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin)) {
+        Column(Modifier
+                .fillMaxSize()
+                .navigationBarsPadding().statusBarsPadding().padding(horizontal = Grid.Margin)) {
             Row(
                 Modifier.fillMaxWidth().padding(vertical = Grid.S12),
                 verticalAlignment = Alignment.CenterVertically,

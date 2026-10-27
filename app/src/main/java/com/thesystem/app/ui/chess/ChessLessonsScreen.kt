@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -53,7 +54,9 @@ fun ChessLessonsScreen(nav: NavHostController) {
     fun open(route: String) { haptics.select(); nav.navigate(route) }
 
     SystemBackground {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin)) {
+        Column(Modifier
+                .fillMaxSize()
+                .navigationBarsPadding().statusBarsPadding().padding(horizontal = Grid.Margin)) {
             Row(
                 Modifier.fillMaxWidth().padding(vertical = Grid.S12),
                 verticalAlignment = Alignment.CenterVertically,

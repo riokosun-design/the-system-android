@@ -40,6 +40,7 @@ fun AiBenchmarkScreen(
         Column(
             Modifier
                 .fillMaxSize()
+                .navigationBarsPadding()
                 .statusBarsPadding()
                 .padding(horizontal = Grid.Margin)
                 .verticalScroll(rememberScrollState()),

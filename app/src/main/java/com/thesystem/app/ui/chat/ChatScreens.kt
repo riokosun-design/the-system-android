@@ -32,7 +32,9 @@ fun ChatHomeScreen(nav: NavHostController, vm: ChatViewModel = hiltViewModel()) 
     var tab by remember { mutableIntStateOf(if (s.membership != null) 0 else 1) }
 
     SystemBackground(wallpaperAlpha = 0.08f) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        Column(Modifier
+            .fillMaxSize()
+            .navigationBarsPadding().statusBarsPadding()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
                 IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary) }
                 Text("MESSAGES", style = MaterialTheme.typography.headlineMedium, color = ElectricBlue)
@@ -107,7 +109,9 @@ fun ConversationScreen(otherId: String, otherName: String, onBack: () -> Unit, v
     val presence = presenceLine(other?.lastSeenAt)
 
     SystemBackground(wallpaperAlpha = 0.06f) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier
+            .fillMaxSize()
+            .navigationBarsPadding()) {
             Column(Modifier.fillMaxSize().statusBarsPadding()) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary) }

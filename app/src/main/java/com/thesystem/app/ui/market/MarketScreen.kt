@@ -136,7 +136,9 @@ fun MarketScreen(nav: NavHostController, vm: MarketViewModel = hiltViewModel()) 
 
     SystemBackground {
         LazyColumn(
-            Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin),
+            Modifier
+                .fillMaxSize()
+                .navigationBarsPadding().statusBarsPadding().padding(horizontal = Grid.Margin),
             verticalArrangement = Arrangement.spacedBy(Grid.CardSpace),
             contentPadding = PaddingValues(vertical = Grid.S16),
         ) {

@@ -109,7 +109,9 @@ class OnboardingViewModel @Inject constructor(
                 auth.signInWithGoogleIdToken(google.idToken, rawNonce)
                 auth.myProfile()
             }.onSuccess { profile ->
-                _ui.value = _ui.value.copy(signingIn = false, signedInProfile = profile, page = 8)
+                // §2: no page teleports — the flow's LaunchedEffect sees the
+                // profile and routes existing-hunter vs new-vessel itself.
+                _ui.value = _ui.value.copy(signingIn = false, signedInProfile = profile)
             }.onFailure { e ->
                 _ui.value = _ui.value.copy(signingIn = false, authError = e.message ?: "Google sign-in failed")
             }
@@ -120,7 +122,12 @@ class OnboardingViewModel @Inject constructor(
     // STEP 16: the hunter's typed case is PRESERVED for display (SaN stays SaN);
     // the server normalizes for uniqueness and enforces the reserved list.
     fun onUsernameChanged(raw: String) {
-        val clean = raw.filter { it.isLetterOrDigit() || it == '_' }.take(20)
+        // §2.4 FLEXIBLE HANDLE LAW: A-Z a-z 0-9 and - _ / — case preserved as
+        // typed, never force-lowered, never stripped. Server migration 034
+        // carries the same charset (3–24).
+        val clean = raw.filter {
+            it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it == '_' || it == '-' || it == '/'
+        }.take(24)
         _ui.value = _ui.value.copy(username = clean, usernameAvailable = null, usernameError = null)
         usernameJob?.cancel()
         if (clean.length < 3) return
@@ -151,7 +158,7 @@ class OnboardingViewModel @Inject constructor(
                 val copy = when {
                     "handle_taken" in raw -> "@${s.username.lowercase()} is already claimed by another hunter."
                     "reserved_handle" in raw -> "That handle is reserved by THE SYSTEM."
-                    "bad_handle" in raw -> "3–20 characters: letters, numbers, underscore."
+                    "bad_handle" in raw -> "3–24 characters: letters, numbers, hyphen, underscore, slash."
                     else -> raw.ifBlank { "Username rejected" }
                 }
                 _ui.value = _ui.value.copy(busy = false, error = copy)

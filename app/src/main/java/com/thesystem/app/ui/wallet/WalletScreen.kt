@@ -80,6 +80,7 @@ fun WalletScreen(nav: NavHostController, vm: WalletViewModel = hiltViewModel()) 
         LazyColumn(
             Modifier
                 .fillMaxSize()
+                .navigationBarsPadding()
                 .padding(horizontal = Grid.Margin),
             verticalArrangement = Arrangement.spacedBy(Grid.S16),
             contentPadding = PaddingValues(vertical = Grid.S16),

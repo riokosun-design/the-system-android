@@ -121,7 +121,9 @@ fun SupportScreen(nav: NavHostController, vm: SupportViewModel = hiltViewModel()
     }
 
     SystemBackground(wallpaperAlpha = 0.06f) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier
+                .fillMaxSize()
+                .navigationBarsPadding()) {
             Column(Modifier.fillMaxSize().statusBarsPadding()) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
                     IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary) }

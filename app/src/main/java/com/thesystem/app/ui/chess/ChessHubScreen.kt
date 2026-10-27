@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -107,7 +108,9 @@ fun ChessHubScreen(nav: NavHostController, vm: ChessViewModel = hiltViewModel())
     )
 
     SystemBackground(wallpaperAlpha = 0.15f) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier
+                .fillMaxSize()
+                .navigationBarsPadding()) {
             LazyColumn(
                 Modifier.fillMaxSize().padding(horizontal = Grid.Margin),
                 verticalArrangement = Arrangement.spacedBy(Grid.S12),

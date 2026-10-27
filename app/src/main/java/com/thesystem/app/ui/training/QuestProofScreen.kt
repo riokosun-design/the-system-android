@@ -125,7 +125,9 @@ fun QuestProofScreen(
     }
 
     SystemBackground {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        Column(Modifier
+                .fillMaxSize()
+                .navigationBarsPadding().statusBarsPadding()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
                 IconButton(onClick = onExit) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PaperWhite)

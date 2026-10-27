@@ -118,7 +118,9 @@ fun TournamentsScreen(nav: NavHostController, vm: TournamentsViewModel = hiltVie
     }
 
     SystemBackground(wallpaperAlpha = 0.08f) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier
+                .fillMaxSize()
+                .navigationBarsPadding()) {
             Column(Modifier.fillMaxSize().statusBarsPadding()) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
                     IconButton(onClick = { if (s.active != null) vm.close() else nav.popBackStack() }) {

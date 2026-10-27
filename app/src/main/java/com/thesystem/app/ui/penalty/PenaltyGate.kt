@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -270,7 +271,9 @@ private fun TrialRow(q: QuestDto, onExecute: () -> Unit) {
 @Composable
 private fun PenaltyClearedLayout(onLifted: () -> Unit) {
     Column(
-        Modifier.fillMaxSize().background(Color.Black).padding(horizontal = 24.dp),
+        Modifier
+            .fillMaxSize()
+            .navigationBarsPadding().background(Color.Black).padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

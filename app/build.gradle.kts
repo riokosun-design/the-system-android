@@ -20,7 +20,7 @@ android {
         applicationId = "com.thesystem.app"
         minSdk = 26 // low-end / older Android first
         targetSdk = 35
-        versionCode = 46
+        versionCode = 47
         versionName = "0.23.0-LIVE"
 
         // 2GB-first install weight: drop emulator-only native ABIs (MediaPipe+

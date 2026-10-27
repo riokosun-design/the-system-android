@@ -32,6 +32,7 @@ import com.thesystem.app.core.ui.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -257,9 +258,13 @@ fun ChessGameScreen(
         aiThinking = true
         delay(350)
         val snapshotFen = fen
+        // §4 THE 5-SECOND LAW, second wall: withTimeoutOrNull + a guaranteed-legal
+        // fallback make it impossible for any bot to think longer than ~5s.
         val mv = withContext(Dispatchers.Default) {
-            ChessAI.bestMove(Board.fromFen(snapshotFen), diff)
-        }
+            withTimeoutOrNull(ChessAI.MAX_THINK_TIME_MS + 300L) {
+                ChessAI.bestMove(Board.fromFen(snapshotFen), diff)
+            }
+        } ?: Board.fromFen(snapshotFen).legalMoves().firstOrNull()
         aiThinking = false
         // COMMIT GATE: game may have moved on while the search ran (undo / NEW
         // key / resign). Commit only if the board is EXACTLY the snapshot and
@@ -313,6 +318,7 @@ fun ChessGameScreen(
         Column(
             Modifier
                 .fillMaxSize()
+                .navigationBarsPadding()
                 .statusBarsPadding()
                 .padding(horizontal = Grid.Margin),
         ) {
@@ -495,7 +501,7 @@ fun ChessGameScreen(
 
             if (result == null) {
                 // ── controls: undo where permitted · new game · resign · back ──
-                Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth().padding(bottom = 22.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (undoAllowed && (mode != ChessMode.AI_TRAINING || allowUndoPref)) {
                         val canUndo = !aiThinking && undos.isNotEmpty() &&
                             (pnp || (if (board.whiteToMove) 0 else 1) == userColorIdx)

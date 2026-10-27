@@ -92,7 +92,9 @@ fun BlackRoomScreen(onBack: () -> Unit, vm: BlackRoomViewModel = hiltViewModel()
     }
 
     SystemBackground {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier
+                .fillMaxSize()
+                .navigationBarsPadding()) {
             LazyColumn(
                 Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin),
                 verticalArrangement = Arrangement.spacedBy(Grid.CardSpace),

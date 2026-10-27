@@ -222,24 +222,11 @@ class MainActivity : ComponentActivity() {
             Box(Modifier.fillMaxSize()) {
                 val vm: RootViewModel = hiltViewModel()
                 val state by vm.state.collectAsStateWithLifecycle()
-                // §2 (v0.25.0): first-ever launch opens with the glowing camera-tracked
-                // master cinematic (biometric → discipline lock → F→SS matrix) — the
-                // old "SYSTEM DETECTED" radar is permanently retired (spec §1).
                 val appContext = androidx.compose.ui.platform.LocalContext.current
-                var masterIntroPending by remember {
-                    mutableStateOf(com.thesystem.app.core.LaunchPrefs.masterIntroPending(appContext))
-                }
-                if (masterIntroPending) {
-                    com.thesystem.app.ui.motion.SystemMasterIntroCinematics(
-                        onEnterSystem = {
-                            com.thesystem.app.core.LaunchPrefs.markMasterIntroSeen(appContext)
-                            masterIntroPending = false
-                        },
-                    )
-                } else {
-                // ROUND 7: cinematic launch flow — unregistered vessels walk the full
-                // intake → awakening → contract → evaluation → auth gate ritual.
-                // Signed-in hunters get the shuffled brand splash and go straight in.
+                // 0.23.0-LIVE §1: the SYS_SEQ master-intro trilogy and its
+                // ENTER button are EXECUTED (field verdict: ugly, unresponsive).
+                // Launch chain is now clean & classic:
+                // splash S-flash → BLACK ROOM → RANKS → GROWTH → gates.
                 val splashVariants = remember { com.thesystem.app.ui.splash.HONEST_SPLASH_ROTATION }
                 when (val s = state) {
                     RootState.Booting -> DynamicSplash(variants = splashVariants)
@@ -273,7 +260,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                } // §2 master-intro else-gate
 
                 // 0.25.1 — CRASH FORENSICS (debug nightly only): if the previous
                 // launch died fatally, the captured stack surfaces HERE once —

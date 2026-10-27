@@ -61,7 +61,9 @@ fun RoutineScreen(
     var alarmFor by remember { mutableStateOf<CommitmentBlock?>(null) }
 
     SystemBackground {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin)) {
+        Column(Modifier
+                .fillMaxSize()
+                .navigationBarsPadding().statusBarsPadding().padding(horizontal = Grid.Margin)) {
             Row(Modifier.fillMaxWidth().padding(vertical = Grid.S16), verticalAlignment = Alignment.CenterVertically) {
                 FloatingIconButton(Icons.Default.ArrowBack, "back", onClick = onBack)
                 Spacer(Modifier.width(12.dp))

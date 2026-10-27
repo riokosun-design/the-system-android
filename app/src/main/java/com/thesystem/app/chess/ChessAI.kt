@@ -191,9 +191,30 @@ object ChessAI {
     private const val INF = 200000
     private const val NODE_CEILING = 1_200_000
 
+    /** §4 (field report: EXPERT froze after 4–5 moves) — THE 5-SECOND LAW.
+     *  No difficulty level may think longer than this, ever. The clock owns
+     *  the search; hope is not a strategy. */
+    const val MAX_THINK_TIME_MS = 4500L
+
+    /** Wall-clock-guarded search context: node counter + hard deadline + abort
+     *  flag. tick() runs every node but only reads the clock every 2048 nodes —
+     *  syscalls stay rare, recursion stays hot, abort stays near-instant. When
+     *  the flag rises, EVERY level unwinds at once and the last COMPLETED
+     *  depth's verdict plays (iterative deepening guarantee). */
+    private class SearchCtx(val deadlineMs: Long) {
+        var nodes = 0
+        var timeUp = false
+        fun tick() {
+            nodes++
+            if (nodes > NODE_CEILING) { timeUp = true; return }
+            if ((nodes and 2047) == 0 && System.currentTimeMillis() >= deadlineMs) timeUp = true
+        }
+    }
+
     /** Captures-only search — kills the horizon effect on MEDIUM+/EXPERT. */
-    private fun quiesce(b: Board, alpha0: Int, beta: Int, qDepth: Int, nodes: IntArray): Int {
-        nodes[0]++
+    private fun quiesce(b: Board, alpha0: Int, beta: Int, qDepth: Int, ctx: SearchCtx): Int {
+        ctx.tick()
+        if (ctx.timeUp) return evaluate(b)
         val (status, _) = b.status()
         if (status != Board.Status.ONGOING) {
             return when (status) {
@@ -208,8 +229,9 @@ object ChessAI {
         val captures = b.legalMoves().filter { typeOf(b.sq[it.to]) != EMPTY || it.promo != 0 }
             .sortedByDescending { VALUE[typeOf(b.sq[it.to])] }
         for (m in captures) {
+            if (ctx.timeUp) break
             val u = b.make(m)
-            val v = -quiesce(b, -beta, -alpha, qDepth - 1, nodes)
+            val v = -quiesce(b, -beta, -alpha, qDepth - 1, ctx)
             b.unmake(m, u)
             if (v >= beta) return beta
             if (v > alpha) alpha = v
@@ -217,11 +239,9 @@ object ChessAI {
         return alpha
     }
 
-    private fun negamax(b: Board, depth: Int, qDepth: Int, alpha0: Int, beta: Int, ply: Int, nodes: IntArray): Int {
-        nodes[0]++
-        // hard ceiling — deterministic (nodes are a pure function of position+difficulty),
-        // guards ancient silicon from pathological depth-5 positions
-        if (nodes[0] > NODE_CEILING) return evaluate(b)
+    private fun negamax(b: Board, depth: Int, qDepth: Int, alpha0: Int, beta: Int, ply: Int, ctx: SearchCtx): Int {
+        ctx.tick()
+        if (ctx.timeUp) return evaluate(b)
         val (status, _) = b.status()
         if (status != Board.Status.ONGOING) {
             return when (status) {
@@ -230,7 +250,7 @@ object ChessAI {
             }
         }
         if (depth == 0) {
-            return if (qDepth > 0) quiesce(b, alpha0, beta, qDepth, nodes) else evaluate(b)
+            return if (qDepth > 0) quiesce(b, alpha0, beta, qDepth, ctx) else evaluate(b)
         }
         var alpha = alpha0
         val moves = b.legalMoves()
@@ -242,8 +262,9 @@ object ChessAI {
         }.sortedByDescending { it.first }
         var best = -INF
         for ((_, m) in scored) {
+            if (ctx.timeUp) break
             val u = b.make(m)
-            val v = -negamax(b, depth - 1, qDepth, -beta, -alpha, ply + 1, nodes)
+            val v = -negamax(b, depth - 1, qDepth, -beta, -alpha, ply + 1, ctx)
             b.unmake(m, u)
             if (v > best) best = v
             if (v > alpha) alpha = v
@@ -277,53 +298,61 @@ object ChessAI {
         // EXPERT law: 4-ply midgame with deep quiescence; 5-ply when the board empties
         val maxDepth = if (diff == Difficulty.EXPERT && endgameBoost(b)) diff.depth + 1 else diff.depth
 
-        val nodes = intArrayOf(0)
-        // EXPERT/HARD deepen iteratively; EASY/MEDIUM jump straight to their depth.
-        val startDepth = if (maxDepth >= 3) 3 else maxDepth
+        // §4 ITERATIVE DEEPENING UNDER THE 5-SECOND LAW: EVERY difficulty starts
+        // at depth 1 and earns upward; the verdict of each COMPLETED depth is
+        // banked; the instant the wall clock hits 4.5s the current (deeper)
+        // iteration is discarded and the banked verdict plays. The bot can never
+        // freeze — worst case it answers with a shallower truth, in time.
+        val ctx = SearchCtx(System.currentTimeMillis() + MAX_THINK_TIME_MS)
         var bestScored: List<Pair<Int, Move>>? = null
-        var depth = startDepth
-        while (depth <= maxDepth) {
+        var depth = 1
+        while (depth <= maxDepth && !ctx.timeUp) {
             val scored = moves.map { m ->
                 val u = b.make(m)
-                val v = -negamax(b, depth - 1, diff.qDepth, -INF, INF, 1, nodes)
+                val v = if (ctx.timeUp) 0 else -negamax(b, depth - 1, diff.qDepth, -INF, INF, 1, ctx)
                 b.unmake(m, u)
                 v to m
-            }.sortedByDescending { it.first }
-            bestScored = scored
-            // budget: 900k nodes per full root — beyond that, keep the shallower answer
-            if (nodes[0] > 900_000) break
+            }
+            if (ctx.timeUp) break   // partial depth run — untrustworthy, keep shallower
+            bestScored = scored.sortedByDescending { it.first }
             depth++
         }
-        val scored = bestScored ?: return moves.first()
+        val scored = bestScored ?: return moves.first() // even depth-1 aborted: instant legal fallback
         if (diff.jitter == 0) return scored[0].second
         val top = scored.filter { it.first >= scored[0].first - diff.jitter }
         val seed = abs(b.toFen().hashCode())
         return top[seed % top.size].second
     }
 
-    /** Evaluate a played move's centipawn swing for the post-game analysis (§5/§15). */
+    /** Evaluate a played move's centipawn swing for the post-game analysis (§5/§15).
+     *  §4: analysis sits under its own wall clock too — a hung analysis sheet is
+     *  still a hung app. Abort → neutral 0 (no verdict is better than no app). */
     fun moveSwing(before: Board, move: Move, diff: Difficulty = Difficulty.MEDIUM): Int {
-        val nodes = intArrayOf(0)
+        val ctx = SearchCtx(System.currentTimeMillis() + 1500L)
         val evalBefore = run {
             var best = -INF
             for (m in before.legalMoves()) {
+                if (ctx.timeUp) break
                 val u = before.make(m)
-                val v = -negamax(before, diff.depth - 1, diff.qDepth, -INF, INF, 1, nodes)
+                val v = -negamax(before, diff.depth - 1, diff.qDepth, -INF, INF, 1, ctx)
                 before.unmake(m, u)
                 if (v > best) best = v
             }
             if (best <= -MATE + 10) MATE else best
         }
+        if (ctx.timeUp || evalBefore == -INF) return 0
         val u = before.make(move)
         val after = before.copy()
         before.unmake(move, u)
         var best = -INF
         for (m in after.legalMoves()) {
+            if (ctx.timeUp) break
             val uu = after.make(m)
-            val v = -negamax(after, diff.depth - 1, diff.qDepth, -INF, INF, 1, nodes)
+            val v = -negamax(after, diff.depth - 1, diff.qDepth, -INF, INF, 1, ctx)
             after.unmake(m, uu)
             if (v > best) best = v
         }
+        if (ctx.timeUp || best == -INF) return 0
         val evalAfterWhite = if (best <= -MATE + 10) -MATE else -best // back to moving side's perspective inverted
         return evalBefore - evalAfterWhite // positive = good move for the mover
     }

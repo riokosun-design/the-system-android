@@ -55,7 +55,9 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel(), ops: A
     var tab by remember { mutableIntStateOf(0) }
 
     SystemBackground(wallpaperAlpha = 0.06f) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        Column(Modifier
+                .fillMaxSize()
+                .navigationBarsPadding().statusBarsPadding()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = HunterGold) }
                 Text("ADMIN CONTROL", style = MaterialTheme.typography.headlineMedium, color = HunterGold)

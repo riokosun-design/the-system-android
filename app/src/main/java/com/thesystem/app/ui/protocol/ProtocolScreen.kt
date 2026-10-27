@@ -38,7 +38,9 @@ fun ProtocolScreen(nav: NavHostController, vm: ProtocolViewModel = hiltViewModel
     val tabs = listOf("ROOMS", "ARCS", "GUILDS")
 
     SystemBackground(wallpaperAlpha = 0.12f) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin)) {
+        Column(Modifier
+                .fillMaxSize()
+                .navigationBarsPadding().statusBarsPadding().padding(horizontal = Grid.Margin)) {
             Text("PROTOCOL", style = MaterialTheme.typography.headlineMedium, color = PaperWhite)
             SystemTabBar(tabs = tabs, selected = subTab, onSelect = { i -> haptics.select(); subTab = i })
             // ROUND 3: skeleton shimmer while protocol resolves

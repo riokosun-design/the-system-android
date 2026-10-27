@@ -108,7 +108,9 @@ fun ChessPuzzleScreen(
     val puzzle = verdict?.puzzle
 
     SystemBackground {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = Grid.Margin)) {
+        Column(Modifier
+                .fillMaxSize()
+                .navigationBarsPadding().statusBarsPadding().padding(horizontal = Grid.Margin)) {
             Row(Modifier.fillMaxWidth().padding(vertical = Grid.S12), verticalAlignment = Alignment.CenterVertically) {
                 FloatingIconButton(Icons.Default.ArrowBack, "back", onClick = onBack)
                 Spacer(Modifier.width(10.dp))

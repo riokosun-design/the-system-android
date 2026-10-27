@@ -102,7 +102,7 @@ import com.thesystem.app.core.theme.VenomGreen
 import com.thesystem.app.core.ui.AnimatedCounter
 import com.thesystem.app.core.ui.SystemHaptics
 import com.thesystem.app.core.ui.rememberSystemHaptics
-import com.thesystem.app.ui.motion.SystemPalette
+import com.thesystem.app.core.theme.SystemPalette
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.cos
@@ -118,12 +118,13 @@ import kotlin.math.sin
 //                                           RANKS showcase → BLACK ROOM)
 //   PHASE 3 · SYSTEM CONTRACT pages 10–12  (sport path → hold → final gate)
 //
-// The weak informational slides are DELETED — their job is done better by the
-// first-launch SystemMasterIntroCinematics (spec §2). The old P01 "SYSTEM
-// DETECTED" circular radar loop is permanently retired (spec §1). Only the
-// two showcase pages the directive names (RANKS, BLACK ROOM) survive — now
-// riding the glow-camera motion graphics engine, joined by the camera-tracked
-// disciplinary trajectory graph at the stat-calculation step (spec §3.3).
+// The weak informational slides are DELETED. The old P01 "SYSTEM
+// DETECTED" circular radar loop is permanently retired (spec §1), and the
+// 0.25.x SYS_SEQ master-intro trilogy + its ENTER button were executed in
+// the 0.23.0-LIVE overhaul (field verdict: ugly, unresponsive). Only the two
+// showcase pages the directive names (RANKS, BLACK ROOM) survive — riding
+// quiet tier gradients, with the clean pure-Canvas growth curve at the
+// stat-calculation step. Google gate is PAGE 01 (auth-order law §2).
 // VM contract unchanged: username gate → claim → metrics → finish. Zero
 // backend changes.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -162,7 +163,7 @@ private fun Modifier.popIn(c: Float): Modifier = this.graphicsLayer {
 }
 
 private fun phaseOf(page: Int): Int = when (page) {
-    in 1..5 -> 1; in 6..9 -> 2; else -> 3
+    in 1..6 -> 1; in 7..10 -> 2; else -> 3
 }
 
 // ══ HOST — page state machine + cinematic transitions ═══════════════════════
@@ -184,9 +185,17 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
     // system back rewinds the ritual one page instead of ejecting the hunter
     BackHandler(enabled = page > 1) { haptics.tick(); page = (page - 1).coerceAtLeast(1) }
 
-    // Google seal → finalize the contract through the existing VM pipeline
-    LaunchedEffect(ui.signedInProfile != null) {
-        if (ui.signedInProfile != null) vm.finish(onDone, activityName)
+    // §2 AUTH-ORDER LAW: the Google gate is PAGE 01. After binding:
+    //  • EXISTING hunter (onboarding completed, real handle) → STRAIGHT into the
+    //    main app — existing name/profile untouched, never overwritten.
+    //  • NEW vessel → advance to IDENTIFY YOUR VESSEL and walk the full ritual.
+    LaunchedEffect(ui.signedInProfile) {
+        val prof = ui.signedInProfile ?: return@LaunchedEffect
+        if (prof.onboardingCompleted && !prof.username.startsWith("hunter_")) {
+            onDone()
+        } else if (page == 1) {
+            haptics.select(); page = 2
+        }
     }
 
     SystemBackdrop(videoBackdrop = true) {
@@ -203,20 +212,21 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
                 Box(Modifier.fillMaxSize()) {
                     pageArtFor(p)?.let { art -> CinematicArt(art.res, clock, alpha = art.alpha, mirror = art.mirror) }
                     when (p) {
-                        1 -> P01_Name(ui, vm, advance)
-                        2 -> P02_Age(ui, vm, clock, advance)
-                        3 -> P03_Height(ui, vm, clock, advance)
-                        4 -> P04_Weight(ui, vm, clock, advance)
-                        5 -> P05_Archetype(archetype, { archetypeName = it.name }, activity, { activityName = it.name }, {
-                            vm.setGoal(archetype.goal); haptics.select(); page = 6
+                        // §2: GOOGLE GATE FIRST — no vessel types a name they already own
+                        1 -> P12_FinalGate(ui, vm, haptics, context)
+                        2 -> P01_Name(ui, vm, advance)
+                        3 -> P02_Age(ui, vm, clock, advance)
+                        4 -> P03_Height(ui, vm, clock, advance)
+                        5 -> P04_Weight(ui, vm, clock, advance)
+                        6 -> P05_Archetype(archetype, { archetypeName = it.name }, activity, { activityName = it.name }, {
+                            vm.setGoal(archetype.goal); haptics.select(); page = 7
                         })
-                        6 -> P06_Biometric(ui, archetype, activity, clock, advance)
-                        7 -> P07_Trajectory(clock, advance)
-                        8 -> P08_Ranks(clock, advance)
-                        9 -> P09_BlackRoom(clock, advance)
-                        10 -> P10_SportPath(ui, vm, clock) { haptics.select(); page = 11 }
-                        11 -> P11_Contract(haptics) { page = 12 }
-                        12 -> P12_FinalGate(ui, vm, haptics, context)
+                        7 -> P06_Biometric(ui, archetype, activity, clock, advance)
+                        8 -> P07_Trajectory(clock, advance)
+                        9 -> P08_Ranks(clock, advance)
+                        10 -> P09_BlackRoom(clock, advance)
+                        11 -> P10_SportPath(ui, vm, clock) { haptics.select(); page = 12 }
+                        12 -> P11_Contract(haptics) { vm.finish(onDone, activityName) }
                         else -> Box(Modifier.fillMaxSize())
                     }
                 }
@@ -1162,14 +1172,14 @@ private fun P12_FinalGate(ui: OnboardingUiState, vm: OnboardingViewModel, haptic
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(Modifier.height(80.dp))
-            Text("FINAL GATE", fontFamily = FontFamily.Default, fontSize = 10.sp, color = VenomGreen, letterSpacing = 4.sp,
+            Text("FIRST GATE", fontFamily = FontFamily.Default, fontSize = 10.sp, color = Color(0xFFE0FBFC), letterSpacing = 4.sp,
                 modifier = Modifier.appear(seg(clock, 0.1f)))
             Spacer(Modifier.height(12.dp))
-            GlitchWithAppear(seg(clock, 0.2f), "VESSEL VERIFIED", VenomGreen, 30)
+            GlitchWithAppear(seg(clock, 0.2f), "SIGN THE LEDGER", VenomGreen, 30)
             Spacer(Modifier.height(14.dp))
             Text(
-                "Your journey begins now.",
-                style = MaterialTheme.typography.bodyLarge, color = TextPrimary,
+                "Existing hunters walk straight in. New vessels then earn a name.",
+                style = MaterialTheme.typography.bodyLarge, color = TextPrimary, textAlign = TextAlign.Center,
                 modifier = Modifier.appear(seg(clock, 0.45f)),
             )
             Spacer(Modifier.height(30.dp))
