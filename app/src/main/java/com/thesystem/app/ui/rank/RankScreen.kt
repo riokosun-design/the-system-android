@@ -3,13 +3,11 @@ package com.thesystem.app.ui.rank
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -26,8 +24,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -36,7 +32,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import com.thesystem.app.R
 import com.thesystem.app.core.SystemMath
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
@@ -91,7 +86,7 @@ fun RankScreen(vm: RankViewModel = hiltViewModel()) {
     val penaltyRank = s.profile?.rank?.value?.takeIf { it.isPenaltyRank }
 
     // ── RANK REVEAL — one staged timeline, then calm forever ────────────────
-    //   0.00–0.30  the original artwork fades in and starts its slow drift
+    //   0.00–0.30  the hunter's loop surfaces behind the veil
     //   0.25–0.65  rising motes join
     //   0.05–0.45  the emblem forms (scale + alpha + glow)
     //   0.35–0.65  the F→SS ladder lands
@@ -100,39 +95,14 @@ fun RankScreen(vm: RankViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { reveal.animateTo(1f, tween(1600, easing = FastOutSlowInEasing)) }
     fun stage(a: Float, b: Float): Float = ((reveal.value - a) / (b - a)).coerceIn(0f, 1f)
 
-    // the artwork never sits still — a 26s Ken Burns drift, infinitely mirrored
-    val drift by rememberInfiniteTransition(label = "rankBg").animateFloat(
-        0f, 1f,
-        infiniteRepeatable(tween(26000, easing = LinearEasing), RepeatMode.Reverse),
-        label = "d",
-    )
-
     SystemBackground {
         Box(Modifier.fillMaxSize()) {
-            // LAYER 0 — original cinematic art (bundled, zero network, zero video)
-            Image(
-                painter = painterResource(id = R.drawable.rank_bg),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                alpha = 0.40f * stage(0f, 0.30f),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = 1.14f; scaleY = 1.14f
-                        translationX = (drift - 0.5f) * 18.dp.toPx()
-                        translationY = (0.5f - drift) * 12.dp.toPx()
-                    },
-            )
-            // readability scrim — dark above, deeper at the data rows
-            Box(
-                Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(
-                        0f to InkBlack.copy(alpha = 0.66f),
-                        0.45f to InkBlack.copy(alpha = 0.52f),
-                        1f to InkBlack.copy(alpha = 0.90f),
-                    ),
-                ),
-            )
+            // LAYER 0 (vC48 FIELD LAW §3) — the static rank_bg plate is
+            // EXECUTED. The hunter's own faded anime loop IS the rank chamber
+            // now: framework VideoView, muted, looping, lifecycle-released,
+            // faded by an in-window top-to-bottom gradient (surface alpha is
+            // forbidden — budget-ROM render law).
+            OnboardingVideoBackdrop(Modifier.fillMaxSize(), tint = 0.25f, floorFade = true)
             // LAYER 2 — energy motes, rising slowly until the end of time
             ParticleField(alpha = stage(0.25f, 0.65f))
 

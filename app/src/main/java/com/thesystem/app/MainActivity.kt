@@ -228,7 +228,18 @@ class MainActivity : ComponentActivity() {
                 // Launch chain is now clean & classic:
                 // splash S-flash → BLACK ROOM → RANKS → GROWTH → gates.
                 val splashVariants = remember { com.thesystem.app.ui.splash.HONEST_SPLASH_ROTATION }
-                when (val s = state) {
+                // vC48 MINIMUM-DWELL LAW (field report: the classic slides
+                // looked "deleted"). Truth: a fast session resolve vaulted
+                // straight past Booting and the rotation never got screen
+                // time. Now the opening ritual — S flash 1.8s alone, then one
+                // full BLACK ROOM → RANKS → GROWTH circuit — ALWAYS completes
+                // exactly once per process before ANY gate mounts. Network
+                // speed can never skip the slides again. After the first
+                // completion, resyncs fall through to the looping splash.
+                var splashDone by remember { mutableStateOf(false) }
+                if (!splashDone) {
+                    DynamicSplash(variants = splashVariants, onFinished = { splashDone = true })
+                } else when (val s = state) {
                     RootState.Booting -> DynamicSplash(variants = splashVariants)
                     RootState.NeedsOnboarding -> AwakeningFlowScreen(onDone = { vm.resolve() })
                     is RootState.Ready -> {

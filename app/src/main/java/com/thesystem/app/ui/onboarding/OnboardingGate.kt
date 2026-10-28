@@ -155,7 +155,7 @@ fun SystemBackdrop(
     Box(Modifier.fillMaxSize().background(GateBlack)) {
         // §4 (0.26.0): the hunter's faded loop lives between the void and the mana
         if (videoBackdrop) {
-            com.thesystem.app.core.ui.OnboardingVideoBackdrop(Modifier.fillMaxSize(), visibility = 0.28f)
+            com.thesystem.app.core.ui.OnboardingVideoBackdrop(Modifier.fillMaxSize(), tint = 0.30f)
         }
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width; val h = size.height

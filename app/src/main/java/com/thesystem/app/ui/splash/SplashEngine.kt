@@ -93,8 +93,9 @@ fun DynamicSplash(
     val brandScale by animateFloatAsState(if (booted) 1f else 0.82f, SystemMotion.springPunch, label = "brandPop")
 
     Box(Modifier.fillMaxSize().background(InkBlack)) {
-        // 0.26.0 §4 — the hunter's faded cinematic underlay (always on)
-        OnboardingVideoBackdrop(Modifier.fillMaxSize(), visibility = 0.30f)
+        // vC48 RENDER LAW — the hunter's loop behind every slide, faded by
+        // in-window scrims only (surface alpha is a budget-ROM lie).
+        OnboardingVideoBackdrop(Modifier.fillMaxSize(), tint = 0.30f)
         // CRT scanline texture — sells the "you are inside THE SYSTEM" fantasy
         Scanlines(Modifier.matchParentSize())
         if (!flashDone) {
