@@ -3,7 +3,6 @@ package com.thesystem.app.data.repo
 import com.thesystem.app.data.model.*
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
@@ -81,20 +80,6 @@ class AdminRepository @Inject constructor(private val supabase: SupabaseClient) 
         supabase.from("tournaments").select { order("created_at", Order.DESCENDING) }.decodeList<TournamentDto>()
     }.getOrDefault(emptyList())
 
-    // ── Prediction pool settlement (solo + clan battles use the same engine) ─
-    suspend fun settlePool(poolId: String, winningSide: String): Result<Unit> = runCatching {
-        // SQL function is admin-guarded; Edge Function variant also exists for scheduled settlement.
-        supabase.postgrest.rpc("settle_prediction_pool", buildJsonObject {
-            put("p_pool_id", poolId); put("p_winner", winningSide)
-        }); Unit
-    }
-
-    suspend fun settlePoolViaEdge(poolId: String, winningSide: String): Result<Unit> = runCatching {
-        supabase.functions.invoke("settle-prediction-pool", buildJsonObject {
-            put("poolId", poolId); put("winner", winningSide)
-        }); Unit
-    }
-
     // ── Bracket engine (migration 006): seed round 1, advance rounds, crown champion ──
     suspend fun generateBracket(tournamentId: String): Result<Int> = runCatching {
         supabase.postgrest.rpc("generate_bracket", buildJsonObject { put("p_tournament_id", tournamentId) })
@@ -105,10 +90,6 @@ class AdminRepository @Inject constructor(private val supabase: SupabaseClient) 
         supabase.postgrest.rpc("advance_bracket", buildJsonObject { put("p_tournament_id", tournamentId) })
             .decodeSingle<Int>()
     }
-
-    suspend fun unsettledPools(): List<PoolDto> = runCatching {
-        supabase.from("prediction_pools").select { filter { neq("status", "SETTLED") } }.decodeList<PoolDto>()
-    }.getOrDefault(emptyList())
 
     // ── OPS COMMAND (mig 030) — metrics, roles, support ─────────────────────
     // §4 (v0.24.0): manual payment verification + withdrawal review + the

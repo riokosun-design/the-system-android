@@ -46,8 +46,6 @@ data class UserDto(
     @SerialName("activity_level") val activityLevel: String? = null,
     @SerialName("athletic_experience") val athleticExperience: String? = null,
     @SerialName("weight_verified_at") val weightVerifiedAt: String? = null,
-    /** FREE, non-redeemable spectator points — the only prediction currency. */
-    @SerialName("prediction_points") val predictionPoints: Long = 0,
 ) {
     val isAdmin: Boolean get() = role == "SUPER_ADMIN" || role == "ADMIN"
     val isSuperAdmin: Boolean get() = role == "SUPER_ADMIN"
@@ -278,7 +276,7 @@ data class BattleDto(
     @SerialName("started_at") val startedAt: String? = null,
 )
 
-/** Hunter battle-stats sheet (RPC hunter_battle_stats) — pre-prediction inspection. */
+/** Hunter battle-stats sheet (RPC hunter_battle_stats) — pre-war inspection. */
 @Serializable
 data class HunterStatsDto(
     @SerialName("user_id") val userId: String,
@@ -308,29 +306,6 @@ data class VerifiedBestsDto(
     @SerialName("run_meters") val runMeters: Int = 0,
     val sessions: Int = 0,
     @SerialName("battle_wins") val battleWins: Int = 0,
-)
-
-@Serializable
-data class PoolDto(
-    val id: String,
-    @SerialName("battle_id") val battleId: String,
-    val status: String = "OPEN",
-    @SerialName("platform_cut_bps") val platformCutBps: Int = 1500,
-    @SerialName("total_pool_vc") val totalPoolVc: Long = 0,
-    @SerialName("total_a_vc") val totalAVc: Long = 0,
-    @SerialName("total_b_vc") val totalBVc: Long = 0,
-    @SerialName("winning_side") val winningSide: String? = null,
-)
-
-@Serializable
-data class BetDto(
-    val id: Long,
-    @SerialName("pool_id") val poolId: String,
-    @SerialName("user_id") val userId: String,
-    val side: String, // A | B
-    @SerialName("amount_vc") val amountVc: Long,
-    @SerialName("payout_vc") val payoutVc: Long? = null,
-    val status: String = "OPEN", // OPEN | WON | LOST | REFUNDED
 )
 
 @Serializable
@@ -566,4 +541,31 @@ data class ChessSessionDto(
     @SerialName("xp_gained") val xpGained: Int = 0,
     @SerialName("rating_after") val ratingAfter: Int? = null,
     @SerialName("created_at") val createdAt: String,
+)
+
+/** vC49 §3 — server-computed SYSTEM PLAN (BMR/TDEE deterministic server-side;
+ *  daily directives drafted by the Groq edge fn, or the deterministic floor
+ *  when the AI key is pending — ai_generated tells the truth). */
+@Serializable
+data class SystemPlanDto(
+    @SerialName("user_id") val userId: String = "",
+    val bmr: Int = 0,
+    val tdee: Int = 0,
+    @SerialName("calories_target") val caloriesTarget: Int = 0,
+    @SerialName("protein_g") val proteinG: Int = 0,
+    @SerialName("carbs_g") val carbsG: Int = 0,
+    @SerialName("fat_g") val fatG: Int = 0,
+    @SerialName("daily_routine") val dailyRoutine: List<PlanDirectiveDto> = emptyList(),
+    @SerialName("rank_tier") val rankTier: String? = null,
+    val multiplier: Double? = null,
+    @SerialName("ai_generated") val aiGenerated: Boolean = false,
+    val model: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+)
+
+@Serializable
+data class PlanDirectiveDto(
+    val time: String = "",
+    val directive: String = "",
+    val detail: String = "",
 )

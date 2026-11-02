@@ -7,6 +7,7 @@ import com.thesystem.app.ai.AiJson
 import com.thesystem.app.ai.CommitmentBlock
 import com.thesystem.app.ai.ContextEngine
 import com.thesystem.app.ai.RoutineItem
+import com.thesystem.app.data.model.SystemPlanDto
 import com.thesystem.app.data.repo.SystemRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +43,9 @@ class RoutineViewModel @Inject constructor(
         /** STEP 7: server-owned week arc (mig 023) */
         val routineWeek: Int = 1,
         val minor: Boolean = false,
+        /** vC49 §3: server-computed SYSTEM PLAN (Groq-drafted directives). */
+        val systemPlan: SystemPlanDto? = null,
+        val planBusy: Boolean = false,
         val notice: String? = null,
         val error: String? = null,
     ) {
@@ -56,6 +60,7 @@ class RoutineViewModel @Inject constructor(
 
     fun load() = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null)
+        val plan = system.fetchOrGenerateSystemPlan(false)
         val dto = system.routineToday()
         val items = dto?.let { d ->
             runCatching { AiJson.decodeFromJsonElement(ListSerializer(RoutineItem.serializer()), d.items) }.getOrNull()
@@ -83,6 +88,7 @@ class RoutineViewModel @Inject constructor(
             commitments = commitments,
             routineWeek = week,
             minor = minor,
+            systemPlan = plan ?: _state.value.systemPlan,
             status = when (dto?.status) {
                 "CONFIRMED" -> RStatus.CONFIRMED
                 "DRAFT" -> if (items.isEmpty()) RStatus.NONE else RStatus.DRAFT
@@ -90,6 +96,20 @@ class RoutineViewModel @Inject constructor(
             },
             regenArmed = false,
             notice = weekNotice,
+        )
+    }
+
+    /** vC49 §3 — armed single-tap recalculation (forces past the 20h cache;
+     *  on failure the cached plan holds, never blank). */
+    fun regeneratePlan() = viewModelScope.launch {
+        if (_state.value.planBusy) return@launch
+        _state.value = _state.value.copy(planBusy = true)
+        val plan = system.fetchOrGenerateSystemPlan(true)
+        _state.value = _state.value.copy(
+            planBusy = false,
+            systemPlan = plan ?: _state.value.systemPlan,
+            notice = if (plan != null) "SYSTEM PLAN RECALCULATED — RANK ${plan.rankTier ?: "?"}"
+                else "PLAN OFFLINE — cached directives hold",
         )
     }
 

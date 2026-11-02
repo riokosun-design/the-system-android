@@ -17,16 +17,14 @@ import javax.inject.Inject
 /**
  * ARENA — three sections, in this order (spec):
  *   1 MATCHMAKING      — username search, live challenge, scheduled war, filters
- *   2 PREDICTION / SPECTATOR — free non-redeemable points, WATCH a live board
+ *   2 LIVE BOARDS      — spectate real wars (vC49: the prediction/betting rail
+ *       is EXECUTED — wager history archived server-side, never deleted)
  *   3 CHALLENGES       — created / received / scheduled / completed / history
  */
 data class ArenaState(
     val loading: Boolean = true,
     val myProfile: UserDto? = null,
     val live: List<ArenaLiveRow> = emptyList(),
-    val hub: List<PredictionHubRow> = emptyList(),
-    val myPredictions: List<PredictionBetDto> = emptyList(),
-    val predictionPoints: Long = 0,
     val matches: List<ScheduledMatchDto> = emptyList(),
     val challenges: List<BattleChallengeDto> = emptyList(),
     val myBattles: List<BattleDto> = emptyList(),
@@ -65,8 +63,6 @@ class ArenaViewModel @Inject constructor(
         _state.value = _state.value.copy(loading = true)
         val profileD = async { system.profile() }
         val liveD = async { arena.arenaLive() }
-        val hubD = async { arena.predictionHub() }
-        val predsD = async { arena.myPredictions() }
         val matchesD = async { arena.scheduledMatches() }
         val challengesD = async { arena.dailyChallenges() }
         val openD = async { arena.openBattles() }
@@ -77,9 +73,6 @@ class ArenaViewModel @Inject constructor(
             loading = false,
             myProfile = profile,
             live = liveD.await(),
-            hub = hubD.await(),
-            myPredictions = predsD.await(),
-            predictionPoints = profile?.predictionPoints ?: 0,
             matches = matchesD.await(),
             challenges = challengesD.await(),
             myBattles = openD.await(),
@@ -181,26 +174,6 @@ class ArenaViewModel @Inject constructor(
             .onFailure { _state.value = _state.value.copy(error = friendly(it.message)) }
     }
 
-    // ── SECTION 2 — predictions on FREE points ──────────────────────────────
-    fun claimAllowance() = viewModelScope.launch {
-        arena.claimPredictionAllowance()
-            .onSuccess { earned ->
-                _state.value = _state.value.copy(notice = "+$earned free prediction points claimed.")
-                refresh()
-            }
-            .onFailure { _state.value = _state.value.copy(error = "Allowance already claimed today.") }
-    }
-
-    fun predict(row: PredictionHubRow, side: String, points: Long) = viewModelScope.launch {
-        val pool = row.poolId ?: run {
-            _state.value = _state.value.copy(error = "This board has no open pool yet.")
-            return@launch
-        }
-        arena.placePrediction(pool, side, points)
-            .onSuccess { _state.value = _state.value.copy(notice = "Prediction locked: ${row.playerAName} vs ${row.playerBName}."); refresh() }
-            .onFailure { _state.value = _state.value.copy(error = friendly(it.message)) }
-    }
-
     // ── SECTION 3 — daily challenge blocks ──────────────────────────────────
     fun claimChallenge(kind: String) = viewModelScope.launch {
         arena.claimBattleChallenge(kind)
@@ -273,14 +246,9 @@ class ArenaViewModel @Inject constructor(
 
     private fun friendly(raw: String?): String = when {
         raw == null -> "Action failed. Try again."
-        raw.contains("not_enough_points") -> "Not enough prediction points — claim the free daily allowance."
-        raw.contains("min_backing_5") -> "Minimum prediction is 5 points."
-        raw.contains("already_bet") -> "You already backed this board."
-        raw.contains("no_self_bet") -> "You are in this war — no predictions on your own match."
         raw.contains("no_self_battle") -> "You cannot challenge yourself."
         raw.contains("bad_time") -> "That time has already passed."
         raw.contains("bad_duration") -> "Allowed war lengths: 30 / 60 / 120 seconds."
-        raw.contains("pool_locked") -> "The pool closed before your prediction landed."
         raw.contains("challenge_incomplete") -> "Win the required battles first."
         raw.contains("already_claimed") -> "Already claimed today."
         else -> "Arena: $raw"

@@ -9,7 +9,7 @@ import kotlin.math.roundToLong
  *
  * ⚠ These rules are mirrored 1:1 in `supabase/migrations/002_functions.sql`.
  * The server is the source of truth; this engine exists for instant UI math
- * (progress bars, prediction previews, power previews) with zero network cost.
+ * (progress bars, power previews) with zero network cost.
  * Never change one side without the other.
  */
 object SystemMath {
@@ -131,14 +131,6 @@ object SystemMath {
     const val BATTLE_WIN_XP = 150L
     const val BATTLE_LOSS_XP = 20L
     const val BATTLE_DURATION_SECONDS = 60
-
-    // ── Prediction Engine: Payout = (Bet / WinningPool) × (TotalPool × 0.85) ─
-    const val PLATFORM_CUT_BPS = 1500 // 15%
-    fun expectedPayout(betVc: Long, winningSidePoolVc: Long, totalPoolVc: Long): Long {
-        if (winningSidePoolVc <= 0L) return betVc // your bet is the entire winning pool
-        val distributable = totalPoolVc * (10000 - PLATFORM_CUT_BPS) / 10000.0
-        return floor((betVc.toDouble() / winningSidePoolVc.toDouble()) * distributable).toLong()
-    }
 
     // ── Clan / Shadow Guild gates ────────────────────────────────────────────
     const val CLAN_MIN_LEVEL = 30

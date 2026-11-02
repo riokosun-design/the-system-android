@@ -146,39 +146,6 @@ data class ArenaLiveRow(
 )
 
 /** `prediction_hub()` row — FREE, non-redeemable points only (13+ product). */
-@Serializable
-data class PredictionHubRow(
-    @SerialName("battle_id") val battleId: String,
-    @SerialName("exercise_type") val exerciseType: String = "PUSHUP",
-    @SerialName("duration_sec") val durationSec: Int = 60,
-    val status: String = "LOBBY",
-    @SerialName("scheduled_at") val scheduledAt: String? = null,
-    @SerialName("pool_id") val poolId: String? = null,
-    @SerialName("pool_status") val poolStatus: String? = null,
-    @SerialName("player_a_name") val playerAName: String? = null,
-    @SerialName("player_b_name") val playerBName: String? = null,
-    @SerialName("player_a_id") val playerAId: String,
-    @SerialName("player_b_id") val playerBId: String,
-    @SerialName("odds_a") val oddsA: Double? = null,
-    @SerialName("odds_b") val oddsB: Double? = null,
-    @SerialName("my_side") val mySide: String? = null,
-    @SerialName("my_amount") val myAmount: Long? = null,
-)
-
-/** `prediction_bets` joined locally against the hub — my prediction slips. */
-@Serializable
-data class PredictionBetDto(
-    val id: Long,
-    @SerialName("pool_id") val poolId: String,
-    @SerialName("user_id") val userId: String,
-    val side: String,
-    @SerialName("amount_vc") val amount: Long = 0,
-    @SerialName("payout_vc") val payout: Long? = null,
-    val status: String = "OPEN",
-    @SerialName("odds_multiplier") val oddsMultiplier: Double? = null,
-    @SerialName("created_at") val createdAt: String? = null,
-)
-
 /** `scheduled_matches_with_names` — SCHEDULED section of the Arena. */
 @Serializable
 data class ScheduledMatchDto(

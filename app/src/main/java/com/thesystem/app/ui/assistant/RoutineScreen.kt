@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.horizontalScroll
@@ -87,6 +88,11 @@ fun RoutineScreen(
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
             }
+
+            // ── vC49 §3 — SYSTEM PLAN: server-computed BMR/TDEE + AI-drafted
+            //    directives from the Groq edge fn (deterministic floor honestly
+            //    stamped when the AI key is pending) ────────────────────────
+            SystemPlanPanel(s.systemPlan, s.planBusy) { haptics.slam(); vm.regeneratePlan() }
 
             // ── WEEK ARC (STEP 7) — the server-owned 4-week progression:
             //    anchors fixed, work blocks scale, verdicts from MEASURED days ──
@@ -492,6 +498,74 @@ private fun AlarmEditSheet(block: CommitmentBlock, onDismiss: () -> Unit) {
                     haptics.success(); onDismiss()
                 }, Modifier.weight(1f))
             }
+        }
+    }
+}
+
+// ── vC49 §3 — SYSTEM PLAN panel (high-contrast futuristic panel law) ────────
+@Composable
+private fun SystemPlanPanel(
+    plan: com.thesystem.app.data.model.SystemPlanDto?,
+    busy: Boolean,
+    onRegenerate: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp)
+            .border(1.dp, SkyBlue.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+            .background(androidx.compose.ui.graphics.Color(0xFF05070A))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "[ SYSTEM PLAN${plan?.rankTier?.let { " — RANK $it" } ?: ""} ]",
+                color = SkyBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                fontFamily = SystemMono, letterSpacing = 1.sp, modifier = Modifier.weight(1f),
+            )
+            if (busy) Text("CALCULATING…", color = FaintGray, fontSize = 9.sp, fontFamily = SystemMono)
+            else Text(
+                "RECALCULATE", color = PaperWhite, fontSize = 9.sp, fontFamily = SystemMono,
+                modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable(onClick = onRegenerate).padding(6.dp),
+            )
+        }
+        if (plan == null) {
+            Text(
+                if (busy) "The System is computing your directives…"
+                else "PLAN UNSEEN — sync once with the grid to calibrate BMR/TDEE.",
+                color = LabelGray, fontSize = 10.sp, fontFamily = SystemMono,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        } else {
+            // Deterministic math row — server is the only authority.
+            Text(
+                "BMR ${plan.bmr} · TDEE ${plan.tdee} · TARGET ${plan.caloriesTarget} kcal",
+                color = PaperWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                fontFamily = SystemMono, modifier = Modifier.padding(top = 6.dp),
+            )
+            Text(
+                "P ${plan.proteinG}g · C ${plan.carbsG}g · F ${plan.fatG}g" +
+                    (plan.multiplier?.let { "  · ×$it multiplier" } ?: ""),
+                color = LabelGray, fontSize = 10.sp, fontFamily = SystemMono,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            Spacer(Modifier.height(6.dp))
+            plan.dailyRoutine.take(6).forEach { d ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                    Text(d.time, color = SkyBlue, fontSize = 9.sp, fontFamily = SystemMono)
+                    Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(d.directive, color = PaperWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono)
+                        if (d.detail.isNotBlank()) Text(d.detail, color = LabelGray, fontSize = 9.sp, fontFamily = SystemMono)
+                    }
+                }
+            }
+            // Honesty law — the brain that wrote the directives is named.
+            Text(
+                if (plan.aiGenerated) "AI CORE: ${plan.model ?: "Groq"}" else "DETERMINISTIC FLOOR — AI core key pending",
+                color = FaintGray, fontSize = 8.sp, fontFamily = SystemMono,
+                modifier = Modifier.padding(top = 6.dp),
+            )
         }
     }
 }

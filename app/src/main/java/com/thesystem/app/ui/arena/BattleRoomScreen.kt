@@ -314,7 +314,7 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
                 s.battle?.status == "LOBBY" -> LobbyCard(s, vm, haptics, onExit)
                 s.battle?.status == "CANCELLED" -> GlowCard {
                     Text("BATTLE CANCELLED", style = MaterialTheme.typography.titleLarge, color = PaperWhite)
-                    Text("The lobby was dismissed. Any prediction stakes are refunded.", style = MaterialTheme.typography.bodyMedium)
+                    Text("The lobby was dismissed. Wars carry no stakes — the wager rail was retired in vC49.", style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
                     NeonButton("LEAVE", onExit, Modifier.fillMaxWidth())
                 }
@@ -356,7 +356,7 @@ private fun BoxScope.MomentumFlash(signal: Int, mine: Boolean) {
 /**
  * LOBBY WAIT STAGE — both hunters must arm READY before the war goes LIVE.
  * Quick-tap signal/taunt presets live here (no typing); spectators use this
- * window to inspect profiles and join the prediction pool.
+ * window to inspect profiles. No pools exist — wars are wager-free (vC49).
  */
 private val LOBBY_PRESETS = listOf(
     "Please wait, setting up phone.",
@@ -378,7 +378,7 @@ private fun LobbyCard(
     GlowCard {
         Text("LOBBY — ARM READY", style = MaterialTheme.typography.labelLarge, color = PaperWhite)
         Text(
-            "Both hunters must be READY. The duel runs ${s.durationSec}s. Spectators are inspecting and joining the prediction pool.",
+            "Both hunters must be READY. The duel runs ${s.durationSec}s. Spectators may inspect — wars are wager-free.",
             style = MaterialTheme.typography.bodyMedium,
         )
         Spacer(Modifier.height(8.dp))

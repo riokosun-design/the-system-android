@@ -5,6 +5,8 @@ import com.thesystem.app.data.model.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.functions.functions
+import io.ktor.client.call.body
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
@@ -303,6 +305,37 @@ class SystemRepository @Inject constructor(
             val raw = supabase.postgrest.rpc("get_engine_config").data ?: return@runCatching null
             Json.parseToJsonElement(raw).jsonObject
         }.getOrNull()
+    }
+
+    /** vC49 §2 — CPA offerwall rail status (server-owned truth, engine_config
+     *  monetization.cpa_offerwall). Null/offline = caller renders the honest
+     *  "rail pending" card; a provider URL activates the wall automatically. */
+    suspend fun offerwallConfig(): JsonObject? = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.postgrest.rpc("get_offerwall_config").data ?: return@runCatching null
+            Json.parseToJsonElement(raw).jsonObject
+        }.getOrNull()
+    }
+
+    /** vC49 §3 — SYSTEM PLAN (Groq edge fn). Server computes BMR/TDEE deterministically
+     *  and drafts the RPG directives; a SharedPreferences mirror is the offline floor.
+     *  forceRefresh bypasses the 20h server cache; network failure NEVER wipes the mirror. */
+    suspend fun fetchOrGenerateSystemPlan(forceRefresh: Boolean): SystemPlanDto? = withContext(Dispatchers.IO) {
+        val prefs = app.getSharedPreferences("system_plan_cache", Context.MODE_PRIVATE)
+        fun mirror(): SystemPlanDto? = prefs.getString("plan_json", null)?.let { raw ->
+            runCatching { Json.decodeFromString(SystemPlanDto.serializer(), raw) }.getOrNull()
+        }
+        runCatching {
+            // supabase-kt 3.x: invoke returns the raw Ktor HttpResponse — decode via body<T>().
+            val resp = supabase.functions.invoke(
+                "generate-system-plan",
+                buildJsonObject { put("force_refresh", forceRefresh) },
+            )
+            val el = Json.parseToJsonElement(resp.body<String>()).jsonObject["plan"] ?: return@runCatching null
+            val plan = Json.decodeFromJsonElement(SystemPlanDto.serializer(), el)
+            prefs.edit().putString("plan_json", Json.encodeToString(SystemPlanDto.serializer(), plan)).apply()
+            plan
+        }.getOrNull() ?: mirror()
     }
 
     suspend fun harvestConsent(): Boolean = withContext(Dispatchers.IO) {

@@ -87,12 +87,12 @@ class ArenaRepository @Inject constructor(private val supabase: SupabaseClient) 
         }); Unit
     }
 
-    /** Abort a dead lobby; the server refunds any early prediction stakes. */
+    /** Abort a dead lobby. */
     suspend fun cancelBattle(battleId: String): Result<Unit> = runCatching {
         supabase.postgrest.rpc("cancel_battle", buildJsonObject { put("p_battle_id", battleId) }); Unit
     }
 
-    /** Pre-prediction inspection sheet: win rate, level, pace, last 5 wars. */
+    /** Pre-war inspection sheet: win rate, level, pace, last 5 wars. */
     suspend fun hunterStats(userId: String): HunterStatsDto? = runCatching {
         val data = supabase.postgrest.rpc(
             "hunter_battle_stats", buildJsonObject { put("p_user", userId) }
@@ -201,46 +201,17 @@ class ArenaRepository @Inject constructor(private val supabase: SupabaseClient) 
         awaitClose { job.cancel(); launch { supabase.realtime.runCatching { channel.unsubscribe() } } }
     }
 
-    // ── Prediction Engine ────────────────────────────────────────────────────
-    suspend fun openPools(): List<Pair<PoolDto, BattleDto?>> {
-        val pools = runCatching {
-            supabase.from("prediction_pools").select {
-                filter { eq("status", "OPEN") }; order("created_at", Order.DESCENDING)
-            }.decodeList<PoolDto>()
-        }.getOrDefault(emptyList())
-        return pools.map { it to battle(it.battleId) }
-    }
-
-    suspend fun poolFor(battleId: String): PoolDto? = runCatching {
-        supabase.from("prediction_pools").select { filter { eq("battle_id", battleId) } }
-            .decodeList<PoolDto>().firstOrNull()
-    }.getOrNull()
-
-    /** Server verifies balance, debits VC, inserts the bet and updates pool totals atomically. */
-    suspend fun placeBet(poolId: String, side: String, amountVc: Long): Result<Unit> = runCatching {
-        supabase.postgrest.rpc("place_bet", buildJsonObject {
-            put("p_pool_id", poolId); put("p_side", side); put("p_amount", amountVc)
-        }); Unit
-    }
-
-    suspend fun myBets(): List<BetDto> {
-        val me = uid ?: return emptyList()
-        return runCatching {
-            supabase.from("prediction_bets").select {
-                filter { eq("user_id", me) }; order("created_at", Order.DESCENDING); limit(50)
-            }.decodeList<BetDto>()
-        }.getOrDefault(emptyList())
-    }
-
     // ── Leaderboards ─────────────────────────────────────────────────────────
     suspend fun xpLeaderboard(): List<UserDto> = runCatching {
         supabase.from("users").select { order("xp", Order.DESCENDING); limit(50) }.decodeList<UserDto>()
     }.getOrDefault(emptyList())
 
     // ═════════════════════════════════════════════════════════════════════════
-    // v0.4.1 — ARENA 3 SECTIONS (migration 012, live)
-    //   1 MATCHMAKING · 2 PREDICTION/SPECTATOR · 3 CHALLENGES
-    // Predictions run on FREE, non-redeemable points. No cash, no withdrawal.
+    // vC49 — ARENA 3 SECTIONS
+    //   1 MATCHMAKING · 2 LIVE BOARDS (spectate) · 3 CHALLENGES
+    // The prediction/betting module is EXECUTED (mig 035): pools, points, odds
+    // and slips are gone from the client; wager history lives archived
+    // server-side, never deleted.
     // ═════════════════════════════════════════════════════════════════════════
 
     /** SECTION 2 — live boards (LIVE + last 24h). Spectate via the War Room engine. */
@@ -248,34 +219,6 @@ class ArenaRepository @Inject constructor(private val supabase: SupabaseClient) 
         val raw = supabase.postgrest.rpc("arena_live").data ?: return emptyList()
         statsJson.decodeFromString(kotlinx.serialization.builtins.ListSerializer(ArenaLiveRow.serializer()), raw)
     }.getOrDefault(emptyList())
-
-    /** SECTION 2 — open boards, other hunters only, odds from the server. */
-    suspend fun predictionHub(): List<PredictionHubRow> = runCatching {
-        val raw = supabase.postgrest.rpc("prediction_hub").data ?: return emptyList()
-        statsJson.decodeFromString(kotlinx.serialization.builtins.ListSerializer(PredictionHubRow.serializer()), raw)
-    }.getOrDefault(emptyList())
-
-    suspend fun myPredictions(): List<PredictionBetDto> {
-        val me = uid ?: return emptyList()
-        return runCatching {
-            supabase.from("prediction_bets").select {
-                filter { eq("user_id", me) }; order("created_at", Order.DESCENDING); limit(40)
-            }.decodeList<PredictionBetDto>()
-        }.getOrDefault(emptyList())
-    }
-
-    /** FREE points only — server debits prediction_points, never VC or cash. */
-    suspend fun placePrediction(poolId: String, side: String, points: Long): Result<Unit> = runCatching {
-        supabase.postgrest.rpc("place_bet", buildJsonObject {
-            put("p_pool_id", poolId); put("p_side", side); put("p_amount", points)
-        }); Unit
-    }
-
-    /** Daily free allowance (server caps it at one claim per day). */
-    suspend fun claimPredictionAllowance(): Result<Int> = runCatching {
-        val raw = supabase.postgrest.rpc("claim_prediction_allowance").data ?: error("no response")
-        Json.decodeFromString(Int.serializer(), raw)
-    }
 
     /** SECTION 1/3 — live challenge with the chosen exercise (PUSHUP | SQUAT). */
     suspend fun challengeLive(opponentId: String, exercise: String, durationSec: Int): Result<String> = runCatching {

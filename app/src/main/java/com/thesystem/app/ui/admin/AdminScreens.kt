@@ -50,7 +50,8 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel(), ops: A
     // OPS COMMAND sections bolted onto the rail — each gates itself by server-side permission.
     // §4 (v0.24.0): PAYMENTS / ORDERS / WITHDRAWALS / CONFIG (the manual money
     // rail) are gone from the console; history stays server-side.
-    val sections = listOf("OVERVIEW", "LEGAL", "STORE", "TOURNAMENTS", "POOLS", "ASSETS", "TRAINING",
+    // vC49: POOLS section executed with the prediction module (mig 035).
+    val sections = listOf("OVERVIEW", "LEGAL", "STORE", "TOURNAMENTS", "ASSETS", "TRAINING",
         "OPS", "SUPPORT", "ROLES")
     var tab by remember { mutableIntStateOf(0) }
 
@@ -97,12 +98,11 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel(), ops: A
                 1 -> LegalTab(s, vm)
                 2 -> StoreCmsTab(s, vm)
                 3 -> TournamentTab(s, vm)
-                4 -> PoolsTab(s, vm)
-                5 -> AssetsTab(s, vm)
-                6 -> AdminTrainingTabs(s, vm)
-                7 -> OpsTab()
-                8 -> AdminSupportTab()
-                9 -> RolesTab()
+                4 -> AssetsTab(s, vm)
+                5 -> AdminTrainingTabs(s, vm)
+                6 -> OpsTab()
+                7 -> AdminSupportTab()
+                8 -> RolesTab()
             }
         }
         Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.BottomCenter) { SnackbarHost(snack) }
@@ -125,7 +125,7 @@ private fun OverviewTab(s: AdminState) {
             Box(Modifier.enterAnim(1)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     AnimatedStatTile("Open tournaments", o?.get("open_tournaments")?.jsonPrimitive?.content?.toLongOrNull() ?: 0, HunterGold, Modifier.weight(1f))
-                    AnimatedStatTile("VC in flight", o?.get("pool_vc")?.jsonPrimitive?.content?.toLongOrNull() ?: 0, VenomGreen, Modifier.weight(1f))
+                    AnimatedStatTile("Pending payments", o?.get("pending_payments")?.jsonPrimitive?.content?.toLongOrNull() ?: 0, VenomGreen, Modifier.weight(1f))
                 }
             }
         }
@@ -301,26 +301,6 @@ private fun TournamentTab(s: AdminState, vm: AdminViewModel) {
 
 // §4 (v0.24.0): manual payment verification is REMOVED — no approval queues
 // anywhere in the client. Money movement returns via the official gateway.
-
-// ── Prediction pool settlement (solo + clan use the same engine) ─────────────
-@Composable
-private fun PoolsTab(s: AdminState, vm: AdminViewModel) {
-    val haptics = rememberSystemHaptics()
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (s.pools.isEmpty()) item { EmptyState("No unsettled pools.") }
-        items(s.pools, key = { it.id }) { pool ->
-            GlowCard(glow = ElectricBlue) {
-                Text("Pool ${SystemMath.formatVc(pool.totalPoolVc)} · A ${SystemMath.formatVc(pool.totalAVc)} / B ${SystemMath.formatVc(pool.totalBVc)} · ${pool.status}",
-                    color = TextPrimary, style = MaterialTheme.typography.titleMedium)
-                Text("Platform cut ${pool.platformCutBps / 100}% · 20% of it is paid to the war winner on settle.", style = MaterialTheme.typography.labelSmall)
-                if (pool.status != "SETTLED") Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
-                    NeonButton("A WON", { haptics.slam(); vm.settlePool(pool.id, "A") }, Modifier.weight(1f), enabled = !s.busy)
-                    NeonButton("B WON", { haptics.slam(); vm.settlePool(pool.id, "B") }, Modifier.weight(1f), color = CrimsonRed, enabled = !s.busy)
-                }
-            }
-        }
-    }
-}
 
 // ── Dynamic Theme Asset CMS ──────────────────────────────────────────────────
 @Composable

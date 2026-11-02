@@ -23,7 +23,6 @@ data class AdminState(
     val products: List<ProductDto> = emptyList(),
     val tournaments: List<TournamentDto> = emptyList(),
     val assets: List<AssetDto> = emptyList(),
-    val pools: List<PoolDto> = emptyList(),
     // v0.4.1 training CMS
     val courses: List<CourseDto> = emptyList(),
     val courseQuests: List<CourseQuestDto> = emptyList(),
@@ -52,14 +51,13 @@ class AdminViewModel @Inject constructor(
         val pr = async { admin.allProducts() }
         val tr = async { admin.allTournaments() }
         val asd = async { admin.allAssets() }
-        val pools = async { admin.unsettledPools() }
         val coursesD = async { admin.allCourses() }
         val templatesD = async { admin.questTemplates() }
         _state.value = _state.value.copy(
             loading = false,
             overview = o.await(), privacy = pv.await(), terms = ts.await(),
             products = pr.await(), tournaments = tr.await(),
-            assets = asd.await(), pools = pools.await(),
+            assets = asd.await(),
             courses = coursesD.await(), questTemplates = templatesD.await(),
         )
     }
@@ -102,8 +100,6 @@ class AdminViewModel @Inject constructor(
             }
             .onFailure { _state.value = _state.value.copy(busy = false, error = it.message?.take(160)) }
     }
-
-    fun settlePool(poolId: String, side: String) = run({ admin.settlePool(poolId, side) }, "Pool settled. Winners paid, house kept 15%.")
 
     fun uploadAsset(key: String, type: String, uri: Uri, context: Context, fade: Double) = viewModelScope.launch {
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@launch

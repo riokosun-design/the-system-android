@@ -49,7 +49,7 @@ import java.time.ZoneId
  *
  *   PRIMARY scroll: the ENTIRE page is one top-level [LazyColumn] — header,
  *   matchmaking hero, tournament carousel, section rail and every list item,
- *   so the page scrolls from the very top to the last prediction card without
+ *   so the page scrolls from the very top to the last live-war card without
  *   a single dead strip.
  *   SECONDARY scroll: horizontal [LazyRow] carousels inside the page for the
  *   tournament brackets and username search picks.
@@ -57,7 +57,7 @@ import java.time.ZoneId
  * No fixed-height lists nested inside scroll parents. Touch never traps.
  *
  *   MATCH    · username search → public record → live/scheduled war + open wars
- *   PREDICT  · FREE non-redeemable spectator points (13+, no cash value)
+ *   vC49: the PREDICT/betting rail is EXECUTED (mig 035) — wagers live only as server-side archives.
  *   LIVE     · real wars in progress / joinable lobbies + daily battle blocks
  *   PLANNED  · booked wars, accept/decline, enter the War Room at the hour
  */
@@ -93,8 +93,8 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
                             Text("ARENA", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 22.sp, letterSpacing = 1.sp)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text("PREDICTION PTS", style = MonoLabel, color = LabelGray)
-                            Text("${s.predictionPoints}", style = MonoData, color = SkyBlue)
+                            Text("VAULT", style = MonoLabel, color = LabelGray)
+                            Text("${s.myProfile?.vcBalance ?: 0} VC", style = MonoData, color = SkyBlue)
                         }
                     }
                 }
@@ -118,7 +118,7 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
                 // ── section rail — stays in the flow, scrolls with the page ──
                 item(key = "sections") {
                     SystemTabBar(
-                        tabs = listOf("MATCH", "PREDICT", "LIVE", "PLANNED"),
+                        tabs = listOf("MATCH", "LIVE", "PLANNED"),
                         selected = section,
                         onSelect = { haptics.select(); section = it },
                     )
@@ -205,40 +205,8 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
                         }
                     }
 
-                    // ══ PREDICT — free spectator points ══════════════════════
-                    1 -> {
-                        item(key = "p-title") {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                SectionTitle("PREDICTION / SPECTATOR", PaperWhite)
-                                Spacer(Modifier.weight(1f))
-                                GhostButton("CLAIM +50", { haptics.tick(); vm.claimAllowance() })
-                            }
-                        }
-                        item(key = "p-caption") {
-                            Text(
-                                "Free spectator points — never bought, never cashed out.",
-                                style = MaterialTheme.typography.bodySmall, color = LabelGray,
-                            )
-                        }
-                        if (s.hub.isEmpty()) {
-                            item(key = "p-empty") { EmptyState("No open boards right now. Live wars appear here as soon as they are created.") }
-                        } else {
-                            items(s.hub.take(8), key = { "hub-${it.battleId}" }) { row -> PredictionRow(row, vm) }
-                        }
-                        if (s.myPredictions.isNotEmpty()) {
-                            item(key = "p-slips-title") { Text("MY SLIPS", style = MonoLabel, color = LabelGray) }
-                            items(s.myPredictions.take(6), key = { "slip-${it.id}" }) { b ->
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("SIDE ${b.side}", style = MonoLabel, color = if (b.status == "WON") SkyBlue else LabelGray)
-                                    Spacer(Modifier.weight(1f))
-                                    Text("${b.amount} pts · ${b.status}", style = MaterialTheme.typography.bodySmall, color = LabelGray)
-                                }
-                            }
-                        }
-                    }
-
                     // ══ LIVE — wars in progress + daily battle blocks ════════
-                    2 -> {
+                    1 -> {
                         item(key = "l-title") { SectionTitle("LIVE CHALLENGES", PaperWhite) }
                         if (s.live.isEmpty()) {
                             item(key = "l-empty") {
@@ -611,44 +579,6 @@ private fun LiveBoardRow(row: ArenaLiveRow, onWatch: () -> Unit) {
                     SystemChip(stateLabel, stateColor)
                     Text(if (row.iAmIn) "ENTER" else "WATCH", style = MonoLabel, color = if (row.iAmIn) SkyBlue else LabelGray)
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PredictionRow(row: PredictionHubRow, vm: ArenaViewModel) {
-    var points by remember { mutableStateOf(10L) }
-    GlowCard(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "${row.playerAName ?: "?"} vs ${row.playerBName ?: "?"}",
-                    color = PaperWhite, style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    "${row.exerciseType} · ${row.durationSec}s" +
-                        (row.scheduledAt?.let { " · ${it.take(16).replace('T', ' ')}" } ?: ""),
-                    style = MaterialTheme.typography.bodySmall, color = LabelGray,
-                )
-            }
-            Text("x${row.oddsA ?: "—"} / x${row.oddsB ?: "—"}", style = MonoLabel, color = LabelGray)
-        }
-        Spacer(Modifier.height(Grid.S8))
-        if (row.mySide != null) {
-            Text("BACKED ${row.mySide} · ${row.myAmount} pts", style = MonoLabel, color = SkyBlue)
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Grid.S8)) {
-                Text("PTS", style = MonoLabel, color = LabelGray)
-                listOf(5L, 10L, 25L).forEach { p ->
-                    FilterChipPill("$p", points == p) { points = p }
-                }
-                Spacer(Modifier.weight(1f))
-                NeonButton("BACK A", { vm.predict(row, "A", points) }, color = SkyBlue)
-                Spacer(Modifier.width(6.dp))
-                NeonButton("BACK B", { vm.predict(row, "B", points) }, color = LabelGray)
             }
         }
     }
