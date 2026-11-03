@@ -18,41 +18,39 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 
 /**
- * HUNTER VIDEO BACKDROP (vC48) — the faded cinematic anime underlay, bound to
- * the splash ritual, the awakening gates AND the main RANK chamber.
+ * HUNTER VIDEO BACKDROP (vC50 LEGIBILITY LAW) — the faded cinematic anime
+ * underlay bound to the splash ritual, awakening gates AND the RANK chamber.
  *
- * CRITICAL RENDER LAW (field fix): a VideoView's pixels live in a SEPARATE
- * SurfaceFlinger layer behind the app window. A Compose `graphicsLayer` alpha
- * on the AndroidView does NOT fade the video on budget ROMs — the surface
- * either full-blasts through the punched hole or vanishes entirely (the
- * "video never renders" field report). The fade is therefore applied ONLY via
- * in-window Compose scrims below, which SurfaceFlinger always blends over the
- * hole. The AndroidView itself renders untouched at full opacity.
+ * FIELD LAW (this order): the video was legible-hostile. The scrim stack is
+ * now FIXED by directive, not tunable per call site:
+ *   L1 — permanent veil: Color(0xFF030508) at alpha 0.72 over the whole frame
+ *   L2 — crown-to-floor gradient: Black 0.85 → Transparent (mid-band, where
+ *        the hunter silhouette breathes) → Black 0.90
+ *   L3 — (floorFade / rank chamber only) an extra bottom weight 0.65 so the
+ *        ladder's data rows never fight the footage.
+ * The video reads as a living aura in the mid-band; typography always wins.
  *
- * Implementation law:
- *  • ZERO new dependencies — framework VideoView on its own SurfaceView
- *    (no ExoPlayer/Media3 bloat; one 720p H.264 decoder ≈ 8–15MB RSS, only
- *    one backdrop is ever composed at a time: splash → gates → rank).
- *  • REPEAT forever + audio hard-muted — the System speaks in silence.
- *  • Lifecycle-aware: pause on ON_PAUSE, resume on ON_RESUME, stopPlayback on
- *    unmount — the player NEVER outlives its screen (2GB RAM safety).
- *  • Codec failure ⇒ the player unmounts itself and the scrim stays: never a
- *    crash, never a frozen black slab.
- *  • FADED by law: uniform dark veil [tint] + soft edge vignette, or the
- *    top-to-bottom gradient ([floorFade]) for the rank chamber. Foreground
- *    typography always wins; the video is an aura, never content.
+ * CRITICAL RENDER LAW (vC48, still binding): a VideoView's pixels live in a
+ * SEPARATE SurfaceFlinger layer behind the app window — Compose graphicsLayer
+ * alpha on the AndroidView does NOT fade the video on budget ROMs. The fade
+ * lives ONLY in these in-window scrims, which always blend over the hole.
  *
- * ASSET SEAM — if `onboarding_bg_video` is absent from res/raw this renders
- * ONLY the static scrim (no crash, no fake footage). Dropping the mp4 into
- * res/raw is the entire activation ritual.
+ *  • ZERO new dependencies — framework VideoView (no ExoPlayer/Media3 bloat);
+ *    one 720p H.264 decoder alive at a time, ~8–15MB RSS — 2GB-RAM safe.
+ *  • REPEAT forever + audio hard-muted. Lifecycle: pause ON_PAUSE / resume
+ *    ON_RESUME / stopPlayback on unmount — the player never outlives its screen.
+ *  • Codec failure ⇒ unmount to scrims only: never a crash, never a black slab.
+ *
+ * ASSET SEAM — if `onboarding_bg_video` is absent from res/raw, only the
+ * scrim stack renders (no crash, no fake footage).
  */
 @Composable
 fun OnboardingVideoBackdrop(
     modifier: Modifier = Modifier,
-    /** Uniform dark veil over the live video (0.25f–0.32f per field law). */
-    tint: Float = 0.30f,
-    /** TRUE = rank chamber: dark top-to-bottom gradient instead of vignette. */
+    /** rank chamber: adds the L3 bottom weight behind scrollable data rows. */
     floorFade: Boolean = false,
+    /** @deprecated kept for source-compat; the vC50 law stack owns the fade. */
+    @Suppress("UNUSED_PARAMETER") tint: Float = 0f,
 ) {
     val context = LocalContext.current
     // Resource presence is resolved once — zero is a legal answer (asset seam).
@@ -62,7 +60,7 @@ fun OnboardingVideoBackdrop(
     // A decoder hiccup on cheap silicon flips this once; the veil outlives it.
     val playerDead = remember { androidx.compose.runtime.mutableStateOf(false) }
 
-    Box(modifier.background(Color.Black)) {
+    Box(modifier.background(Color(0xFF030508))) {
         if (rawResId != 0 && !playerDead.value) {
             val lifecycleOwner = LocalLifecycleOwner.current
             val player = remember(rawResId) {
@@ -98,24 +96,23 @@ fun OnboardingVideoBackdrop(
             }
         }
 
-        // ── THE FADE LIVES HERE (in-window, always blended over the hole) ──
-        val t = tint.coerceIn(0f, 0.85f)
+        // ── THE vC50 LAW STACK (in-window, always blended over the hole) ──
+        // L1 — permanent 72% veil
+        Box(Modifier.fillMaxSize().background(Color(0xFF030508).copy(alpha = 0.72f)))
+        // L2 — crown→mid→floor gradient
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+            colors = listOf(
+                Color.Black.copy(alpha = 0.85f),
+                Color.Transparent,
+                Color.Black.copy(alpha = 0.90f),
+            ),
+        )))
+        // L3 — rank chamber floor weight (scrollable data rows anchor on dark)
         if (floorFade) {
-            // RANK LAW: dark top-to-bottom gradient — header readable up top,
-            // ladder cards anchored on the deep floor.
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-                0f to Color.Black.copy(alpha = t),
-                0.5f to Color.Black.copy(alpha = (t + 0.15f).coerceAtMost(0.9f)),
-                1f to Color.Black.copy(alpha = (t + 0.35f).coerceAtMost(0.9f)),
-            )))
-        } else {
-            // Splash / awakening: uniform veil + soft edge vignette — the
-            // monochrome hunter stays VISIBLE behind the slides, type crisp.
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = t)))
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-                0f to Color.Black.copy(alpha = 0.30f),
-                0.5f to Color.Black.copy(alpha = 0.12f),
-                1f to Color.Black.copy(alpha = 0.42f),
+                0f to Color.Transparent,
+                0.55f to Color.Black.copy(alpha = 0.35f),
+                1f to Color.Black.copy(alpha = 0.65f),
             )))
         }
     }

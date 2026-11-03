@@ -338,6 +338,10 @@ class SystemRepository @Inject constructor(
         }.getOrNull() ?: mirror()
     }
 
+    /** vC50 §2 — directive-named trigger: wake the Groq brain, force a fresh
+     *  plan past the 20h cache, mirror it locally. Alias over the same rail. */
+    suspend fun requestAiBrainPlan(): SystemPlanDto? = fetchOrGenerateSystemPlan(forceRefresh = true)
+
     suspend fun harvestConsent(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val raw = supabase.postgrest.rpc("harvest_consent").data ?: return@runCatching false

@@ -157,6 +157,13 @@ fun DashboardScreen(
                         // 2 ── PLAYER SNAPSHOT — level · rank · XP · three micro-stats
                         item { Box(Modifier.enterAnim(2)) { PlayerSnapshotCard(s) } }
 
+                        // 2.6 ── SYSTEM BRAIN (vC50 §2) — the Groq edge fn's personal
+                        //         quest/nutrition edict for THIS body, advisory only:
+                        //         server quests above stay the only authority.
+                        s.systemPlan?.let { plan ->
+                            item { Box(Modifier.enterAnim(3)) { SystemBrainCard(plan) } }
+                        }
+
                         // 3 ── TODAY QUEST — primary action (tap = QUEST INFO sheet, START = proof)
                         item {
                             Box(Modifier.enterAnim(3)) {
@@ -902,6 +909,54 @@ private fun MindQuestModule(
                     Text("BODY PENDING", style = MonoLabel, color = FaintGray)
                 }
             }
+        }
+    }
+}
+
+// ── vC50 §2 — SYSTEM BRAIN advisory card (server-grade contrast panel) ───────
+@Composable
+private fun SystemBrainCard(plan: com.thesystem.app.data.model.SystemPlanDto) {
+    val quest = plan.planData?.dailyQuest
+    val directive = plan.planData?.systemDirective.orEmpty()
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .videoPanel()
+            .padding(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "[ SYSTEM BRAIN${plan.rankTier?.let { " — RANK $it" } ?: ""} ]",
+                color = CyanEdge, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                fontFamily = SystemMono, letterSpacing = 1.sp, modifier = Modifier.weight(1f),
+            )
+            Text(
+                if (plan.aiGenerated) "AI CORE: ${plan.model ?: "Groq"}" else "DETERMINISTIC FLOOR",
+                color = SilverSoft, fontSize = 8.sp, fontFamily = SystemMono,
+            )
+        }
+        if (quest != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(quest.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                fontFamily = SystemMono, style = androidx.compose.ui.text.TextStyle(shadow = VideoTextShadow))
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "PUSH ${quest.pushupTarget} · SQUAT ${quest.squatTarget} · RUN ${quest.cardioTargetKm}km",
+                color = IceWhite, fontSize = 11.sp, fontFamily = SystemMono,
+            )
+            if (quest.penaltyWarning.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text("⚠ ${quest.penaltyWarning}", color = SilverSoft, fontSize = 10.sp, fontFamily = SystemMono)
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "CAL ${plan.caloriesTarget} kcal · P ${plan.proteinG}g · C ${plan.carbsG}g · F ${plan.fatG}g",
+            color = IceWhite, fontSize = 10.sp, fontFamily = SystemMono,
+        )
+        if (directive.isNotBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Text("“${directive}”", color = SilverSoft, fontSize = 10.sp, fontFamily = SystemMono)
         }
     }
 }

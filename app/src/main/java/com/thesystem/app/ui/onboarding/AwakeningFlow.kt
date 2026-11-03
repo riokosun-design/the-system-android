@@ -239,7 +239,7 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
         ) {
             Text(
                 "PHASE ${phaseOf(page)}/3",
-                fontFamily = FontFamily.Default, fontSize = 9.sp, color = ElectricBlue.copy(alpha = 0.65f), letterSpacing = 2.sp,
+                fontFamily = FontFamily.Default, fontSize = 9.sp, color = ElectricBlue.copy(alpha = 0.9f), letterSpacing = 2.sp,
             )
             Spacer(Modifier.weight(1f))
             Text(
@@ -412,7 +412,7 @@ private fun P02_Age(ui: OnboardingUiState, vm: OnboardingViewModel, clock: Float
         Text("AGE DETECTION", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)))
         Spacer(Modifier.height(12.dp))
-        Text("How old is the vessel?", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
+        Text("How old is the vessel?", style = MaterialTheme.typography.headlineMedium.copy(shadow = com.thesystem.app.core.ui.VideoTextShadow), color = Color.White,
             modifier = Modifier.appear(seg(clock, 0.2f)))
         Spacer(Modifier.height(30.dp))
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.appear(seg(clock, 0.3f))) {
@@ -470,7 +470,7 @@ private fun P03_Height(ui: OnboardingUiState, vm: OnboardingViewModel, clock: Fl
                 }
             }
             Spacer(Modifier.height(12.dp))
-            Text("Measure the frame.", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
+            Text("Measure the frame.", style = MaterialTheme.typography.headlineMedium.copy(shadow = com.thesystem.app.core.ui.VideoTextShadow), color = Color.White,
                 modifier = Modifier.appear(seg(clock, 0.2f)))
             Spacer(Modifier.height(30.dp))
             val totalInches = (ui.heightCm / 2.54f).roundToInt()
@@ -526,7 +526,7 @@ private fun P04_Weight(ui: OnboardingUiState, vm: OnboardingViewModel, clock: Fl
         Text("MASS DETECTION", fontFamily = FontFamily.Default, fontSize = 10.sp, color = HunterGold, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)))
         Spacer(Modifier.height(12.dp))
-        Text("Weigh the armor.", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
+        Text("Weigh the armor.", style = MaterialTheme.typography.headlineMedium.copy(shadow = com.thesystem.app.core.ui.VideoTextShadow), color = Color.White,
             modifier = Modifier.appear(seg(clock, 0.2f)))
         Spacer(Modifier.height(24.dp))
         // gauge
@@ -593,7 +593,7 @@ private fun P05_Archetype(
         Text("CLASS ASSIGNMENT", fontFamily = FontFamily.Default, fontSize = 10.sp, color = NeonPurple, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)))
         Spacer(Modifier.height(12.dp))
-        Text("Choose your discipline.", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
+        Text("Choose your discipline.", style = MaterialTheme.typography.headlineMedium.copy(shadow = com.thesystem.app.core.ui.VideoTextShadow), color = Color.White,
             modifier = Modifier.appear(seg(clock, 0.2f)))
         Spacer(Modifier.height(24.dp))
         Archetype.entries.forEachIndexed { i, a ->
@@ -692,7 +692,7 @@ private fun P07_Trajectory(clock: Float, advance: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         Text(
             "Your discipline, projected.",
-            style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
+            style = MaterialTheme.typography.headlineMedium.copy(shadow = com.thesystem.app.core.ui.VideoTextShadow), color = Color.White,
             modifier = Modifier.appear(seg(clock, 0.18f)),
         )
         Spacer(Modifier.height(18.dp))
@@ -845,7 +845,7 @@ private fun P08_Ranks(clock: Float, advance: () -> Unit) {
             Spacer(Modifier.height(10.dp))
             Text(
                 "From weakest F to\nAbsolute Monarch.",
-                style = MaterialTheme.typography.headlineMedium, color = TextPrimary, lineHeight = 30.sp,
+                style = MaterialTheme.typography.headlineMedium.copy(shadow = com.thesystem.app.core.ui.VideoTextShadow), color = Color.White, lineHeight = 30.sp,
                 modifier = Modifier.appear(seg(clock, 0.2f)),
             )
             Spacer(Modifier.height(6.dp))
@@ -1069,7 +1069,7 @@ private fun P10_SportPath(ui: OnboardingUiState, vm: OnboardingViewModel, clock:
         Text("ATHLETE PATH", fontFamily = FontFamily.Default, fontSize = 10.sp, color = VenomGreen, letterSpacing = 3.sp,
             modifier = Modifier.appear(seg(clock, 0.1f)))
         Spacer(Modifier.height(12.dp))
-        Text("Will you chase a sport?", style = MaterialTheme.typography.headlineMedium, color = TextPrimary,
+        Text("Will you chase a sport?", style = MaterialTheme.typography.headlineMedium.copy(shadow = com.thesystem.app.core.ui.VideoTextShadow), color = Color.White,
             modifier = Modifier.appear(seg(clock, 0.2f)))
         Spacer(Modifier.height(8.dp))
         Text(

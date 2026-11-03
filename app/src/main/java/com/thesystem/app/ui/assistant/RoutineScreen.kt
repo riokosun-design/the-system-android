@@ -43,6 +43,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.thesystem.app.ai.CommitmentBlock
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
+import com.thesystem.app.core.ui.IceWhite
+import com.thesystem.app.core.ui.SilverSoft
 import com.thesystem.app.service.RoutineAlarmScheduler
 import java.time.LocalDate
 
@@ -549,6 +551,17 @@ private fun SystemPlanPanel(
                 color = LabelGray, fontSize = 10.sp, fontFamily = SystemMono,
                 modifier = Modifier.padding(top = 2.dp),
             )
+            plan.planData?.dailyQuest?.let { q ->
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "${q.title} — PUSH ${q.pushupTarget} · SQUAT ${q.squatTarget} · RUN ${q.cardioTargetKm}km",
+                    color = IceWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono,
+                )
+            }
+            plan.planData?.systemDirective?.takeIf { it.isNotBlank() }?.let {
+                Text("“$it”", color = SilverSoft, fontSize = 9.sp, fontFamily = SystemMono,
+                    modifier = Modifier.padding(top = 4.dp))
+            }
             Spacer(Modifier.height(6.dp))
             plan.dailyRoutine.take(6).forEach { d ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {

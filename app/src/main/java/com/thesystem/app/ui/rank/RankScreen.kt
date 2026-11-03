@@ -102,7 +102,7 @@ fun RankScreen(vm: RankViewModel = hiltViewModel()) {
             // now: framework VideoView, muted, looping, lifecycle-released,
             // faded by an in-window top-to-bottom gradient (surface alpha is
             // forbidden — budget-ROM render law).
-            OnboardingVideoBackdrop(Modifier.fillMaxSize(), tint = 0.25f, floorFade = true)
+            OnboardingVideoBackdrop(Modifier.fillMaxSize(), floorFade = true)
             // LAYER 2 — energy motes, rising slowly until the end of time
             ParticleField(alpha = stage(0.25f, 0.65f))
 
@@ -117,7 +117,8 @@ fun RankScreen(vm: RankViewModel = hiltViewModel()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("SYSTEM", style = MonoLabel, color = SkyBlue)
-                            Text("RANK", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 22.sp, letterSpacing = 1.sp)
+                            Text("RANK", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 22.sp, letterSpacing = 1.sp,
+        style = androidx.compose.ui.text.TextStyle(shadow = com.thesystem.app.core.ui.VideoTextShadow))
                         }
                         penaltyRank?.let { Text(it.title, style = MonoLabel, color = LabelGray) }
                     }
@@ -132,7 +133,8 @@ fun RankScreen(vm: RankViewModel = hiltViewModel()) {
                     ) {
                         TierEmblem(tier, glow = p)
                         Spacer(Modifier.height(Grid.S12))
-                        Text(tier.title, color = SkyBlue, fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 2.sp)
+                        Text(tier.title, color = SkyBlue, fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 2.sp,
+        style = androidx.compose.ui.text.TextStyle(shadow = com.thesystem.app.core.ui.VideoTextShadow))
                         Text("LEVEL $level", style = MonoLabel, color = LabelGray)
                         if (penaltyRank != null) {
                             Spacer(Modifier.height(6.dp))
@@ -338,7 +340,9 @@ private fun LadderStrip(current: SystemMath.HunterTier) {
                     isPast -> LineStrong
                     else -> LineSoft
                 }
-                val bg = if (isCurrent) SkyBlue.copy(alpha = 0.14f) else PanelGray
+                // vC50 §1 — tier cells ride the videoPanel plate over the aura
+                val bg = if (isCurrent) SkyBlue.copy(alpha = 0.14f)
+                    else com.thesystem.app.core.ui.PanelInk.copy(alpha = 0.78f)
                 val fg = when {
                     isCurrent -> SkyBlue
                     isPast -> LabelGray

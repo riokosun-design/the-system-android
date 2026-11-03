@@ -6,6 +6,7 @@ import com.thesystem.app.core.SystemMath
 import com.thesystem.app.data.model.CourseDto
 import com.thesystem.app.data.model.FormDto
 import com.thesystem.app.data.model.QuestDto
+import com.thesystem.app.data.model.SystemPlanDto
 import com.thesystem.app.data.model.UserCourseDto
 import com.thesystem.app.data.model.UserDto
 import com.thesystem.app.data.model.VerifiedBestsDto
@@ -35,6 +36,8 @@ data class DashboardState(
     val bests: VerifiedBestsDto? = null,
     // ── AI ENGINE: proposed bonus quest (adoption goes through the server RPC)
     val aiQuest: com.thesystem.app.ai.QuestProposal? = null,
+    /** vC50 §2 — the Groq brain's personal plan (advisory strip over quests). */
+    val systemPlan: SystemPlanDto? = null,
     val aiQuestBrain: String = "",
     val aiQuestBusy: Boolean = false,
     val aiQuestNote: String? = null,
@@ -93,6 +96,7 @@ class DashboardViewModel @Inject constructor(
         val specialsD = async { training.courses("SPECIAL") }
         val mineD = async { training.myCourses() }
         val bestsD = async { system.verifiedBests() }
+        val planD = async { system.fetchOrGenerateSystemPlan(false) }
         val profile = profileD.await()
         val wall = wallD.await()
         val questsLoaded = questsD.await()
@@ -117,6 +121,7 @@ class DashboardViewModel @Inject constructor(
             specials = specialsD.await(),
             myCourses = mineD.await(),
             bests = bestsD.await(),
+            systemPlan = planD.await() ?: _state.value.systemPlan,
             error = if (profile == null) "OFFLINE MODE — retry when back on the grid." else null,
         )
     }

@@ -556,6 +556,8 @@ data class SystemPlanDto(
     @SerialName("carbs_g") val carbsG: Int = 0,
     @SerialName("fat_g") val fatG: Int = 0,
     @SerialName("daily_routine") val dailyRoutine: List<PlanDirectiveDto> = emptyList(),
+    /** vC50 §2 — the full brain payload: personalized quest + nutrition + edict. */
+    @SerialName("plan_data") val planData: PlanDataDto? = null,
     @SerialName("rank_tier") val rankTier: String? = null,
     val multiplier: Double? = null,
     @SerialName("ai_generated") val aiGenerated: Boolean = false,
@@ -568,4 +570,30 @@ data class PlanDirectiveDto(
     val time: String = "",
     val directive: String = "",
     val detail: String = "",
+)
+
+/** vC50 §2 — AI-drafted (or deterministic-floor) personal directives. */
+@Serializable
+data class PlanDataDto(
+    val headline: String = "",
+    @SerialName("daily_quest") val dailyQuest: PlanQuestDto? = null,
+    @SerialName("nutrition_target") val nutritionTarget: PlanNutritionDto? = null,
+    @SerialName("system_directive") val systemDirective: String = "",
+)
+
+@Serializable
+data class PlanQuestDto(
+    val title: String = "",
+    @SerialName("pushup_target") val pushupTarget: Int = 0,
+    @SerialName("squat_target") val squatTarget: Int = 0,
+    @SerialName("cardio_target_km") val cardioTargetKm: Double = 0.0,
+    @SerialName("penalty_warning") val penaltyWarning: String = "",
+)
+
+@Serializable
+data class PlanNutritionDto(
+    val calories: Int = 0,
+    @SerialName("protein_g") val proteinG: Int = 0,
+    @SerialName("carbs_g") val carbsG: Int = 0,
+    @SerialName("fats_g") val fatsG: Int = 0,
 )

@@ -93,9 +93,9 @@ fun DynamicSplash(
     val brandScale by animateFloatAsState(if (booted) 1f else 0.82f, SystemMotion.springPunch, label = "brandPop")
 
     Box(Modifier.fillMaxSize().background(InkBlack)) {
-        // vC48 RENDER LAW — the hunter's loop behind every slide, faded by
-        // in-window scrims only (surface alpha is a budget-ROM lie).
-        OnboardingVideoBackdrop(Modifier.fillMaxSize(), tint = 0.30f)
+        // vC50 LEGIBILITY LAW — fixed scrim stack (0x030508@72% + 85→0→90
+        // gradient); the hunter breathes in the mid-band, type always wins.
+        OnboardingVideoBackdrop(Modifier.fillMaxSize())
         // CRT scanline texture — sells the "you are inside THE SYSTEM" fantasy
         Scanlines(Modifier.matchParentSize())
         if (!flashDone) {
@@ -119,9 +119,10 @@ fun DynamicSplash(
             ) {
                 Text(
                     "THE SYSTEM",
-                    style = MaterialTheme.typography.displayMedium,
-                    // 0.26.0 §4.3 — high-luminance crisp white over the dark video aura
-                    color = Color(0xFFF0F4F8),
+                    style = MaterialTheme.typography.displayMedium.copy(
+                        shadow = com.thesystem.app.core.ui.VideoTextShadow),
+                    // vC50 §1 — pure crisp white + hard drop shadow over the aura
+                    color = Color.White,
                     fontWeight = FontWeight.Black,
                     modifier = Modifier.graphicsLayer { scaleX = brandScale; scaleY = brandScale },
                 )
@@ -130,8 +131,8 @@ fun DynamicSplash(
                     Text(
                         label,
                         style = MaterialTheme.typography.labelSmall,
-                        // §4.3 — bright silver-cyan accent, lightning-matched
-                        color = Color(0xFFE0FBFC),
+                        // vC50 §1 — full-strength ice-cyan + shadow over video
+                        color = com.thesystem.app.core.ui.IceWhite,
                         fontSize = 11.sp,
                     )
                 }

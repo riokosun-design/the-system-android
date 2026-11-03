@@ -36,6 +36,8 @@ private fun rememberNativePaint(textSize: Float, color: Int, typeface: Typeface 
             this.color = color
             this.typeface = typeface
             this.textAlign = android.graphics.Paint.Align.CENTER
+            // vC50 §1: video-law drop shadow — glyphs stay carved over footage.
+            setShadowLayer(8f, 2f, 2f, android.graphics.Color.BLACK)
         }
     }
 
