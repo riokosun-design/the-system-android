@@ -950,8 +950,8 @@ private fun SexCalibrationCard(onPick: (String) -> Unit) {
         )
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            GhostButton("MALE VESSEL", modifier = Modifier.weight(1f)) { onPick("M") }
-            GhostButton("FEMALE VESSEL", modifier = Modifier.weight(1f)) { onPick("F") }
+            GhostButton("MALE VESSEL", { onPick("M") }, modifier = Modifier.weight(1f))
+            GhostButton("FEMALE VESSEL", { onPick("F") }, modifier = Modifier.weight(1f))
         }
     }
 }
