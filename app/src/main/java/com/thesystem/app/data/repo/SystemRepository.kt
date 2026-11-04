@@ -184,6 +184,13 @@ class SystemRepository @Inject constructor(
         supabase.from("users").update({ set("display_name", displayName) }) { filter { eq("id", userId) } }
     }
 
+    /** vC51 — vessel sex calibration (users.gender, M|F). One truth switch: the
+     *  Groq brain's BMR formula (+5 M / −161 F) reads this column server-side. */
+    suspend fun setGender(userId: String, gender: String) {
+        require(gender == "M" || gender == "F") { "bad_gender" }
+        supabase.from("users").update({ set("gender", gender) }) { filter { eq("id", userId) } }
+    }
+
     // ── NOTIFICATIONS (mig 030) — payment/withdrawal/support decisions land here ──
 
     suspend fun myNotifications(limit: Int = 30): List<com.thesystem.app.data.model.UserNotificationDto> =

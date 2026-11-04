@@ -111,12 +111,16 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 // ═══════════════════════════════════════════════════════════════════════════
-// THE AWAKENING FLOW — 12 pages · 3 phases (v0.25.0 spec §1/§3).
+// THE AWAKENING FLOW — 13 pages · 3 phases (v0.25.0 spec §1/§3 + vC51 §GENDER).
 //
-//   PHASE 1 · VESSEL INTAKE   pages 01–05  (name / age / height / mass / class)
-//   PHASE 2 · POWER AWAKENING pages 06–09  (biometric → trajectory graph →
+//   PHASE 1 · VESSEL INTAKE   pages 02–07  (name / SEX / age / height / mass /
+//                                           class) — vC51 added page 03 VESSEL
+//                                           SEX VERIFICATION: the explicit M/F
+//                                           declaration the AI brain's BMR
+//                                           constant (M +5 / F −161) bends to.
+//   PHASE 2 · POWER AWAKENING pages 08–11  (biometric → trajectory graph →
 //                                           RANKS showcase → BLACK ROOM)
-//   PHASE 3 · SYSTEM CONTRACT pages 10–12  (sport path → hold → final gate)
+//   PHASE 3 · SYSTEM CONTRACT pages 12–13  (sport path → hold → final gate)
 //
 // The weak informational slides are DELETED. The old P01 "SYSTEM
 // DETECTED" circular radar loop is permanently retired (spec §1), and the
@@ -163,12 +167,12 @@ private fun Modifier.popIn(c: Float): Modifier = this.graphicsLayer {
 }
 
 private fun phaseOf(page: Int): Int = when (page) {
-    in 1..6 -> 1; in 7..10 -> 2; else -> 3
+    in 1..7 -> 1; in 8..11 -> 2; else -> 3
 }
 
 // ══ HOST — page state machine + cinematic transitions ═══════════════════════
 
-private const val LAST_PAGE = 12
+private const val LAST_PAGE = 13
 
 @Composable
 fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewModel()) {
@@ -215,18 +219,20 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
                         // §2: GOOGLE GATE FIRST — no vessel types a name they already own
                         1 -> P12_FinalGate(ui, vm, haptics, context)
                         2 -> P01_Name(ui, vm, advance)
-                        3 -> P02_Age(ui, vm, clock, advance)
-                        4 -> P03_Height(ui, vm, clock, advance)
-                        5 -> P04_Weight(ui, vm, clock, advance)
-                        6 -> P05_Archetype(archetype, { archetypeName = it.name }, activity, { activityName = it.name }, {
-                            vm.setGoal(archetype.goal); haptics.select(); page = 7
+                        // vC51 §GENDER: the vessel-sex gate — page 03, explicit M/F, AI BMR key
+                        3 -> P02b_Sex(ui, vm, clock, advance)
+                        4 -> P02_Age(ui, vm, clock, advance)
+                        5 -> P03_Height(ui, vm, clock, advance)
+                        6 -> P04_Weight(ui, vm, clock, advance)
+                        7 -> P05_Archetype(archetype, { archetypeName = it.name }, activity, { activityName = it.name }, {
+                            vm.setGoal(archetype.goal); haptics.select(); page = 8
                         })
-                        7 -> P06_Biometric(ui, archetype, activity, clock, advance)
-                        8 -> P07_Trajectory(clock, advance)
-                        9 -> P08_Ranks(clock, advance)
-                        10 -> P09_BlackRoom(clock, advance)
-                        11 -> P10_SportPath(ui, vm, clock) { haptics.select(); page = 12 }
-                        12 -> P11_Contract(haptics) { vm.finish(onDone, activityName) }
+                        8 -> P06_Biometric(ui, archetype, activity, clock, advance)
+                        9 -> P07_Trajectory(clock, advance)
+                        10 -> P08_Ranks(clock, advance)
+                        11 -> P09_BlackRoom(clock, advance)
+                        12 -> P10_SportPath(ui, vm, clock) { haptics.select(); page = 13 }
+                        13 -> P11_Contract(haptics) { vm.finish(onDone, activityName) }
                         else -> Box(Modifier.fillMaxSize())
                     }
                 }
@@ -314,17 +320,18 @@ private data class PageArt(val res: Int, val alpha: Float, val mirror: Boolean =
 private fun pageArtFor(p: Int): PageArt? = when (p) {
     1 -> PageArt(R.drawable.onb_scan, 0.22f)
     2 -> PageArt(R.drawable.onb_recruit, 0.22f)
-    3 -> PageArt(R.drawable.onb_stand, 0.20f)
-    4 -> PageArt(R.drawable.onb_mass, 0.20f)
-    5 -> PageArt(R.drawable.onb_paths, 0.22f)
-    6 -> PageArt(R.drawable.onb_sentinel, 0.18f, mirror = true)
-    10 -> PageArt(R.drawable.onb_paths, 0.22f, mirror = true)
-    11 -> PageArt(R.drawable.onb_scan, 0.20f)
-    else -> null // 7/8/9 motion graphics · 12 carries its own gate art
+    3 -> PageArt(R.drawable.onb_recruit, 0.18f, mirror = true) // vC51 sex gate
+    4 -> PageArt(R.drawable.onb_stand, 0.20f)
+    5 -> PageArt(R.drawable.onb_mass, 0.20f)
+    6 -> PageArt(R.drawable.onb_paths, 0.22f)
+    7 -> PageArt(R.drawable.onb_sentinel, 0.18f, mirror = true)
+    11 -> PageArt(R.drawable.onb_paths, 0.22f, mirror = true)
+    12 -> PageArt(R.drawable.onb_scan, 0.20f)
+    else -> null // 8/9/10 motion graphics · 13 is the bare contract seal
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PHASE 1 — VESSEL INTAKE (pages 01–05)
+// PHASE 1 — VESSEL INTAKE (pages 01–07)
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── PAGE 01 · NAME ───────────────────────────────────────────────────────────
@@ -402,6 +409,69 @@ private fun P01_Name(ui: OnboardingUiState, vm: OnboardingViewModel, advance: ()
 @Composable
 private fun GlitchWithAppear(c: Float, text: String, color: Color = TextPrimary, size: Int = 26) {
     Box(Modifier.graphicsLayer { alpha = c }) { GlitchRevealText(text, color = color, fontSize = size) }
+}
+
+// ── PAGE 03 · VESSEL SEX VERIFICATION (vC51 §GENDER) ────────────────────────
+// The AI brain's metabolic constant (Mifflin-St Jeor: M +5 / F −161) rides on
+// this one declaration. No silent default in the ritual — the gate demands an
+// explicit M/F so BMR, calories and quest load bend to the body the hunter
+// actually carries. Awakened hunters predating this gate get the dashboard
+// SEX CALIBRATION card instead (gender NULL = legacy M-default, honestly
+// stamped until they calibrate).
+@Composable
+private fun P02b_Sex(ui: OnboardingUiState, vm: OnboardingViewModel, clock: Float, advance: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp).verticalScroll(rememberScrollState()),
+    ) {
+        Spacer(Modifier.height(72.dp))
+        Text("VESSEL SEX VERIFICATION", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 3.sp,
+            modifier = Modifier.appear(seg(clock, 0.1f)))
+        Spacer(Modifier.height(12.dp))
+        Text("Male or female vessel?", style = MaterialTheme.typography.headlineMedium.copy(shadow = com.thesystem.app.core.ui.VideoTextShadow), color = Color.White,
+            modifier = Modifier.appear(seg(clock, 0.2f)))
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "The System tunes your metabolic engine to this truth — BMR, calories and quest load recompute for the body you actually carry.",
+            style = MaterialTheme.typography.bodyMedium, color = TextMuted,
+            modifier = Modifier.appear(seg(clock, 0.26f)),
+        )
+        Spacer(Modifier.height(24.dp))
+        Box(Modifier.appear(seg(clock, 0.34f)).padding(vertical = 6.dp)) {
+            ArchetypeCard(
+                title = "MALE",
+                tagline = "Masculine metabolic calibration",
+                stat = "BMR ENGINE · M-CONSTANT +5",
+                accent = ElectricBlue,
+                selected = ui.gender == "M",
+                onClick = { vm.setGender("M") },
+            )
+        }
+        Box(Modifier.appear(seg(clock, 0.44f)).padding(vertical = 6.dp)) {
+            ArchetypeCard(
+                title = "FEMALE",
+                tagline = "Feminine metabolic calibration",
+                stat = "BMR ENGINE · F-CONSTANT −161",
+                accent = NeonPurple,
+                selected = ui.gender == "F",
+                onClick = { vm.setGender("F") },
+            )
+        }
+        Spacer(Modifier.height(26.dp))
+        if (ui.gender != null) {
+            ContinueBar(
+                seg(clock, 0.6f), advance,
+                label = "SEAL VESSEL SEX ▸",
+                subtext = if (ui.gender == "M") "MALE VESSEL — M-CALIBRATION LOCKED" else "FEMALE VESSEL — F-CALIBRATION LOCKED",
+            )
+        } else {
+            Text(
+                "DECLARE THE VESSEL'S SEX TO ADVANCE",
+                fontFamily = FontFamily.Default, fontSize = 10.sp, color = TextMuted, letterSpacing = 2.sp,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 30.dp).graphicsLayer { alpha = seg(clock, 0.6f) },
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
 }
 
 // ── PAGE 02 · AGE DETECTION (13–30 hard range) ───────────────────────────────
@@ -621,7 +691,7 @@ private fun P05_Archetype(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PHASE 2 — POWER AWAKENING (pages 06–09, motion-graphics carried)
+// PHASE 2 — POWER AWAKENING (pages 08–11, motion-graphics carried)
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── PAGE 06 · BIOMETRIC ANALYSIS (auto-advance scan) ─────────────────────────
@@ -634,6 +704,7 @@ private fun P06_Biometric(ui: OnboardingUiState, arch: Archetype, act: Activity,
     }
     val rows = listOf(
         "TAG" to "@${ui.username.ifBlank { "unbound" }}",
+        "SEX" to (ui.gender?.let { if (it == "M") "MALE" else "FEMALE" } ?: "—"),
         "AGE" to "${ui.age}",
         "HEIGHT" to "${ui.heightCm.roundToInt()} cm",
         "MASS" to "${ui.weightKg.roundToInt()} kg",
@@ -1049,7 +1120,7 @@ private fun P09_BlackRoom(clock: Float, advance: () -> Unit) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PHASE 3 — SYSTEM CONTRACT (pages 10–12)
+// PHASE 3 — SYSTEM CONTRACT (pages 12–13)
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── PAGE 10 · SPORT PATH ─────────────────────────────────────────────────────

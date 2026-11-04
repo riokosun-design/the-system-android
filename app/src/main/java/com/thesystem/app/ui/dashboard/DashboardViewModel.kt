@@ -126,6 +126,25 @@ class DashboardViewModel @Inject constructor(
         )
     }
 
+    /** vC51 §GENDER — one-tap sex calibration for awakened hunters whose gate
+     *  predates the vessel-sex page (gender NULL → AI runs the male default).
+     *  On write: profile patch + the brain silently re-thinks for the real body. */
+    fun calibrateGender(g: String) = viewModelScope.launch {
+        val p = _state.value.profile ?: return@launch
+        runCatching { system.setGender(p.id, g) }
+            .onSuccess {
+                _state.value = _state.value.copy(
+                    profile = _state.value.profile?.copy(gender = g),
+                    notice = if (g == "M") "SEX CALIBRATED — MALE FORMULA ACTIVE."
+                             else "SEX CALIBRATED — FEMALE FORMULA ACTIVE.",
+                )
+                _state.value = _state.value.copy(
+                    systemPlan = system.fetchOrGenerateSystemPlan(true) ?: _state.value.systemPlan,
+                )
+            }
+            .onFailure { _state.value = _state.value.copy(error = it.message) }
+    }
+
     fun completeQuest(quest: QuestDto) = viewModelScope.launch {
         system.completeQuest(quest.id)
             .onSuccess {

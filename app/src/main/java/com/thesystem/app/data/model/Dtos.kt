@@ -30,6 +30,8 @@ data class UserDto(
     @SerialName("streak_days") val streakDays: Int = 0,
     @SerialName("last_activity_date") val lastActivityDate: String? = null,
     val goal: String? = null,
+    /** vC51 (mig 036 col): vessel sex M|F — the AI brain BMR constant. NULL → server M-default. */
+    val gender: String? = null,
     /** Declared sport path (STEP 6) — NULL = no sport content anywhere. */
     val sport: String? = null,
     /** STEP 7 adaptive routine arc, server-owned (mig 023): 1..4. */

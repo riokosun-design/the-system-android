@@ -157,6 +157,19 @@ fun DashboardScreen(
                         // 2 ── PLAYER SNAPSHOT — level · rank · XP · three micro-stats
                         item { Box(Modifier.enterAnim(2)) { PlayerSnapshotCard(s) } }
 
+                        // 2.5 ── SEX CALIBRATION (vC51) — awakened hunters predate the
+                        //         vessel-sex gate; NULL gender = the AI's BMR runs the male
+                        //         default. One tap writes server truth + the brain re-thinks.
+                        s.profile?.let { p ->
+                            if (p.gender == null) {
+                                item {
+                                    Box(Modifier.enterAnim(3)) {
+                                        SexCalibrationCard(onPick = { haptics.select(); vm.calibrateGender(it) })
+                                    }
+                                }
+                            }
+                        }
+
                         // 2.6 ── SYSTEM BRAIN (vC50 §2) — the Groq edge fn's personal
                         //         quest/nutrition edict for THIS body, advisory only:
                         //         server quests above stay the only authority.
@@ -909,6 +922,36 @@ private fun MindQuestModule(
                     Text("BODY PENDING", style = MonoLabel, color = FaintGray)
                 }
             }
+        }
+    }
+}
+
+// ── vC51 §GENDER — one-time vessel-sex calibration for awakened hunters ──────
+// Onboarding's sex gate came after these hunters awakened; their NULL gender
+// makes the Groq brain's BMR run the male default (server-side Mifflin law).
+// Two taps → users.gender → the plan silently re-generates for the real body.
+@Composable
+private fun SexCalibrationCard(onPick: (String) -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .videoPanel()
+            .padding(14.dp),
+    ) {
+        Text(
+            "[ VESSEL SEX UNVERIFIED ]",
+            color = CyanEdge, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+            fontFamily = SystemMono, letterSpacing = 1.sp,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "The AI's metabolic engine is running the male default. Declare your vessel once — BMR, calories and quest load recalibrate instantly.",
+            color = SilverSoft, fontSize = 10.sp, fontFamily = SystemMono, lineHeight = 14.sp,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            GhostButton("MALE VESSEL", modifier = Modifier.weight(1f)) { onPick("M") }
+            GhostButton("FEMALE VESSEL", modifier = Modifier.weight(1f)) { onPick("F") }
         }
     }
 }

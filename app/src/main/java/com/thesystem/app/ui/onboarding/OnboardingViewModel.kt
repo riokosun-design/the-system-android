@@ -34,6 +34,8 @@ data class OnboardingUiState(
     val age: Int = 18,
     val heightCm: Float = 170f,
     val weightKg: Float = 65f,
+    /** vC51: vessel sex (M|F) — the AI plan BMR constant rides on it. NULL until declared. */
+    val gender: String? = null,
     val goal: String = "SHRED",
     /** STEP 6 sport path: null = opted out (explicit or legacy); set = declared sport id. */
     val sport: String? = null,
@@ -82,6 +84,8 @@ class OnboardingViewModel @Inject constructor(
     fun setAge(v: Int) { _ui.value = _ui.value.copy(age = v) }
     fun setHeight(v: Float) { _ui.value = _ui.value.copy(heightCm = v) }
     fun setWeight(v: Float) { _ui.value = _ui.value.copy(weightKg = v) }
+    /** vC51 — vessel sex: M +5 / F −161 metabolic constant for the Groq brain. */
+    fun setGender(v: String) { if (v == "M" || v == "F") _ui.value = _ui.value.copy(gender = v) }
     fun setGoal(v: String) { _ui.value = _ui.value.copy(goal = v) }
     /** Sport path selection — null sport with chosen=true = the explicit opt-out. */
     fun setSport(v: String?) { _ui.value = _ui.value.copy(sport = v, sportChosen = true) }
@@ -164,7 +168,7 @@ class OnboardingViewModel @Inject constructor(
                 _ui.value = _ui.value.copy(busy = false, error = copy)
                 return@launch
             }
-            auth.completeOnboarding(s.age, s.heightCm.toDouble(), s.weightKg.toDouble(), s.goal, activityLevel, s.sport)
+            auth.completeOnboarding(s.age, s.heightCm.toDouble(), s.weightKg.toDouble(), s.goal, activityLevel, s.sport, s.gender)
                 .onFailure { _ui.value = _ui.value.copy(error = it.message) }
             if (s.referralCode.isNotBlank()) runCatching { auth.applyReferralCode(s.referralCode) }
             _ui.value = _ui.value.copy(busy = false)

@@ -62,12 +62,15 @@ class AuthRepository @Inject constructor(private val supabase: SupabaseClient) {
         goal: String,
         activityLevel: String = "STEADY",
         sport: String? = null,
+        /** vC51: vessel sex (M|F) → users.gender — the Groq plan's BMR key. NULL skips the write. */
+        gender: String? = null,
     ): Result<Unit> = runCatching {
         val uid = currentUserId ?: error("Not signed in")
         supabase.from("users").update({
             set("age", age); set("height_cm", heightCm); set("weight_kg", weightKg)
             set("goal", goal); set("activity_level", activityLevel.uppercase())
             if (sport != null) set("sport", sport)
+            if (gender == "M" || gender == "F") set("gender", gender)
             set("onboarding_completed", true)
         }) { filter { eq("id", uid) } }
         Unit
