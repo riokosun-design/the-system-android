@@ -97,7 +97,10 @@ class SystemRepository @Inject constructor(
     // ── Daily Quests (Leguna S.1 AI) ─────────────────────────────────────────
     suspend fun dailyQuests(): List<QuestDto> {
         val id = uid ?: return cachedQuestsToday()
-        runCatching { supabase.postgrest.rpc("ensure_daily_quests") } // server generates today's set once
+        // vC52 §4: the GROQ BRAIN writes today's ledger first (periodization-lawed,
+        // full context). Edge unreachable ⇒ the template floor (mig 039) issues.
+        runCatching { supabase.functions.invoke("generate-daily-quests") }
+            .onFailure { runCatching { supabase.postgrest.rpc("ensure_daily_quests") } }
         return runCatching {
             supabase.from("daily_quests").select { filter { eq("user_id", id) } }
                 .decodeList<QuestDto>().sortedBy { it.id }
@@ -177,6 +180,16 @@ class SystemRepository @Inject constructor(
     suspend fun updateBodyStats(userId: String, age: Int, heightCm: Double, weightKg: Double) {
         supabase.from("users").update({
             set("age", age); set("height_cm", heightCm); set("weight_kg", weightKg)
+        }) { filter { eq("id", userId) } }
+    }
+
+    /** vC52 §5 — athlete calibration persistence (sport exp + environment, BODY STATS). */
+    suspend fun updateSportProfile(userId: String, experience: String?, location: String?) {
+        require(experience == null || experience in setOf("BEGINNER", "INTERMEDIATE", "ADVANCED", "COMPETITIVE")) { "bad_experience" }
+        require(location == null || location in setOf("HOME", "FIELD", "BOTH")) { "bad_location" }
+        supabase.from("users").update({
+            experience?.let { set("sport_experience_level", it) }
+            location?.let { set("training_location", it) }
         }) { filter { eq("id", userId) } }
     }
 

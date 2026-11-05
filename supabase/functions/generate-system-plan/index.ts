@@ -90,7 +90,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const { data: p } = await admin.from("users")
-    .select("weight_kg,height_cm,age,gender,level,activity_level,username,display_name")
+    .select("weight_kg,height_cm,age,gender,level,activity_level,username,display_name,sport,sport_experience_level,training_location,streak_days")
     .eq("id", user.id).maybeSingle();
   if (!p?.weight_kg || !p?.height_cm || !p?.age) {
     return Response.json({ error: "biometrics_incomplete", detail: "Finish IDENTIFY YOUR VESSEL first." }, { status: 422 });
@@ -113,10 +113,15 @@ Deno.serve(async (req: Request) => {
 
   const groqKey = Deno.env.get("GROQ_API_KEY") ?? "";
   if (groqKey) {
-    const userPrompt = `Hunter ${p.display_name ?? p.username} | rank ${tier} | level ${p.level} | ${w}kg | ${h}cm | ${age}yo | sex ${p.gender ?? "M"} | TDEE ${tdee} kcal.
+    // vC52 §4.2/§5.4: the athlete context rides into the brain — sport, experience
+    // and practice environment bend the directive + routine drills honestly.
+    const sportLine = p.sport
+      ? ` | athlete: ${p.sport} at ${p.sport_experience_level ?? "BEGINNER"} level, trains ${p.training_location === "FIELD" ? "on FIELD only" : p.training_location === "HOME" ? "at HOME only (zero equipment variants)" : "BOTH home & field"} | streak ${p.streak_days ?? 0}d`
+      : ` | no sport path | streak ${p.streak_days ?? 0}d`;
+    const userPrompt = `Hunter ${p.display_name ?? p.username} | rank ${tier} | level ${p.level} | ${w}kg | ${h}cm | ${age}yo | sex ${p.gender ?? "M"} | TDEE ${tdee} kcal${sportLine}.
 Act as the authoritative Solo Leveling System. Output ONLY valid JSON:
 {"bmr":number,"tdee":number,"daily_quest":{"title":string,"pushup_target":number,"squat_target":number,"cardio_target_km":number,"penalty_warning":string},"nutrition_target":{"calories":number,"protein_g":number,"carbs_g":number,"fats_g":number},"system_directive":string,"daily_routine":[{"time":"HH:MM","directive":string,"detail":string} x7-9 ascending]}.
-Targets scale to the rank above. Register: cold, militaristic system-window. No medical claims, no supplements, no fantasy violence. Household-executable, zero equipment.`;
+Targets scale to the rank above. If an athlete line exists, one daily_routine block MUST be a sport-specific drill executable in the stated environment. Register: cold, militaristic system-window. No medical claims, no supplements, no fantasy violence. Household-executable, zero equipment.`;
     try {
       const res = await fetch(GROQ_URL, {
         method: "POST",

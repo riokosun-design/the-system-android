@@ -64,6 +64,9 @@ class AuthRepository @Inject constructor(private val supabase: SupabaseClient) {
         sport: String? = null,
         /** vC51: vessel sex (M|F) → users.gender — the Groq plan's BMR key. NULL skips the write. */
         gender: String? = null,
+        /** vC52 §5.2: athlete calibration — written ONLY when a sport path was chosen. */
+        sportExperience: String? = null,
+        trainingLocation: String? = null,
     ): Result<Unit> = runCatching {
         val uid = currentUserId ?: error("Not signed in")
         supabase.from("users").update({
@@ -71,6 +74,8 @@ class AuthRepository @Inject constructor(private val supabase: SupabaseClient) {
             set("goal", goal); set("activity_level", activityLevel.uppercase())
             if (sport != null) set("sport", sport)
             if (gender == "M" || gender == "F") set("gender", gender)
+            if (sportExperience in setOf("BEGINNER", "INTERMEDIATE", "ADVANCED", "COMPETITIVE")) set("sport_experience_level", sportExperience)
+            if (trainingLocation in setOf("HOME", "FIELD", "BOTH")) set("training_location", trainingLocation)
             set("onboarding_completed", true)
         }) { filter { eq("id", uid) } }
         Unit

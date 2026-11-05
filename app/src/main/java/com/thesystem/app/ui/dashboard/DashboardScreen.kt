@@ -537,6 +537,10 @@ private fun TodayQuestModule(
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${q.progress}/${q.targetValue} ${q.targetUnit}", style = MonoData, color = PaperWhite)
+                q.scheduledWindow?.let {  // vC52 §6: circadian slot from the quest engine
+                    Spacer(Modifier.width(8.dp))
+                    Text("◷ $it WINDOW", style = MonoData, color = LabelGray)
+                }
                 Spacer(Modifier.weight(1f))
                 Text("+${q.xpReward} XP", style = MonoData, color = SkyBlue)
             }
@@ -917,7 +921,7 @@ private fun MindQuestModule(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("BODY × MIND SYNC", style = MonoLabel, color = PaperWhite, modifier = Modifier.weight(1f))
                 if (bodyDone) {
-                    GhostButton("CLAIM +25 XP · +5 VC", { haptics.slam(); vm.claimSync() })
+                    GhostButton("CLAIM +25 XP", { haptics.slam(); vm.claimSync() })
                 } else {
                     Text("BODY PENDING", style = MonoLabel, color = FaintGray)
                 }

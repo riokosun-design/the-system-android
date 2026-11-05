@@ -111,7 +111,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 // ═══════════════════════════════════════════════════════════════════════════
-// THE AWAKENING FLOW — 13 pages · 3 phases (v0.25.0 spec §1/§3 + vC51 §GENDER).
+// THE AWAKENING FLOW — 14 pages · 3 phases (v0.25.0 spec §1/§3 + vC51 §GENDER + vC52 §5).
 //
 //   PHASE 1 · VESSEL INTAKE   pages 02–07  (name / SEX / age / height / mass /
 //                                           class) — vC51 added page 03 VESSEL
@@ -120,7 +120,10 @@ import kotlin.math.sin
 //                                           constant (M +5 / F −161) bends to.
 //   PHASE 2 · POWER AWAKENING pages 08–11  (biometric → trajectory graph →
 //                                           RANKS showcase → BLACK ROOM)
-//   PHASE 3 · SYSTEM CONTRACT pages 12–13  (sport path → hold → final gate)
+//   PHASE 3 · SYSTEM CONTRACT pages 12–14  (sport path → ATHLETE CALIBRATION
+//                                           (vC52 §5.2: experience + practice
+//                                           environment, mandatory for the AI
+//                                           drill engine) → hold → final gate)
 //
 // The weak informational slides are DELETED. The old P01 "SYSTEM
 // DETECTED" circular radar loop is permanently retired (spec §1), and the
@@ -172,7 +175,7 @@ private fun phaseOf(page: Int): Int = when (page) {
 
 // ══ HOST — page state machine + cinematic transitions ═══════════════════════
 
-private const val LAST_PAGE = 13
+private const val LAST_PAGE = 14
 
 @Composable
 fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewModel()) {
@@ -187,7 +190,12 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
     val advance: () -> Unit = { haptics.tick(); page = (page + 1).coerceAtMost(LAST_PAGE) }
 
     // system back rewinds the ritual one page instead of ejecting the hunter
-    BackHandler(enabled = page > 1) { haptics.tick(); page = (page - 1).coerceAtLeast(1) }
+    BackHandler(enabled = page > 1) {
+        haptics.tick()
+        // vC52: athletes pass the calibration gate (13); non-athletes never saw it
+        val back = if (page == 14 && ui.sport == null) 12 else page - 1
+        page = back.coerceAtLeast(1)
+    }
 
     // §2 AUTH-ORDER LAW: the Google gate is PAGE 01. After binding:
     //  • EXISTING hunter (onboarding completed, real handle) → STRAIGHT into the
@@ -231,8 +239,13 @@ fun AwakeningFlowScreen(onDone: () -> Unit, vm: OnboardingViewModel = hiltViewMo
                         9 -> P07_Trajectory(clock, advance)
                         10 -> P08_Ranks(clock, advance)
                         11 -> P09_BlackRoom(clock, advance)
-                        12 -> P10_SportPath(ui, vm, clock) { haptics.select(); page = 13 }
-                        13 -> P11_Contract(haptics) { vm.finish(onDone, activityName) }
+                        12 -> P10_SportPath(ui, vm, clock) {
+                            // vC52 §5.2: declared athletes MUST calibrate (page 13);
+                            // the explicit opt-out walks straight to the contract.
+                            haptics.select(); page = if (ui.sport != null) 13 else 14
+                        }
+                        13 -> P11b_AthleteCalibration(ui, vm, clock) { haptics.select(); page = 14 }
+                        14 -> P11_Contract(haptics) { vm.finish(onDone, activityName) }
                         else -> Box(Modifier.fillMaxSize())
                     }
                 }
@@ -327,6 +340,7 @@ private fun pageArtFor(p: Int): PageArt? = when (p) {
     7 -> PageArt(R.drawable.onb_sentinel, 0.18f, mirror = true)
     11 -> PageArt(R.drawable.onb_paths, 0.22f, mirror = true)
     12 -> PageArt(R.drawable.onb_scan, 0.20f)
+    13 -> PageArt(R.drawable.onb_stand, 0.20f, mirror = true) // vC52 athlete calibration
     else -> null // 8/9/10 motion graphics · 13 is the bare contract seal
 }
 
@@ -1122,6 +1136,86 @@ private fun P09_BlackRoom(clock: Float, advance: () -> Unit) {
 // ═══════════════════════════════════════════════════════════════════════════
 // PHASE 3 — SYSTEM CONTRACT (pages 12–13)
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ── PAGE 13 · ATHLETE CALIBRATION (vC52 §5.2) ────────────────────────────────
+// Two mandatory declarations once a sport is chosen: HOW DEEP the craft runs
+// (experience) and WHERE the craft is practiced (environment). The Groq quest
+// engine reads both — HOME hunters never get cone-drill fantasies, FIELD
+// hunters never get towel-pull cop-outs.
+@Composable
+private fun P11b_AthleteCalibration(ui: OnboardingUiState, vm: OnboardingViewModel, clock: Float, advance: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp).verticalScroll(rememberScrollState()),
+    ) {
+        Spacer(Modifier.height(56.dp))
+        Text("ATHLETE CALIBRATION", fontFamily = FontFamily.Default, fontSize = 10.sp, color = VenomGreen, letterSpacing = 3.sp,
+            modifier = Modifier.appear(seg(clock, 0.1f)))
+        Spacer(Modifier.height(12.dp))
+        Text("Temper the discipline.", style = MaterialTheme.typography.headlineMedium.copy(shadow = com.thesystem.app.core.ui.VideoTextShadow), color = Color.White,
+            modifier = Modifier.appear(seg(clock, 0.2f)))
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Declared path: ${ui.sport ?: "—"}. The System's AI issues drills tuned to these two truths every dawn.",
+            style = MaterialTheme.typography.bodyMedium, color = TextMuted,
+            modifier = Modifier.appear(seg(clock, 0.26f)),
+        )
+        Spacer(Modifier.height(22.dp))
+        Text("SPORTS EXPERIENCE LEVEL", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 2.sp,
+            modifier = Modifier.appear(seg(clock, 0.32f)))
+        Spacer(Modifier.height(10.dp))
+        val levels = listOf(
+            "BEGINNER" to "learning the craft",
+            "INTERMEDIATE" to "the basics hold under fatigue",
+            "ADVANCED" to "the body is a weapon already",
+            "COMPETITIVE" to "you fight scored matches",
+        )
+        levels.forEachIndexed { i, (id, sub) ->
+            Box(Modifier.appear(seg(clock, 0.36f + i * 0.06f)).padding(vertical = 4.dp)) {
+                ArchetypeCard(
+                    title = id, tagline = sub,
+                    stat = if (ui.sportExperience == id) "SELECTED" else "TAP TO DECLARE",
+                    accent = VenomGreen, selected = ui.sportExperience == id,
+                    onClick = { vm.setSportExperience(id) },
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("PRACTICE ENVIRONMENT", fontFamily = FontFamily.Default, fontSize = 10.sp, color = ElectricBlue, letterSpacing = 2.sp,
+            modifier = Modifier.appear(seg(clock, 0.62f)))
+        Spacer(Modifier.height(10.dp))
+        listOf(
+            "HOME" to "HOME ONLY",
+            "FIELD" to "FIELD / GROUND ONLY",
+            "BOTH" to "BOTH HOME & FIELD",
+        ).forEachIndexed { i, (id, label) ->
+            Box(Modifier.appear(seg(clock, 0.66f + i * 0.05f)).padding(vertical = 4.dp)) {
+                ArchetypeCard(
+                    title = label,
+                    tagline = when (id) {
+                        "HOME" -> "drills arrive zero-equipment, room-scale"
+                        "FIELD" -> "drills arrive ground-ready, full-space"
+                        else -> "the System splits drills across both worlds"
+                    },
+                    stat = if (ui.trainingLocation == id) "SELECTED" else "TAP TO DECLARE",
+                    accent = ElectricBlue, selected = ui.trainingLocation == id,
+                    onClick = { vm.setTrainingLocation(id) },
+                )
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        if (ui.sportExperience != null && ui.trainingLocation != null) {
+            ContinueBar(seg(clock, 0.85f), advance, label = "SEAL CALIBRATION ▸",
+                subtext = "${ui.sportExperience} · ${ui.trainingLocation} — DRILLS WILL HONOR THIS")
+        } else {
+            Text(
+                "BOTH DECLARATIONS REQUIRED — THE AI READS NOTHING GUESSED",
+                fontFamily = FontFamily.Default, fontSize = 10.sp, color = TextMuted, letterSpacing = 2.sp,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 30.dp).graphicsLayer { alpha = seg(clock, 0.85f) },
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
 
 // ── PAGE 10 · SPORT PATH ─────────────────────────────────────────────────────
 /**

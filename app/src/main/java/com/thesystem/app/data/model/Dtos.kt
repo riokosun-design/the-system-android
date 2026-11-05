@@ -32,6 +32,9 @@ data class UserDto(
     val goal: String? = null,
     /** vC51 (mig 036 col): vessel sex M|F — the AI brain BMR constant. NULL → server M-default. */
     val gender: String? = null,
+    /** vC52 §5 (mig 039 cols): athlete calibration for AI quest drills. NULL = uncalibrated. */
+    @SerialName("sport_experience_level") val sportExperienceLevel: String? = null,
+    @SerialName("training_location") val trainingLocation: String? = null,
     /** Declared sport path (STEP 6) — NULL = no sport content anywhere. */
     val sport: String? = null,
     /** STEP 7 adaptive routine arc, server-owned (mig 023): 1..4. */
@@ -95,6 +98,10 @@ data class ProductDto(
     @SerialName("affiliate_commission_pct") val affiliateCommissionPct: Double = 0.0,
     @SerialName("min_rank_required") val minRankRequired: String = "AVERAGE",
     val active: Boolean = true,
+    /** vC52 §2: admin-set VC→discount ratio. 0 = no discount on this shelf item. */
+    @SerialName("vc_discount_cost") val vcDiscountCost: Long = 0,
+    @SerialName("discount_percentage") val discountPercentage: Int = 0,
+    @SerialName("discount_flat_inr") val discountFlatInr: Double = 0.0,
 )
 
 /** log_quest_proof RPC result — server progress after the verified session. */
@@ -125,6 +132,10 @@ data class QuestDto(
     val difficulty: String = "EASY",
     val verification: String = "CAMERA",       // CAMERA | STEPS | TIMER | MANUAL
     val status: String = "READY",              // LOCKED READY ACTIVE VERIFYING COMPLETE MISSED PENALIZED
+    /** vC52 §4/§6: circadian slot stamped by the Groq quest engine (NULL on floor). */
+    @SerialName("scheduled_window") val scheduledWindow: String? = null,
+    /** vC52 §4: honesty stamp — TRUE only when qwen/qwen3.8-27b wrote the row. */
+    @SerialName("ai_generated") val aiGenerated: Boolean = false,
 ) {
     val isLocked: Boolean get() = status == "LOCKED"
     val isDone: Boolean get() = completed || status == "COMPLETE"

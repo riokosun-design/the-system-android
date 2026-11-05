@@ -87,8 +87,14 @@ class OnboardingViewModel @Inject constructor(
     /** vC51 — vessel sex: M +5 / F −161 metabolic constant for the Groq brain. */
     fun setGender(v: String) { if (v == "M" || v == "F") _ui.value = _ui.value.copy(gender = v) }
     fun setGoal(v: String) { _ui.value = _ui.value.copy(goal = v) }
+    /** vC52 §5.2: athlete calibration (only meaningful when a sport is chosen). */
+    val sportExperience: String? = null,
+    val trainingLocation: String? = null,
     /** Sport path selection — null sport with chosen=true = the explicit opt-out. */
     fun setSport(v: String?) { _ui.value = _ui.value.copy(sport = v, sportChosen = true) }
+    /** vC52 — the calibration dual-lock: experience + environment for the AI drill engine. */
+    fun setSportExperience(v: String) { if (v in setOf("BEGINNER", "INTERMEDIATE", "ADVANCED", "COMPETITIVE")) _ui.value = _ui.value.copy(sportExperience = v) }
+    fun setTrainingLocation(v: String) { if (v in setOf("HOME", "FIELD", "BOTH")) _ui.value = _ui.value.copy(trainingLocation = v) }
     fun setReferral(v: String) { _ui.value = _ui.value.copy(referralCode = v) }
 
     // ── Google Sign-In via Credential Manager → Supabase IDToken exchange ────
@@ -168,7 +174,7 @@ class OnboardingViewModel @Inject constructor(
                 _ui.value = _ui.value.copy(busy = false, error = copy)
                 return@launch
             }
-            auth.completeOnboarding(s.age, s.heightCm.toDouble(), s.weightKg.toDouble(), s.goal, activityLevel, s.sport, s.gender)
+            auth.completeOnboarding(s.age, s.heightCm.toDouble(), s.weightKg.toDouble(), s.goal, activityLevel, s.sport, s.gender, s.sportExperience, s.trainingLocation)
                 .onFailure { _ui.value = _ui.value.copy(error = it.message) }
             if (s.referralCode.isNotBlank()) runCatching { auth.applyReferralCode(s.referralCode) }
             _ui.value = _ui.value.copy(busy = false)

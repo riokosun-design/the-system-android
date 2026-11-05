@@ -314,11 +314,17 @@ private fun BodyStatsCard(me: UserDto, vm: ProfileViewModel) {
     var age by remember { mutableIntStateOf(me.age ?: 20) }
     var height by remember { mutableFloatStateOf((me.heightCm ?: 170.0).toFloat()) }
     var weight by remember { mutableFloatStateOf((me.weightKg ?: 65.0).toFloat()) }
+    // vC52 §5.3: athlete calibration editable here when a sport path is declared
+    var sportExp by remember { mutableStateOf(me.sportExperienceLevel) }
+    var trainLoc by remember { mutableStateOf(me.trainingLocation) }
     GlowCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("BODY STATS", style = MaterialTheme.typography.labelLarge, color = ElectricBlue, modifier = Modifier.weight(1f))
             TextButton(onClick = {
-                if (editing) { vm.saveBodyStats(age, height.toDouble(), weight.toDouble()) }
+                if (editing) {
+                    vm.saveBodyStats(age, height.toDouble(), weight.toDouble())
+                    if (me.sport != null) vm.saveSportProfile(sportExp, trainLoc)
+                }
                 editing = !editing
             }) { Text(if (editing) "SAVE" else "EDIT", color = ElectricBlue) }
         }
@@ -328,6 +334,15 @@ private fun BodyStatsCard(me: UserDto, vm: ProfileViewModel) {
                 StatTile("Height", "${me.heightCm?.toInt() ?: "—"} cm", modifier = Modifier.weight(1f))
                 StatTile("Weight", "%.1f".format(me.weightKg ?: 0.0) + " kg", modifier = Modifier.weight(1f))
             }
+            // vC52 §5.3: athlete calibration strip (view mode)
+            if (me.sport != null) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StatTile("Sport", me.sport ?: "—", modifier = Modifier.weight(1f))
+                    StatTile("Experience", me.sportExperienceLevel ?: "—", modifier = Modifier.weight(1f))
+                    StatTile("Environment", me.trainingLocation ?: "—", modifier = Modifier.weight(1f))
+                }
+            }
         } else {
             Text("Age: $age", style = MaterialTheme.typography.bodyMedium)
             Slider(value = age.toFloat(), onValueChange = { age = it.toInt() }, valueRange = 13f..80f)
@@ -335,6 +350,27 @@ private fun BodyStatsCard(me: UserDto, vm: ProfileViewModel) {
             Slider(value = height, onValueChange = { height = it }, valueRange = 120f..220f)
             Text("Weight: %.1f kg".format(weight), style = MaterialTheme.typography.bodyMedium)
             Slider(value = weight, onValueChange = { weight = it }, valueRange = 35f..180f)
+            // vC52 §5.3: athlete calibration (edit mode) — the AI drill engine reads these
+            if (me.sport != null) {
+                Spacer(Modifier.height(8.dp))
+                Text("SPORTS EXPERIENCE", style = MonoLabel, color = LabelGray)
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("BEGINNER", "INTERMEDIATE", "ADVANCED", "COMPETITIVE").forEach { lv ->
+                        NeonButton(lv.take(4), { sportExp = lv }, Modifier.weight(1f),
+                            color = if (sportExp == lv) ElectricBlue else TextMuted)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text("PRACTICE ENVIRONMENT", style = MonoLabel, color = LabelGray)
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("HOME" to "HOME", "FIELD" to "FIELD", "BOTH" to "BOTH").forEach { (id, label) ->
+                        NeonButton(label, { trainLoc = id }, Modifier.weight(1f),
+                            color = if (trainLoc == id) ElectricBlue else TextMuted)
+                    }
+                }
+            }
         }
     }
 }

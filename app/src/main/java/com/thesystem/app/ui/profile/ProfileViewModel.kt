@@ -71,6 +71,14 @@ class ProfileViewModel @Inject constructor(
         )
     }
 
+    /** vC52 §5.3: athlete calibration persists through the same BODY STATS seam. */
+    fun saveSportProfile(experience: String?, location: String?) = viewModelScope.launch {
+        val me = _state.value.profile ?: return@launch
+        runCatching { system.updateSportProfile(me.id, experience, location) }
+            .onSuccess { _state.value = _state.value.copy(notice = "Athlete calibration updated — the AI drills for THIS reality.") }
+            .onFailure { _state.value = _state.value.copy(error = it.message) }
+    }
+
     fun saveBodyStats(age: Int, heightCm: Double, weightKg: Double) = viewModelScope.launch {
         val me = _state.value.profile ?: return@launch
         runCatching { system.updateBodyStats(me.id, age, heightCm, weightKg) }

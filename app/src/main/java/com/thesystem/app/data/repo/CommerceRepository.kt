@@ -6,7 +6,10 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.storage.storage
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.util.UUID
 import javax.inject.Inject
@@ -16,6 +19,18 @@ import javax.inject.Singleton
 class CommerceRepository @Inject constructor(private val supabase: SupabaseClient) {
 
     private val uid: String? get() = supabase.auth.currentSessionOrNull()?.user?.id
+
+    /** vC52 §2: atomic VC→discount redemption (mig 040). Idempotent by tx UUID. */
+    suspend fun redeemVcDiscount(productId: String): Result<String> = runCatching {
+        val raw = supabase.postgrest.rpc("redeem_vc_discount", buildJsonObject {
+            put("p_product", productId); put("p_tx", UUID.randomUUID().toString())
+        }).data
+        val j = Json.parseToJsonElement(raw).jsonObject
+        val spent = j["vc_spent"]?.jsonPrimitive?.content ?: "0"
+        val disc = j["discount_inr"]?.jsonPrimitive?.content ?: "0"
+        val fin = j["final_price_inr"]?.jsonPrimitive?.content ?: "0"
+        "VC REDEEMED — −$spent VC → ₹$disc OFF · final ₹$fin. Show this at checkout."
+    }
 
     // ── Store (level-gated merch + affiliate supplements) ────────────────────
     suspend fun products(): List<ProductDto> = runCatching {

@@ -205,6 +205,9 @@ private fun ProductEditor(p: ProductDto, vm: AdminViewModel, onClose: () -> Unit
     var category by remember { mutableStateOf(p.category) }
     var minRank by remember { mutableStateOf(p.minRankRequired) }
     var commission by remember { mutableStateOf(p.affiliateCommissionPct.toString()) }
+    var vcCost by remember { mutableStateOf(if (p.vcDiscountCost > 0) p.vcDiscountCost.toString() else "") }
+    var discPct by remember { mutableStateOf(if (p.discountPercentage > 0) p.discountPercentage.toString() else "") }
+    var discFlat by remember { mutableStateOf(if (p.discountFlatInr > 0.0) p.discountFlatInr.toString() else "") }
     var active by remember { mutableStateOf(p.active) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { vm.uploadProductImage(it, context) { uploaded -> uploaded?.let { u -> image = u } } }
@@ -221,6 +224,10 @@ private fun ProductEditor(p: ProductDto, vm: AdminViewModel, onClose: () -> Unit
                 field(price, { price = it.filter { c -> c.isDigit() || c == '.' } }, "Price (INR)")
                 field(url, { url = it }, "Outbound / affiliate URL")
                 field(commission, { commission = it.filter { c -> c.isDigit() || c == '.' } }, "Affiliate % (10–15)")
+                // vC52 §2: the admin-owned VC→discount ratio (marketplace utility law)
+                field(vcCost, { vcCost = it.filter { c -> c.isDigit() } }, "VC discount cost (0 = no VC discount)")
+                field(discPct, { discPct = it.filter { c -> c.isDigit() } }, "Discount % off (0–90)")
+                field(discFlat, { discFlat = it.filter { c -> c.isDigit() || c == '.' } }, "OR flat ₹ off (wins when > 0)")
                 field(image, { image = it }, "Image URL (or upload →)")
                 NeonButton("UPLOAD IMAGE TO STORAGE", { haptics.tick(); picker.launch("image/*") }, Modifier.fillMaxWidth().padding(vertical = 4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
@@ -245,7 +252,10 @@ private fun ProductEditor(p: ProductDto, vm: AdminViewModel, onClose: () -> Unit
                 vm.upsertProduct(
                     p.copy(name = name, description = desc, priceInr = price.toDoubleOrNull() ?: 0.0, outboundUrl = url,
                         imageUrl = image.ifBlank { null }, category = category, minRankRequired = minRank,
-                        affiliateCommissionPct = commission.toDoubleOrNull() ?: 0.0, active = active)
+                        affiliateCommissionPct = commission.toDoubleOrNull() ?: 0.0, active = active,
+                        vcDiscountCost = vcCost.toLongOrNull() ?: 0L,
+                        discountPercentage = (discPct.toIntOrNull() ?: 0).coerceIn(0, 90),
+                        discountFlatInr = discFlat.toDoubleOrNull() ?: 0.0)
                 ); onClose()
             }, color = HunterGold, enabled = name.isNotBlank() && url.isNotBlank())
         },

@@ -44,6 +44,42 @@ enum class Sport(
         tagline = "Explosive lungs, razor footwork, reading deception.",
         templatePrefix = "BD", poolSize = 4,
     ),
+    // ── vC52 §5.1 catalog expansion (ordinals 4–10 mirror mig 039 EXACTLY) ────
+    ATHLETICS(
+        id = "ATHLETICS", label = "ATHLETICS / SPRINTING",
+        tagline = "Maximum velocity, block starts, elastic power.",
+        templatePrefix = "AT", poolSize = 4,
+    ),
+    BOXING_MMA(
+        id = "BOXING_MMA", label = "BOXING / MMA",
+        tagline = "Round-stamina, slipped chins, cold combinations.",
+        templatePrefix = "BX", poolSize = 4,
+    ),
+    CALISTHENICS(
+        id = "CALISTHENICS", label = "CALISTHENICS",
+        tagline = "Bodyweight mastery — leverage is the load.",
+        templatePrefix = "CA", poolSize = 4,
+    ),
+    SWIMMING(
+        id = "SWIMMING", label = "SWIMMING",
+        tagline = "Breath discipline, streamline, endless laps.",
+        templatePrefix = "SW", poolSize = 4,
+    ),
+    TENNIS(
+        id = "TENNIS", label = "TENNIS",
+        tagline = "Split-step, rotation, first-strike precision.",
+        templatePrefix = "TE", poolSize = 4,
+    ),
+    VOLLEYBALL(
+        id = "VOLLEYBALL", label = "VOLLEYBALL",
+        tagline = "Vertical pop, platform angles, court reading.",
+        templatePrefix = "VB", poolSize = 4,
+    ),
+    POWERLIFTING(
+        id = "POWERLIFTING", label = "POWERLIFTING",
+        tagline = "Brace, hinge, squat — the barbell trinity.",
+        templatePrefix = "PL", poolSize = 4,
+    ),
     ;
 
     companion object {
