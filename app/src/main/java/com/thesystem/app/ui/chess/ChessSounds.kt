@@ -19,7 +19,7 @@ import kotlin.math.sin
  */
 object ChessSfx {
 
-    enum class Sfx { MOVE, CAPTURE, CHECK, CHECKMATE, VICTORY, DEFEAT, PUZZLE_FAIL }
+    enum class Sfx { MOVE, CAPTURE, CHECK, CHECKMATE, VICTORY, DEFEAT, PUZZLE_FAIL, CRUSH }
 
     private const val SR = 22050
 
@@ -66,13 +66,15 @@ object ChessSfx {
         return ShortArray(n) { acc[it].coerceIn(-32768, 32767).toShort() }
     }
 
+    // vC53 §3 — ACOUSTIC LAW: harsh beeps are dead. Warm wood, crisp snaps,
+    // metallic warning, cinematic impact. Short PCM, still zero assets.
     private fun pcm(s: Sfx): ShortArray = when (s) {
-        // crisp wooden click: descending snap + noise tick
-        Sfx.MOVE -> mix(seg(1250.0, 820.0, 40, 0.30f), seg(0.0, 0.0, 26, 0.10f, noise = true))
-        // capture: noise crack + low body thump
-        Sfx.CAPTURE -> mix(seg(0.0, 0.0, 55, 0.20f, noise = true), seg(320.0, 140.0, 70, 0.28f))
-        // check: urgent double chime
-        Sfx.CHECK -> after(seg(880.0, 880.0, 65, 0.25f), silence(60), seg(1318.0, 1318.0, 110, 0.26f))
+        // deep warm wooden thud — sub knock + soft skin tick
+        Sfx.MOVE -> mix(seg(190.0, 95.0, 70, 0.34f), seg(0.0, 0.0, 22, 0.09f, noise = true))
+        // punchy snap–impact — hard crack over a low body boom
+        Sfx.CAPTURE -> mix(seg(0.0, 0.0, 42, 0.30f, noise = true), seg(240.0, 110.0, 85, 0.30f))
+        // sharp metallic warning chime — high partial folding down
+        Sfx.CHECK -> after(seg(2093.0, 1760.0, 70, 0.22f), silence(30), seg(2637.0, 2093.0, 120, 0.24f))
         // checkmate: falling fifth, then the low gong
         Sfx.CHECKMATE -> after(
             seg(784.0, 784.0, 110, 0.24f), silence(70),
@@ -86,12 +88,36 @@ object ChessSfx {
             seg(988.0, 988.0, 110, 0.22f), silence(60),
             seg(1318.0, 1318.0, 220, 0.24f),
         )
-        // defeat / puzzle fail: descending buzz
-        Sfx.DEFEAT, Sfx.PUZZLE_FAIL -> mix(seg(240.0, 150.0, 240, 0.26f), seg(120.0, 80.0, 240, 0.16f))
+        // defeat / puzzle fail: soft descending hum (no harsh buzz)
+        Sfx.DEFEAT, Sfx.PUZZLE_FAIL -> mix(seg(220.0, 160.0, 220, 0.20f), seg(110.0, 90.0, 240, 0.12f))
+        // vC53 §3/§7 — KING CRUSH: sub-sonic cinematic impact + debris shimmer
+        Sfx.CRUSH -> after(
+            mix(seg(90.0, 42.0, 380, 0.5f), seg(0.0, 0.0, 300, 0.20f, noise = true)),
+            seg(70.0, 48.0, 240, 0.30f),
+        )
+    }
+
+    // ── vC53 §3.4 — SOUND COVENANT: persisted mute, honored by EVERY cue ─────
+    @Volatile private var appCtx: Context? = null
+    @Volatile private var muted: Boolean = false
+
+    /** Call once from Application.onCreate — reads the stored covenant. */
+    fun attach(context: Context) { appCtx = context.applicationContext; muted = prefsMuted(context) }
+
+    private fun prefsMuted(c: Context) =
+        c.getSharedPreferences("system_chess", Context.MODE_PRIVATE).getBoolean("sfx_muted", false)
+
+    fun isMuted(): Boolean = muted
+    fun setMuted(context: Context, value: Boolean) {
+        muted = value
+        appCtx = context.applicationContext
+        context.getSharedPreferences("system_chess", Context.MODE_PRIVATE)
+            .edit().putBoolean("sfx_muted", value).apply()
     }
 
     /** Fire-and-forget cue; the buffer write happens off the main thread. */
     fun play(s: Sfx) {
+        if (muted) return
         Thread {
             runCatching {
                 val data = pcm(s)

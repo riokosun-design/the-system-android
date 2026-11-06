@@ -1,5 +1,6 @@
 package com.thesystem.app.ui.chess
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -28,11 +29,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -93,10 +97,10 @@ fun ChessHubScreen(nav: NavHostController, vm: ChessViewModel = hiltViewModel())
         ChessDoor("Play with Friends", "One board · two hunters", Icons.Default.People) {
             go(Routes.chessGame(ChessMode.FRIEND_MATCH.name))
         },
-        ChessDoor("Chess Puzzles", "Adaptive pool + daily challenge", Icons.Default.Extension) {
+        ChessDoor("Chess Puzzles", "50-rated pool · 1–10 rail + daily", Icons.Default.Extension) {
             go(Routes.chessPuzzles(false))
         },
-        ChessDoor("Chess Lessons", "Openings · endgames · drills", Icons.Default.School) {
+        ChessDoor("Chess Lessons", "The 64-lesson curriculum", Icons.Default.School) {
             go(Routes.CHESS_LESSONS)
         },
         ChessDoor("Rankings", "Your rating · match history", Icons.Default.EmojiEvents) {
@@ -118,11 +122,30 @@ fun ChessHubScreen(nav: NavHostController, vm: ChessViewModel = hiltViewModel())
             ) {
                 item {
                     Box(Modifier.enterAnim(0)) {
-                        Text(
-                            "SYSTEM CHESS",
-                            color = PaperWhite, fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp,
-                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "SYSTEM CHESS",
+                                color = PaperWhite, fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp,
+                                modifier = Modifier.weight(1f),
+                            )
+                            // §3 — sound covenant chip (every chess surface carries the door)
+                            val hctx = LocalContext.current
+                            var hubMuted by remember { mutableStateOf(ChessSfx.isMuted()) }
+                            Text(
+                                if (hubMuted) "🔇" else "🔊",
+                                fontSize = 16.sp,
+                                modifier = Modifier
+                                    .clickable {
+                                        hubMuted = !hubMuted
+                                        ChessSfx.setMuted(hctx, hubMuted)
+                                    }
+                                    .padding(4.dp),
+                            )
+                        }
                     }
                 }
                 item {

@@ -9,12 +9,15 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -45,6 +48,8 @@ import com.thesystem.app.core.theme.SkyBlue
 /** Classic tournament palette — cream / warm brown, exactly like a real board. */
 private val LIGHT_SQ = Color(0xFFF0D9B5)
 private val DARK_SQ = Color(0xFFB58863)
+/** vC53 §5.1 — select = yellow; capture rings = danger red. */
+private val SELECT_YELLOW = Color(0xFFFFD54F)
 
 /** §3.3 — the check frame is ALWAYS this red, never white. */
 val CHECK_RED = Color(0xFFFF1744)
@@ -116,6 +121,16 @@ fun ChessBoard(
     hint: Pair<Int, Int>? = null,        // SHOW MOVE HINTS — engine-whispered from→to
     anim: AnimMove? = null,
     onAnimDone: () -> Unit = {},
+    /** vC53 §4.2 — extra kings under fire glow too (observational match law). */
+    checkSquares: Set<Int> = if (checkSquare >= 0) setOf(checkSquare) else emptySet(),
+    /** vC53 lesson engine — square feedback tints (correct green / mistake red). */
+    squareTints: Map<Int, Color> = emptyMap(),
+    /** vC53 lesson engine — red attack arrows (from → to), drawn over squares. */
+    attackArrows: List<Pair<Int, Int>> = emptyList(),
+    /** vC53 §5.2 — drag-and-drop rail: (from, dropped target); null disables. */
+    onDrop: ((Int, Int) -> Unit)? = null,
+    /** vC53 §5.2 — light up only these drag-source squares (side to move). */
+    draggable: Set<Int>? = null,
 ) {
     // slide progress for the one moving piece
     val progress = remember { Animatable(1f) }
@@ -145,20 +160,56 @@ fun ChessBoard(
     // every tap was judged against the initial position, so pieces stopped
     // selecting. rememberUpdatedState routes every tap through the fresh lambda.
     val currentOnSquare by rememberUpdatedState(onSquare)
+    val currentOnDrop by rememberUpdatedState(onDrop)
+    val currentDraggable by rememberUpdatedState(draggable)
+    val currentBoard by rememberUpdatedState(board)
     val pieceImgs = rememberPieceBitmaps()
+
+    // vC53 §5.2 — drag trail state (screen px); survives recomposition scoped here
+    var dragFrom by remember { mutableStateOf(-1) }
+    var dragPos by remember { mutableStateOf(Offset.Zero) }
+
+    fun boardSquareAt(off: Offset, visualWidth: Float): Int {
+        val cell = visualWidth / 8f
+        if (cell <= 0f) return -1
+        val vF = (off.x / cell).toInt().coerceIn(0, 7)
+        val vR = (off.y / cell).toInt().coerceIn(0, 7)
+        val r = if (myColor == 0) vR else 7 - vR
+        val f = if (myColor == 0) vF else 7 - vF
+        return (r shl 4) or f
+    }
+
     Canvas(
         modifier
             .aspectRatio(1f)
             .pointerInput(myColor) {
                 detectTapGestures { off ->
-                    val cell = size.width / 8f
-                    if (cell <= 0f) return@detectTapGestures
-                    val vF = (off.x / cell).toInt().coerceIn(0, 7)
-                    val vR = (off.y / cell).toInt().coerceIn(0, 7)
-                    val r = if (myColor == 0) vR else 7 - vR
-                    val f = if (myColor == 0) vF else 7 - vF
-                    currentOnSquare((r shl 4) or f)
+                    val sq = boardSquareAt(off, size.width.toFloat())
+                    if (sq >= 0) currentOnSquare(sq)
                 }
+            }
+            .pointerInput(myColor, onDrop != null) {
+                if (currentOnDrop == null) return@pointerInput
+                detectDragGestures(
+                    onDragStart = { off ->
+                        val sq = boardSquareAt(off, size.width.toFloat())
+                        val allowed = currentDraggable?.contains(sq) ?: true
+                        if (sq >= 0 && currentBoard.sq[sq] != com.thesystem.app.chess.EMPTY && allowed) {
+                            dragFrom = sq; dragPos = off
+                        } else dragFrom = -1
+                    },
+                    onDrag = { change, dragAmount ->
+                        if (dragFrom >= 0) { change.consume(); dragPos += dragAmount }
+                    },
+                    onDragEnd = {
+                        if (dragFrom >= 0) {
+                            val target = boardSquareAt(dragPos, size.width.toFloat())
+                            if (target >= 0 && target != dragFrom) currentOnDrop?.invoke(dragFrom, target)
+                        }
+                        dragFrom = -1
+                    },
+                    onDragCancel = { dragFrom = -1 },
+                )
             },
     ) {
         val cell = size.minDimension / 8f
@@ -184,22 +235,26 @@ fun ChessBoard(
                 if (lastMove != null && (sq == lastMove.first || sq == lastMove.second)) {
                     drawRect(SkyBlue.copy(alpha = 0.20f), Offset(left, top), androidx.compose.ui.geometry.Size(cell, cell))
                 }
-                // selected frame — soft #38bdf8 glow at 40% opacity (spec)
+                // vC53 lesson tints sit UNDER selection/check (engine feedback layer)
+                squareTints[sq]?.let { tint ->
+                    drawRect(tint.copy(alpha = 0.34f), Offset(left, top), androidx.compose.ui.geometry.Size(cell, cell))
+                }
+                // selected frame — vC53 §5.1: YELLOW (tournament standard), twin frame
                 if (sq == selected) {
-                    drawRect(SkyBlue.copy(alpha = 0.18f), Offset(left, top), androidx.compose.ui.geometry.Size(cell, cell))
+                    drawRect(SELECT_YELLOW.copy(alpha = 0.22f), Offset(left, top), androidx.compose.ui.geometry.Size(cell, cell))
                     drawRect(
-                        SkyBlue.copy(alpha = 0.40f), Offset(left + 1f, top + 1f),
+                        SELECT_YELLOW.copy(alpha = 0.55f), Offset(left + 1f, top + 1f),
                         androidx.compose.ui.geometry.Size(cell - 2f, cell - 2f),
                         style = Stroke(2.2f),
                     )
                     drawRect(
-                        SkyBlue.copy(alpha = 0.40f), Offset(left + 3f, top + 3f),
+                        SELECT_YELLOW.copy(alpha = 0.45f), Offset(left + 3f, top + 3f),
                         androidx.compose.ui.geometry.Size(cell - 6f, cell - 6f),
                         style = Stroke(1.1f),
                     )
                 }
-                // checked king frame — §3.3: bold glowing RED (#FF1744), never white
-                if (sq == checkSquare) {
+                // checked king frame — §3.3/§4.2: bold glowing RED (#FF1744), never white; BOTH kings burn
+                if (sq in checkSquares) {
                     drawRect(CHECK_RED.copy(alpha = 0.18f * checkA), Offset(left, top), androidx.compose.ui.geometry.Size(cell, cell))
                     drawRect(
                         CHECK_RED.copy(alpha = 0.45f + 0.55f * checkA),
@@ -217,8 +272,9 @@ fun ChessBoard(
                 // legal targets
                 if (sq in targets) {
                     if (board.sq[sq] != EMPTY) {
+                        // §5.1 — capturable enemies wear DANGER rings
                         drawCircle(
-                            SkyBlue.copy(alpha = 0.85f),
+                            CHECK_RED.copy(alpha = 0.90f),
                             radius = cell * 0.44f,
                             center = Offset(left + cell / 2f, top + cell / 2f),
                             style = Stroke(cell * 0.055f),
@@ -286,8 +342,26 @@ fun ChessBoard(
                 val p = board.sq[sq]
                 if (p == EMPTY) continue
                 if (animating && sq == anim!!.to) continue
+                if (dragFrom >= 0 && sq == dragFrom) continue   // §5.2: piece rides the finger
                 drawPieceImg(pieceImgs, p, visualX(f) * cell, visualY(r) * cell, cell)
             }
+        }
+
+        // attack arrows (lesson DIDACTICS) — crimson vectors over the squares
+        for ((af, at) in attackArrows) {
+            val hfx = visualX(af and 7) * cell + cell / 2f
+            val hfy = visualY(af shr 4) * cell + cell / 2f
+            val htx = visualX(at and 7) * cell + cell / 2f
+            val hty = visualY(at shr 4) * cell + cell / 2f
+            val dx = htx - hfx; val dy = hty - hfy
+            val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+            val ux = dx / len; val uy = dy / len
+            val sx = hfx + ux * cell * 0.18f; val sy = hfy + uy * cell * 0.18f
+            val ex = htx - ux * cell * 0.28f; val ey = hty - uy * cell * 0.28f
+            drawLine(CHECK_RED, Offset(sx, sy), Offset(ex, ey), strokeWidth = cell * 0.07f)
+            val px = -uy; val py = ux
+            drawLine(CHECK_RED, Offset(ex, ey), Offset(ex - ux * cell * 0.22f + px * cell * 0.14f, ey - uy * cell * 0.22f + py * cell * 0.14f), strokeWidth = cell * 0.07f)
+            drawLine(CHECK_RED, Offset(ex, ey), Offset(ex - ux * cell * 0.22f - px * cell * 0.14f, ey - uy * cell * 0.22f - py * cell * 0.14f), strokeWidth = cell * 0.07f)
         }
 
         // ── the moving piece: slide + capture fade + promotion crossfade ─
@@ -316,6 +390,42 @@ fun ChessBoard(
                 }
             } else {
                 drawPieceImg(pieceImgs, a.movingPiece, cx, cy, cell)
+            }
+            // vC53 §6 — CAPTURE SHATTER: 10 dark shards burst outward, spin + fade
+            if (a.captured != EMPTY && t < 1f) {
+                val cx2 = tx + cell / 2f; val cy2 = ty + cell / 2f
+                var rng = (a.to * 2654435761L) or 0x9E3779B97F4A7C15L
+                for (i in 0 until 10) {
+                    rng = rng xor (rng shl 13); rng = rng xor (rng ushr 7); rng = rng xor (rng shl 17)
+                    val ang = (rng and 0xFFFF).toFloat() / 65536f * 6.2831855f
+                    rng = rng xor (rng shl 13); rng = rng xor (rng ushr 7); rng = rng xor (rng shl 17)
+                    val spd = cell * (0.42f + ((rng ushr 16) and 0xFF).toFloat() / 255f * 0.85f)
+                    val d = spd * t
+                    val alpha = (1f - t * 1.15f).coerceIn(0f, 1f)
+                    val sz = cell * 0.10f * (1f - 0.35f * t)
+                    val ox = cx2 + kotlin.math.cos(ang) * d
+                    val oy = cy2 + kotlin.math.sin(ang) * d
+                    // angular shard = little rotated diamond
+                    val rot = ang + t * 2.4f
+                    val c = kotlin.math.cos(rot) * sz; val s2 = kotlin.math.sin(rot) * sz
+                    drawPath(
+                        androidx.compose.ui.graphics.Path().apply {
+                            moveTo(ox + c, oy + s2); lineTo(ox - s2 * 0.6f, oy + c * 0.6f)
+                            lineTo(ox - c, oy - s2); lineTo(ox + s2 * 0.6f, oy - c * 0.6f); close()
+                        },
+                        Color(0xFF241A12).copy(alpha = alpha),
+                    )
+                }
+            }
+        }
+
+        // vC53 §5.2 — drag ghost: lifted 12% under the fingertip shadow
+        if (dragFrom >= 0) {
+            val p = board.sq[dragFrom]
+            if (p != EMPTY) {
+                val s = cell * 1.12f
+                drawCircle(Color(0x66000000), radius = s * 0.40f, center = dragPos + Offset(cell * 0.06f, cell * 0.10f))
+                drawPieceImg(pieceImgs, p, dragPos.x - s / 2f, dragPos.y - s / 2f, s)
             }
         }
     }

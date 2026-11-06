@@ -37,8 +37,11 @@ class Board(
     var fullmove: Int = 1,
     var wKing: Int = -1,
     var bKing: Int = -1,
+    /** vC53 §4 OBSERVATIONAL LAW: -1 none · 0 white king captured · 1 black.
+     *  Real-board rule — kings leave the board like every other piece. */
+    var kingCrushed: Int = -1,
 ) {
-    fun copy() = Board(sq.copyOf(), whiteToMove, castling, ep, halfmove, fullmove, wKing, bKing)
+    fun copy() = Board(sq.copyOf(), whiteToMove, castling, ep, halfmove, fullmove, wKing, bKing, kingCrushed)
 
     companion object {
         val START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -148,9 +151,27 @@ class Board(
         return false
     }
 
-    fun inCheck(white: Boolean): Boolean = isAttacked(if (white) wKing else bKing, !white)
+    fun inCheck(white: Boolean): Boolean {
+        if (kingCrushed != -1) return false                  // crushed kings fear nothing
+        val k = if (white) wKing else bKing
+        return k and 0x88 == 0 && isAttacked(k, !white)
+    }
+
+    /** vC53 §4.2 — BOTH monarchs under fire glow: match law asks for either king. */
+    fun kingsInCheck(): Set<Int> = buildSet {
+        if (kingCrushed != 0 && wKing and 0x88 == 0 && isAttacked(wKing, false)) add(wKing)
+        if (kingCrushed != 1 && bKing and 0x88 == 0 && isAttacked(bKing, true)) add(bKing)
+    }
 
     // ── pseudo-legal generation ──────────────────────────────────────────────
+    /** vC53 §4.1: geometric truth, king-safety UNFILTERED. Match play allows
+     *  moves that expose your own king — observance is the hunter's job. */
+    fun pseudoLegalMoves(): List<Move> {
+        val out = ArrayList<Move>(64)
+        genPseudo(out)
+        return out
+    }
+
     private fun genPseudo(moves: MutableList<Move>) {
         val mine = if (whiteToMove) 0 else BLACK_BIT
         val theirs = if (whiteToMove) BLACK_BIT else 0
@@ -231,12 +252,16 @@ class Board(
         }
     }
 
-    data class Undo(val captured: Int, val castling: Int, val ep: Int, val half: Int, var epPawnSq: Int)
+    data class Undo(
+        val captured: Int, val castling: Int, val ep: Int, val half: Int, var epPawnSq: Int,
+        val crushedBefore: Int = -1,   // vC53 §4: king-crush state before the move
+    )
 
     fun make(m: Move): Undo {
-        val undo = Undo(sq[m.to], castling, ep, halfmove, -1)
+        val undo = Undo(sq[m.to], castling, ep, halfmove, -1, kingCrushed)
         val p = sq[m.from]
         halfmove = if (typeOf(p) == PAWN || sq[m.to] != EMPTY) 0 else halfmove + 1
+        if (typeOf(sq[m.to]) == KING) kingCrushed = colorOf(sq[m.to])   // vC53 §4.3 KING CRUSH
         sq[m.to] = if (m.promo != 0) m.promo or (p and BLACK_BIT) else p
         sq[m.from] = EMPTY
         if (typeOf(p) == KING) {
@@ -275,6 +300,7 @@ class Board(
 
     fun unmake(m: Move, undo: Undo) {
         whiteToMove = !whiteToMove
+        kingCrushed = undo.crushedBefore
         if (!whiteToMove) fullmove--   // white now to move again after unmaking black's move
         val moved = sq[m.to]
         sq[m.from] = if (m.promo != 0) PAWN or (moved and BLACK_BIT) else moved
@@ -320,9 +346,10 @@ class Board(
         make(m); return true
     }
 
-    enum class Status { ONGOING, CHECKMATE, STALEMATE, DRAW_50, DRAW_MATERIAL }
+    enum class Status { ONGOING, CHECKMATE, STALEMATE, DRAW_50, DRAW_MATERIAL, KING_CRUSHED }
 
     fun status(): Pair<Status, Boolean> { // status + whiteToMove flag retained for mate side
+        if (kingCrushed != -1) return Status.KING_CRUSHED to whiteToMove   // vC53 §4.3
         if (halfmove >= 100) return Status.DRAW_50 to whiteToMove
         if (insufficientMaterial()) return Status.DRAW_MATERIAL to whiteToMove
         if (legalMoves().isEmpty()) return (if (inCheck(whiteToMove)) Status.CHECKMATE else Status.STALEMATE) to whiteToMove

@@ -44,6 +44,7 @@ import com.thesystem.app.core.theme.PaperWhite
 import com.thesystem.app.core.theme.SkyBlue
 import com.thesystem.app.core.ui.FloatingIconButton
 import com.thesystem.app.core.ui.GhostButton
+import com.thesystem.app.core.ui.NeonButton
 import com.thesystem.app.core.ui.SectionTitle
 import com.thesystem.app.core.ui.SystemBackground
 import com.thesystem.app.core.ui.rememberSystemHaptics
@@ -66,6 +67,7 @@ fun ChessSettingsScreen(nav: NavHostController) {
     var defaultDiff by remember { mutableIntStateOf(prefs.getInt("default_diff", 1).coerceIn(0, 3)) }
     var resetConfirm by remember { mutableStateOf(false) }
     var resetDone by remember { mutableStateOf(false) }
+    var sfxMuted by remember { mutableStateOf(ChessSfx.isMuted()) }   // §3 sound covenant
 
     if (resetConfirm) {
         AlertDialog(
@@ -147,6 +149,35 @@ fun ChessSettingsScreen(nav: NavHostController) {
                                     .padding(vertical = 9.dp),
                             )
                         }
+                    }
+                }
+
+                // §3 AUDIO — the one sound covenant, persisted via ChessSfx
+                SectionTitle("BOARD AUDIO", SkyBlue)
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, ChessCardLine, ChessCardShape)
+                        .padding(14.dp),
+                ) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Move & battle sounds", color = PaperWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                "Wooden thuds on movement, crack on capture, chime on check, the cinematic crush on king-kills. Mirror of the 🔊 chip on every chess screen.",
+                                color = LabelGray, fontSize = 11.sp, lineHeight = 15.sp,
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        NeonButton(
+                            if (sfxMuted) "MUTED" else "SOUND ON",
+                            {
+                                sfxMuted = !sfxMuted
+                                ChessSfx.setMuted(context, sfxMuted)
+                                haptics.select()
+                            },
+                            color = if (sfxMuted) LabelGray else SkyBlue,
+                        )
                     }
                 }
 

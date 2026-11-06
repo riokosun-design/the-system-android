@@ -40,6 +40,9 @@ class TheSystemApplication : Application() {
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_REMINDER, "Scheduled wars", NotificationManager.IMPORTANCE_HIGH)
         )
+        // vC53 §3 — chess audio covenant: re-arm the mute flag from disk BEFORE
+        // any composable can read ChessSfx.isMuted() (cold start race closed).
+        com.thesystem.app.ui.chess.ChessSfx.attach(this)
     }
 
     companion object {

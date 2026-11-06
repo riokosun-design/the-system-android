@@ -24,9 +24,11 @@ import com.thesystem.app.chess.BLACK_BIT
 import com.thesystem.app.chess.Board
 import com.thesystem.app.chess.ChessAI
 import com.thesystem.app.chess.EMPTY
+import com.thesystem.app.chess.KING
 import com.thesystem.app.chess.Move
 import com.thesystem.app.chess.PAWN
 import com.thesystem.app.chess.colorOf
+import com.thesystem.app.chess.typeOf
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
 import kotlinx.coroutines.Dispatchers
@@ -84,6 +86,7 @@ fun ChessGameScreen(
         )
     }
     var aiTrainingUnlocked by remember(mode) { mutableStateOf(mode != ChessMode.AI_TRAINING) }
+    var sfxMuted by remember { mutableStateOf(ChessSfx.isMuted()) }   // §3 — sound covenant
 
     // PLAY vs AI configuration (spec §6/§8/§9): side, takeback, hints
     var sideSel by remember(mode) { mutableIntStateOf(0) }          // 0 WHITE · 1 RANDOM · 2 BLACK
@@ -94,7 +97,9 @@ fun ChessGameScreen(
 
     var fen by remember { mutableStateOf(startFen) }
     val board = remember(fen) { Board.fromFen(fen) }
-    val legal = remember(fen) { board.legalMoves() }
+    // vC53 §4 — OBSERVATIONAL RULES: the hunter may play ANY pseudo-legal move,
+    // even one that exposes their own king. A king left hanging simply dies (§4.2).
+    val legal = remember(fen) { board.pseudoLegalMoves() }
 
     var selected by remember { mutableStateOf(-1) }
     var pendingPromo by remember { mutableStateOf<List<Move>>(emptyList()) }
@@ -118,6 +123,9 @@ fun ChessGameScreen(
 
     var result by remember { mutableStateOf<String?>(null) } // WIN | LOSS | DRAW (hunter view)
     var resultReason by remember { mutableStateOf("") }
+    // vC53 §7 — mate/crush never lands instantly: the kill parks in `finisher`
+    // while the 2.5s cutscene runs, THEN the result modal arrives.
+    var finisher by remember { mutableStateOf<FinisherScene?>(null) }
     var logged by remember { mutableStateOf(false) }
     var analysis by remember { mutableStateOf<GameAnalysis?>(null) }
     var logOutcome by remember { mutableStateOf<com.thesystem.app.data.repo.ChessRepository.LogResult?>(null) }
@@ -129,7 +137,8 @@ fun ChessGameScreen(
     val oppMs = if (userWhite) blackMs else whiteMs
     val undoAllowed = mode in UNDO_MODES
 
-    fun finish(res: String, reason: String) {
+    /** The old terminal path — audio + vibration law fires when the result modal lands. */
+    fun finalizeFinish(res: String, reason: String) {
         if (result != null) return
         result = res; resultReason = reason
         // §3.3 — audio + vibration law: mate jingle + long thud on every conclusion
@@ -138,6 +147,26 @@ fun ChessGameScreen(
             "LOSS" -> { haptics.error(); ChessSfx.play(ChessSfx.Sfx.CHECKMATE); ChessSfx.buzz(appContext, 70, 170) }
             else -> ChessSfx.play(ChessSfx.Sfx.CHECKMATE)
         }
+    }
+
+    fun finish(res: String, reason: String) {
+        if (result != null || finisher != null) return
+        // §7 — KING CRUSH / CHECKMATE detonate the un-skippable cutscene first.
+        if (reason == "CHECKMATE" || reason == "KING CRUSHED") {
+            val attacker = playedMoves.lastOrNull()?.let { board.sq[it.to] } ?: (KING or BLACK_BIT)
+            finisher = FinisherScene(
+                attackerPiece = attacker,
+                banner = if (reason == "KING CRUSHED") "[ KING CRUSHED ]" else "[ CHECKMATE VICTORY ]",
+                reward = when {
+                    mode.war -> "SERVER ADJUDICATES THE SPOILS"
+                    pnp -> "NO RATING — COUCH DUEL"
+                    else -> "PRACTICE RATING PENDING"
+                },
+                res = res, reason = reason,
+            )
+            return
+        }
+        finalizeFinish(res, reason)
     }
 
     fun pushMove(m: Move) {
@@ -163,6 +192,7 @@ fun ChessGameScreen(
         }
         val (st, _) = board.status()
         when (st) {
+            Board.Status.KING_CRUSHED -> finish(if (board.kingCrushed == povColor) "LOSS" else "WIN", "KING CRUSHED")
             Board.Status.CHECKMATE -> finish(if (sideAfter == povColor) "LOSS" else "WIN", "CHECKMATE")
             Board.Status.STALEMATE -> finish("DRAW", "STALEMATE")
             Board.Status.DRAW_50 -> finish("DRAW", "FIFTY-MOVE RULE")
@@ -170,7 +200,7 @@ fun ChessGameScreen(
             Board.Status.ONGOING -> {
                 // §3.3 — move audio law: capture crack > check chime > plain click
                 when {
-                    board.inCheck(board.whiteToMove) -> { ChessSfx.play(ChessSfx.Sfx.CHECK); ChessSfx.buzz(appContext, 45, 150) }
+                    board.kingsInCheck().isNotEmpty() -> { ChessSfx.play(ChessSfx.Sfx.CHECK); ChessSfx.buzz(appContext, 45, 150) }
                     cap != EMPTY -> ChessSfx.play(ChessSfx.Sfx.CAPTURE)
                     else -> ChessSfx.play(ChessSfx.Sfx.MOVE)
                 }
@@ -221,6 +251,7 @@ fun ChessGameScreen(
         whiteMs = mode.clockSec * 1000L; blackMs = mode.clockSec * 1000L
         result = null; resultReason = ""; logged = false
         analysis = null; logOutcome = null
+        finisher = null
         aiThinking = false
         aiTrainingUnlocked = keepUnlock || mode != ChessMode.AI_TRAINING
     }
@@ -261,9 +292,12 @@ fun ChessGameScreen(
         // §4 THE 5-SECOND LAW, second wall: withTimeoutOrNull + a guaranteed-legal
         // fallback make it impossible for any bot to think longer than ~5s.
         val mv = withContext(Dispatchers.Default) {
-            withTimeoutOrNull(ChessAI.MAX_THINK_TIME_MS + 300L) {
-                ChessAI.bestMove(Board.fromFen(snapshotFen), diff)
-            }
+            val snap = Board.fromFen(snapshotFen)
+            // §4.2 — KING CRUSH opportunism: a hanging king dies instantly, no search
+            snap.pseudoLegalMoves().firstOrNull { typeOf(snap.sq[it.to]) == KING }
+                ?: withTimeoutOrNull(ChessAI.MAX_THINK_TIME_MS + 300L) {
+                    ChessAI.bestMove(snap, diff)
+                }
         } ?: Board.fromFen(snapshotFen).legalMoves().firstOrNull()
         aiThinking = false
         // COMMIT GATE: game may have moved on while the search ran (undo / NEW
@@ -275,7 +309,7 @@ fun ChessGameScreen(
     // deterministic clocks (povColor: pnp reads the flag from WHITE's seat)
     LaunchedEffect(result, aiTrainingUnlocked) {
         if (mode.clockSec <= 0 || !aiTrainingUnlocked) return@LaunchedEffect
-        while (result == null) {
+        while (result == null && finisher == null) {   // §7 — clocks freeze during the cutscene
             delay(200)
             if (board.whiteToMove) whiteMs = (whiteMs - 200).coerceAtLeast(0) else blackMs = (blackMs - 200).coerceAtLeast(0)
             if (whiteMs <= 0L) finish(if (povColor == 0) "LOSS" else "WIN", "FLAG FALL")
@@ -312,6 +346,21 @@ fun ChessGameScreen(
         vm.refresh()
     }
 
+    // vC53 §7 — THE FINISHER takes over the entire screen until onDone() hands
+    // the parked result back to the normal flow (rematch / analysis / server log).
+    finisher?.let { scene ->
+        KingCrushFinisher(
+            attackerPiece = scene.attackerPiece,
+            bannerText = scene.banner,
+            rewardLine = scene.reward,
+            onDone = {
+                finisher = null
+                finalizeFinish(scene.res, scene.reason)
+            },
+        )
+        return
+    }
+
     // viewport law (spec): full-height column, top pinned, controls pinned to
     // the bottom, the board optically centered between them — no page scroll.
     SystemBackground {
@@ -333,6 +382,14 @@ fun ChessGameScreen(
                         style = MonoLabel, color = SkyBlue,
                     )
                 }
+                // §3 — sound toggle (persisted covenant via ChessSfx)
+                Text(
+                    if (sfxMuted) "🔇" else "🔊",
+                    fontSize = 15.sp,
+                    modifier = Modifier
+                        .clickable { sfxMuted = !sfxMuted; ChessSfx.setMuted(appContext, sfxMuted) }
+                        .padding(horizontal = 8.dp),
+                )
                 if (mode.clockSec > 0) ClockChip(oppMs, active = !board.whiteToMove == (if (userWhite) false else true) && result == null)
             }
 
@@ -388,10 +445,14 @@ fun ChessGameScreen(
                         selected = selected,
                         targets = remember(selected, legal) { if (selected < 0) emptySet() else targetsFor(legal, selected) },
                         lastMove = lastMove,
-                        checkSquare = if (result == null && inCheck) (if (board.whiteToMove) board.wKing else board.bKing) else -1,
+                        // §4.1 — EVERY burning king glows #FF1744, not only the side to move
+                        checkSquares = if (result == null) board.kingsInCheck() else emptySet(),
                         hint = hintMove?.let { it.from to it.to },
                         anim = anim,
                         onAnimDone = { anim = null },
+                        draggable = if (result != null || aiThinking ||
+                            (!pnp && (if (board.whiteToMove) 0 else 1) != userColorIdx)
+                        ) emptySet() else legal.map { it.from }.toSet(),
                         onSquare = onSquare@{ sq ->
                             if (result != null || aiThinking) return@onSquare
                             val sideToMove = if (board.whiteToMove) 0 else 1
@@ -412,6 +473,22 @@ fun ChessGameScreen(
                                 }
                             }
                             selected = if (piece != EMPTY && colorOf(piece) == (if (pnp) sideToMove else userColorIdx)) sq else -1
+                        },
+                        // §5 — DRAG & DROP rides the same move pipeline as tap
+                        onDrop = drop@{ from, to ->
+                            if (result != null || aiThinking || finisher != null) return@drop
+                            val stm = if (board.whiteToMove) 0 else 1
+                            if (!pnp && stm != userColorIdx) return@drop
+                            val options = legal.filter { it.from == from && it.to == to }
+                            if (options.isEmpty()) return@drop
+                            if (options.any { it.promo != 0 }) {
+                                selected = from
+                                pendingPromo = options
+                            } else {
+                                if (!pnp && userMoveStartedAt > 0) thinkMs.add(System.currentTimeMillis() - userMoveStartedAt)
+                                haptics.tick()
+                                pushMove(options.first())
+                            }
                         },
                         modifier = Modifier.size(boardSide),
                     )
@@ -526,6 +603,15 @@ fun ChessGameScreen(
         }
     }
 }
+
+/** A kill parked behind the §7 cutscene — result + reason land when it ends. */
+private data class FinisherScene(
+    val attackerPiece: Int,
+    val banner: String,
+    val reward: String,
+    val res: String,
+    val reason: String,
+)
 
 private fun materialOf(caps: List<Int>): Int = caps.sumOf { PIECE_VALUE[com.thesystem.app.chess.typeOf(it)] ?: 0 }
 

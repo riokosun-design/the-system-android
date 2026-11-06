@@ -118,6 +118,19 @@ class ChessViewModel @Inject constructor(
 
     suspend fun puzzleRepoTodayDailySolved(): Boolean = repo.todayCount("DAILY", "SOLVED") > 0
 
+    /** vC53 §1 — curriculum completion stamp. Unknown kinds no-op server-side. */
+    fun viewModelReportLesson(lessonId: Int, title: String) =
+        viewModelScope.launch {
+            repoLog(
+                kind = "LESSON", mode = "CURRICULUM", result = "COMPLETE",
+                plies = 0,
+                stats = kotlinx.serialization.json.buildJsonObject {
+                    put("lesson", kotlinx.serialization.json.JsonPrimitive(lessonId))
+                    put("title", kotlinx.serialization.json.JsonPrimitive(title))
+                },
+            )
+        }
+
     /** Rankings screen: the hunter's REAL recent session proofs (server rows only). */
     suspend fun repoRecentSessions(limit: Int = 15) = repo.recentSessions(limit)
 

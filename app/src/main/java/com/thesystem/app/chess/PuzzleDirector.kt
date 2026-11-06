@@ -62,6 +62,7 @@ class PuzzleDirector(
         const val DESCEND_SOLVES = 0.35   // <35% with ≥5 attempts → tier down
         const val MIN_ATTEMPTS = 5
         const val MAX_RECORDS = 400
+        const val WIDEN_MIN = 5            // §2 — minimum neighbor-widened pool
     }
 
     private fun records(): List<Record> = store.loadRecords()
@@ -78,21 +79,28 @@ class PuzzleDirector(
     }
 
     /**
-     * Tier law: Elo anchor (≤600→I, ≤1100→II, else III), then rolling-form
-     * delta (±1, clamped 1..3). A slow-but-accurate solver still climbs;
-     * speed only guards AGAINST climbing (fast guesses aren't mastery).
+     * Tier law vC53 §2 — the FULL 1–10 rail. Elo anchor maps honestly across
+     * all ten grades, then the rolling-form delta (±1) nudges. A slow-but-
+     * accurate solver still climbs; speed only guards AGAINST climbing.
      */
     fun tier(rec: List<Record> = records(), practiceElo: Int = 400): Pair<Int, String> {
         var t = when {
-            practiceElo <= 600 -> 1
-            practiceElo <= 1100 -> 2
-            else -> 3
+            practiceElo <= 420 -> 1
+            practiceElo <= 550 -> 2
+            practiceElo <= 700 -> 3
+            practiceElo <= 850 -> 4
+            practiceElo <= 1000 -> 5
+            practiceElo <= 1200 -> 6
+            practiceElo <= 1400 -> 7
+            practiceElo <= 1650 -> 8
+            practiceElo <= 1900 -> 9
+            else -> 10
         }
         var why = "PRACTICE ELO $practiceElo ANCHOR"
         val rate = rollingSolveRate(rec)
         if (rate != null) {
             val fast = avgSolveMs(rec).let { it in 1..45_000L }
-            if (rate >= CLIMB_SOLVES && t < 3) {
+            if (rate >= CLIMB_SOLVES && t < 10) {
                 if (fast) { t++; why = "${(rate * 100).toInt()}% SOLVE RATE — TIER CLIMB" }
                 else why = "ACCURATE BUT SLOW — CLIMB HELD UNTIL <45s SOLVES"
             } else if (rate < DESCEND_SOLVES && t > 1) {
@@ -101,18 +109,27 @@ class PuzzleDirector(
                 why = "${(rate * 100).toInt()}% SOLVE RATE — TIER HOLDS"
             }
         }
-        return (t.coerceIn(1, 3)) to why
+        return (t.coerceIn(1, 10)) to why
+    }
+
+    /** §2 — tier pools widen honestly when a rating grade is thin: nearest
+     *  ratings by distance, stable order, minimum pipe of [WIDEN_MIN]. */
+    private fun poolFor(t: Int): List<Puzzle> {
+        val exact = pack.filter { it.rating == t }
+        if (exact.size >= WIDEN_MIN) return exact
+        return pack.sortedWith(compareBy({ kotlin.math.abs(it.rating - t) }, { it.id })).take(WIDEN_MIN)
     }
 
     /**
-     * §3.2 — pick the next puzzle pinned to an explicit tier (the 1–10 random
-     * difficulty rail maps to pack tiers I–III). Same anti-repeat law as [next]:
-     * quarantine + full-cycle before any revisit.
+     * Pick the next puzzle pinned to an explicit 1–10 rating (the random
+     * difficulty rail). Same anti-repeat law as [next]: quarantine +
+     * full-cycle before any revisit. Neighbor-widened pools keep even the
+     * thinnest ratings fresh.
      */
     fun nextInTier(t: Int, currentId: String? = null, reason: String = "SPECIFIED DIFFICULTY"): Verdict {
-        val tier = t.coerceIn(1, 3)
+        val tier = t.coerceIn(1, 10)
         val rec = records()
-        return selectFrom(pool = pack.filter { it.diff == tier }.ifEmpty { pack }, rec = rec, currentId = currentId, t = tier, why = reason)
+        return selectFrom(pool = poolFor(tier), rec = rec, currentId = currentId, t = tier, why = reason)
     }
 
     /**
@@ -122,7 +139,7 @@ class PuzzleDirector(
     fun next(currentId: String? = null, practiceElo: Int = 400): Verdict {
         val rec = records()
         val (t, why) = tier(rec, practiceElo)
-        return selectFrom(pool = pack.filter { it.diff == t }.ifEmpty { pack }, rec = rec, currentId = currentId, t = t, why = why)
+        return selectFrom(pool = poolFor(t), rec = rec, currentId = currentId, t = t, why = why)
     }
 
     private fun selectFrom(pool: List<Puzzle>, rec: List<Record>, currentId: String?, t: Int, why: String): Verdict {
