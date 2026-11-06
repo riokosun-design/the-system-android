@@ -394,7 +394,7 @@ fun ChessBoard(
             // vC53 §6 — CAPTURE SHATTER: 10 dark shards burst outward, spin + fade
             if (a.captured != EMPTY && t < 1f) {
                 val cx2 = tx + cell / 2f; val cy2 = ty + cell / 2f
-                var rng = (a.to * 2654435761L) or 0x9E3779B97F4A7C15L
+                var rng = (a.to * 2654435761L) or 0x2545F4914F6CDD1DL   // fits signed Long
                 for (i in 0 until 10) {
                     rng = rng xor (rng shl 13); rng = rng xor (rng ushr 7); rng = rng xor (rng shl 17)
                     val ang = (rng and 0xFFFF).toFloat() / 65536f * 6.2831855f
