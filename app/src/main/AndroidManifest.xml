@@ -99,6 +99,10 @@
             android:theme="@style/Theme.System.Starting" />
 
         <receiver android:name=".service.QuestReminderReceiver" android:exported="false" />
+        <!-- vC54 §1 — circadian quest-window pings (exact, alarm-sound) -->
+        <receiver android:name=".service.QuestWindowReceiver" android:exported="false" />
+        <!-- vC54 §3 — watchdog boundary alarms while the app is dead -->
+        <receiver android:name=".service.WatchdogAlarmReceiver" android:exported="false" />
         <receiver android:name=".service.RoutineBootReceiver" android:exported="true" android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

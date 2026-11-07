@@ -61,6 +61,7 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
             item { Box(Modifier.enterAnim(1)) { WalletCard(me = me, onOpen = { haptics.tick(); nav.navigate(Routes.WALLET) }) } }
             // 0.24.0: DISCIPLINE ENGINE — quest lock, porn shield, anti-uninstall guards
             item { Box(Modifier.enterAnim(1)) { DisciplineCard(onOpen = { haptics.tick(); nav.navigate(Routes.DISCIPLINE) }) } }
+            item { Box(Modifier.enterAnim(1)) { GranularBlockersCard() } }
             if (me.isAdmin) {
                 item { GhostButton("ADMIN CONTROL PANEL", { nav.navigate(Routes.ADMIN) }, Modifier.fillMaxWidth()) }
                 item { GhostButton("AI BENCHMARK", { nav.navigate(Routes.AI_BENCHMARK) }, Modifier.fillMaxWidth()) }
@@ -239,12 +240,78 @@ private fun DisciplineCard(onOpen: () -> Unit) {
                 )
                 Spacer(Modifier.height(3.dp))
                 Text(
-                    "Quest-locked social media · always-on porn shield · anti-uninstall guard.",
+                    "Quest-locked social media · always-on adult-content shield · anti-uninstall guard.",
                     style = MaterialTheme.typography.bodySmall, color = LabelGray,
                 )
             }
             GhostButton("OPEN", onOpen)
         }
+    }
+}
+
+/**
+ * vC54 §2 — GRANULAR BLOCKERS (Vault). Three independent wards, hunter-owned:
+ * adult content, Instagram, YouTube & Shorts. Names stay clinical — the UI
+ * never uses the word these shields fight. Enforcement rides on the System
+ * Guardian accessibility sentinel (armed from the Discipline Engine).
+ */
+@Composable
+private fun GranularBlockersCard() {
+    val context = LocalContext.current
+    var adultBlock by remember { mutableStateOf(com.thesystem.app.core.discipline.DisciplinePrefs.isPornShieldOn(context)) }
+    var instagramBlock by remember { mutableStateOf(com.thesystem.app.core.discipline.DisciplinePrefs.isInstagramBlockOn(context)) }
+    var youtubeBlock by remember { mutableStateOf(com.thesystem.app.core.discipline.DisciplinePrefs.isYoutubeBlockOn(context)) }
+
+    GlowCard {
+        Text("SELF-CONTROL PROTOCOL", style = MonoLabel, color = SkyBlue)
+        Text(
+            "GRANULAR CONTENT BLOCKERS",
+            color = PaperWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono,
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            "Independent wards. Live quest windows hard-lock Instagram and YouTube while these stand.",
+            style = MaterialTheme.typography.bodySmall, color = LabelGray,
+        )
+        Spacer(Modifier.height(10.dp))
+
+        @Composable
+        fun BlockerRow(title: String, hint: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.weight(1f)) {
+                    Text(title, style = MonoLabel, color = PaperWhite)
+                    Text(hint, style = MaterialTheme.typography.bodySmall, color = LabelGray, fontSize = 11.sp)
+                }
+                Switch(
+                    checked = checked,
+                    onCheckedChange = onToggle,
+                    colors = SwitchDefaults.colors(
+                        checkedTrackColor = SkyBlue.copy(alpha = 0.5f),
+                        checkedThumbColor = SkyBlue,
+                    ),
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+
+        BlockerRow(
+            title = "Block Adult Contents",
+            hint = "Every major browser is patrolled; a corrupted impulse meets the red System Intervention.",
+            checked = adultBlock,
+            onToggle = { adultBlock = it; com.thesystem.app.core.discipline.DisciplinePrefs.setPornShield(context, it) },
+        )
+        BlockerRow(
+            title = "Instagram Blocker",
+            hint = "Instagram stays sealed until today's quests are done — and through every live quest window.",
+            checked = instagramBlock,
+            onToggle = { instagramBlock = it; com.thesystem.app.core.discipline.DisciplinePrefs.setInstagramBlock(context, it) },
+        )
+        BlockerRow(
+            title = "YouTube & Shorts Blocker",
+            hint = "Shorts reels are detected and killed on sight; YouTube hard-locks inside quest windows.",
+            checked = youtubeBlock,
+            onToggle = { youtubeBlock = it; com.thesystem.app.core.discipline.DisciplinePrefs.setYoutubeBlock(context, it) },
+        )
     }
 }
 

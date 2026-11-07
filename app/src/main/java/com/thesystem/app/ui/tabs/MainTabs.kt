@@ -113,6 +113,28 @@ fun MainTabs(
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(LineSoft))
             }
+            // ── vC54 §3 — CRIMSON LOCKDOWN BANNER: while the watchdog's
+            //    sentence stands, the redemption ledger rides on EVERY tab,
+            //    refreshed live. Tap → return to the protocol. ────────────────
+            val lockCtx = androidx.compose.ui.platform.LocalContext.current
+            var lockdownPulse by remember { mutableIntStateOf(0) }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    kotlinx.coroutines.delay(5_000)
+                    lockdownPulse++
+                }
+            }
+            val lockdownLedger = remember(lockdownPulse) {
+                if (com.thesystem.app.service.PenaltyLockdown.isActive(lockCtx)) {
+                    com.thesystem.app.service.PenaltyLockdown.bannerLine(lockCtx)
+                } else null
+            }
+            lockdownLedger?.let { ledger ->
+                CrimsonLockdownBanner(ledger = ledger) {
+                    haptics.select()
+                    tab = SystemTab.DASHBOARD
+                }
+            }
             AnimatedContent(
                 targetState = tab,
                 transitionSpec = {
@@ -346,5 +368,43 @@ private fun SystemBottomBar(selected: SystemTab, onSelect: (SystemTab) -> Unit) 
                 }
             }
         }
+    }
+}
+
+/**
+ * vC54 §3 — CRIMSON LOCKDOWN BANNER: the watchdog's sentence in one glance.
+ * Crimson on black-crimson glass, exact hard-edge System language; the ledger
+ * line is the whole redemption gauntlet: quests, rated chess, arena wins.
+ */
+@Composable
+private fun CrimsonLockdownBanner(ledger: String, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF2B060F))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 7.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "PENALTY LOCKDOWN",
+                color = Color(0xFFFF1744), fontSize = 11.sp,
+                fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                "REDEMPTION GAUNTLET",
+                color = Color(0xFFFF1744).copy(alpha = 0.75f), fontSize = 9.sp,
+                letterSpacing = 1.2.sp,
+            )
+        }
+        Spacer(Modifier.height(2.dp))
+        Text(
+            ledger,
+            color = PaperWhite, fontSize = 11.5.sp, fontWeight = FontWeight.Medium,
+            letterSpacing = 0.4.sp,
+        )
+        Spacer(Modifier.height(4.dp))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFFF1744).copy(alpha = 0.45f)))
     }
 }

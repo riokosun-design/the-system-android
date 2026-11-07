@@ -22,9 +22,11 @@ object DisciplinePrefs {
     private const val KEY_QUESTS_DATE = "quests_date"          // ISO yyyy-MM-dd (client calendar day of last verdict)
     private const val KEY_QUESTS_DONE = "quests_done"          // all mandatory daily quests complete (stamped by app)
     private const val KEY_RELEASE_UNTIL = "uninstall_release_until" // §7: confession accepted → 60s amnesty
-    private const val KEY_PORN_SHIELD = "porn_shield"          // §6: always-on adult interception
+    private const val KEY_PORN_SHIELD = "porn_shield"          // §6: always-on adult interception (UI speaks only "Block Adult Contents")
     private const val KEY_SOCIAL_LOCK = "social_lock"          // §5: quest-locked social blocker
     private const val KEY_DNS_GUARD = "dns_guard"              // §6.3: opt-in DNS family filter
+    private const val KEY_INSTAGRAM_BLOCK = "instagram_block"  // vC54 §2: Instagram Blocker (granular)
+    private const val KEY_YOUTUBE_BLOCK = "youtube_block"      // vC54 §2: YouTube & Shorts Blocker (granular)
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -73,4 +75,19 @@ object DisciplinePrefs {
         prefs(context).getBoolean(KEY_DNS_GUARD, false)
     fun setDnsGuard(context: Context, on: Boolean) =
         prefs(context).edit().putBoolean(KEY_DNS_GUARD, on).apply()
+
+    // ── vC54 §2 — granular blockers (Profile / Vault) ───────────────────────
+
+    /** Instagram Blocker — independent ward; defaults ON. */
+    fun isInstagramBlockOn(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_INSTAGRAM_BLOCK, true)
+    fun setInstagramBlock(context: Context, on: Boolean) =
+        prefs(context).edit().putBoolean(KEY_INSTAGRAM_BLOCK, on).apply()
+
+    /** YouTube & Shorts Blocker — kills Shorts reels on sight and hard-locks
+     *  YouTube during active quest windows; defaults ON. */
+    fun isYoutubeBlockOn(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_YOUTUBE_BLOCK, true)
+    fun setYoutubeBlock(context: Context, on: Boolean) =
+        prefs(context).edit().putBoolean(KEY_YOUTUBE_BLOCK, on).apply()
 }

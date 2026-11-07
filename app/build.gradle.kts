@@ -20,7 +20,7 @@ android {
         applicationId = "com.thesystem.app"
         minSdk = 26 // low-end / older Android first
         targetSdk = 35
-        versionCode = 53
+        versionCode = 54
         versionName = "0.23.0-LIVE"
 
         // 2GB-first install weight: drop emulator-only native ABIs (MediaPipe+
@@ -118,6 +118,7 @@ dependencies {
 
     implementation(libs.androidx.datastore)
     implementation(libs.lifecycle.service)
+    implementation(libs.androidx.work.runtime) // vC54 §3 — 24h watchdog (periodic audit while the app is dead)
     implementation(libs.mlkit.pose)
     implementation(libs.tensorflow.lite)
     implementation(libs.mediapipe.tasks.genai) // on-device LLM runtime (AI engine §6) — models download on demand, never bundled

@@ -243,6 +243,26 @@ class SystemRepository @Inject constructor(
         com.thesystem.app.core.discipline.DisciplinePrefs.setQuestsDone(app, todayIso, mandatoryIncomplete == 0)
     }
 
+    /** vC54 §1/§3 — after every server-confirmed quest sync: the circadian war
+     *  clock re-mirrors today's windows, the lockdown ledger re-computes its
+     *  quest counter, and the watchdog's presence clock punches. */
+    fun syncDeviceRhythm(quests: List<QuestDto>) {
+        runCatching {
+            val today = java.time.LocalDate.now().toString()
+            val todays = quests.filter { it.questDate == today && it.source != "PENALTY_TRIAL" }
+            com.thesystem.app.service.QuestRhythm.syncFromQuests(app, todays)
+            com.thesystem.app.service.PenaltyLockdown.onQuestStamp(
+                app,
+                openMandatory = todays.count { !it.isDone },
+                totalMandatory = todays.size,
+            )
+            com.thesystem.app.service.SystemWatchdog.markActivity(app)
+        }
+    }
+
+    /** Device-side wards (watchdog / lockdown) need a context inside VMs. */
+    fun deviceContext(): Context = app
+
     // ── PRESENCE (mig 031) — heartbeat while the app breathes ──
 
     suspend fun touchPresence(): Result<Unit> = runCatching {

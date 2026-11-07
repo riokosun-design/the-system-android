@@ -147,6 +147,10 @@ fun ChessGameScreen(
             "LOSS" -> { haptics.error(); ChessSfx.play(ChessSfx.Sfx.CHECKMATE); ChessSfx.buzz(appContext, 70, 170) }
             else -> ChessSfx.play(ChessSfx.Sfx.CHECKMATE)
         }
+        // vC54 §3 — a rated MENTAL WAR victory feeds the redemption gauntlet
+        if (res == "WIN" && mode.war) {
+            runCatching { com.thesystem.app.service.PenaltyLockdown.recordChessWin(appContext) }
+        }
     }
 
     fun finish(res: String, reason: String) {

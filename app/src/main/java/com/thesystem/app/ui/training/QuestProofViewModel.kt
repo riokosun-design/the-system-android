@@ -234,6 +234,9 @@ class QuestProofViewModel @Inject constructor(
     fun armRecovery(context: android.content.Context) {
         val st = _state.value
         if (st.restSec > 0) RecoveryTracker.markBlockDone(context, RecoveryTracker.today(), st.seq, st.restSec)
+        // vC54 §1 — close the executed window, arm the recovery-end alarm,
+        // punch the watchdog clock. The 15–30 min break is law.
+        com.thesystem.app.service.QuestRhythm.onQuestCompleted(context)
     }
 
     fun consumeError() { _state.value = _state.value.copy(error = null) }

@@ -63,6 +63,34 @@ object QuestNotifier {
         )
     }
 
+    /** vC54 §1/§3 — circadian alarms & watchdog verdicts: MAX priority, ALARM
+     *  category; the channel itself carries the alarm sound so a scheduled
+     *  window always arrives LOUD, even inside Doze. */
+    fun circadian(context: Context, title: String, body: String, notifId: Int) {
+        val nm = context.getSystemService(NotificationManager::class.java) ?: return
+        ensureChannel(nm, TheSystemApplication.CHANNEL_CIRCADIAN, title)
+        val open = PendingIntent.getActivity(
+            context, notifId,
+            Intent(context, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_OPEN, "quests"),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val n = NotificationCompat.Builder(context, TheSystemApplication.CHANNEL_CIRCADIAN)
+            .setSmallIcon(R.drawable.ic_stat_system)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setColor(0xFFFF1744.toInt())
+            .setColorized(true)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(open)
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(notifId, n) }
+    }
+
     private fun allow(id: Int, dedupeSec: Int): Boolean {
         val now = System.currentTimeMillis()
         val last = lastFired[id] ?: 0L

@@ -139,6 +139,26 @@ fun QuestProofScreen(
                         style = MonoLabel, color = SkyBlue,
                     )
                 }
+                // vC54 §1 — QUEST EXECUTION TIMER: the session clock is stared
+                // at, not implied. Entering this screen IS opening the window.
+                var execSec by remember { mutableIntStateOf(0) }
+                LaunchedEffect(s.questId) {
+                    if (s.questId > 0) {
+                        com.thesystem.app.service.QuestRhythm.markExecutionStarted(context, s.questId)
+                    }
+                    val begin = System.currentTimeMillis()
+                    while (true) {
+                        delay(1000)
+                        execSec = ((System.currentTimeMillis() - begin) / 1000L).toInt()
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 6.dp)) {
+                    Text("EXECUTION", style = MonoLabel, color = LabelGray)
+                    Text(
+                        "%02d:%02d".format(execSec / 60, execSec % 60),
+                        style = MaterialTheme.typography.titleMedium, color = SkyBlue, fontWeight = FontWeight.Bold,
+                    )
+                }
             }
 
             when {

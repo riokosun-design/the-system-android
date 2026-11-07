@@ -16,15 +16,23 @@ import com.thesystem.app.core.discipline.DisciplinePrefs
 import com.thesystem.app.ui.discipline.AntiUninstallActivity
 
 /**
- * SYSTEM DISCIPLINE SERVICE (v0.24.0, spec §5/§6/§7) — one accessibility
- * sentinel, three laws:
+ * SYSTEM DISCIPLINE SERVICE (vC54) — one accessibility sentinel, four laws:
  *
  *  §5 QUEST LOCK   — Instagram / YouTube / Facebook / X stay sealed behind an
  *                    un-dismissible Solo Leveling lock until the day's quests
  *                    are verifiably complete (server truth, locally cached).
- *  §6 PORN SHIELD  — browser address bars (and, failing that, the visible
+ *  vC54 §1/§2      — GRANULAR WARDS: the Instagram Blocker and the YouTube &
+ *                    Shorts Blocker are independent toggles; a LIVE quest
+ *                    window (or the 15–30 min recovery break) hard-locks the
+ *                    armed wards, and every YouTube Shorts reel is detected
+ *                    (reel_watch_fragment_root) and killed on sight.
+ *  §6 ADULT SHIELD — browser address bars (and, failing that, the visible
  *                    window) are scanned against the adult blocklist; a hit
  *                    navigates back and slams the red System Intervention.
+ *                    (UI speaks only "Block Adult Contents" — vC54 copy law.)
+ *  vC54 §3         — CRIMSON LOCKDOWN: while PenaltyLockdown stands,
+ *                    Instagram / YouTube / Snapchat seal regardless of the
+ *                    standing toggles until the redemption gauntlet clears.
  *  §7 GUARDIAN     — Settings / package-installer screens trying to uninstall
  *                    THE SYSTEM or strip its permissions trigger the
  *                    System Abandonment Protocol (confession typing ritual).
@@ -48,6 +56,25 @@ class SystemDisciplineService : AccessibilityService() {
             "com.twitter.android" to "X",
             "com.twitter.android.lite" to "X Lite",
         )
+
+        /** vC54 §3 — the crimson lockdown trio (Snapchat lives ONLY here). */
+        val LOCKDOWN_SET: Map<String, String> = mapOf(
+            "com.instagram.android" to "Instagram",
+            "com.instagram.lite" to "Instagram Lite",
+            "com.google.android.youtube" to "YouTube",
+            "com.snapchat.android" to "Snapchat",
+        )
+
+        /** vC54 §1 — apps the live quest window can hard-lock. */
+        private val WINDOW_SET: Map<String, String> = mapOf(
+            "com.instagram.android" to "Instagram",
+            "com.instagram.lite" to "Instagram Lite",
+            "com.google.android.youtube" to "YouTube",
+        )
+
+        private const val YOUTUBE_PKG = "com.google.android.youtube"
+        /** The Shorts player container — its presence alone is the verdict. */
+        private const val REEL_ROOT_ID = "$YOUTUBE_PKG:id/reel_watch_fragment_root"
 
         /** §6 browsers we patrol. */
         private val BROWSERS: Map<String, List<String>> = mapOf(
@@ -92,9 +119,10 @@ class SystemDisciplineService : AccessibilityService() {
         get() = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
     private var overlay: SystemLockOverlayView? = null
-    private var overlayKey: String? = null          // "social:<pkg>" | "porn"
+    private var overlayKey: String? = null          // "social:<pkg>" | "window:<pkg>" | "lockdown:<pkg>" | "adult" | "shorts"
     private var overlayPkg: String? = null
     private var lastBrowserScanAt = 0L
+    private var lastShortsScanAt = 0L
     private var lastInterceptLaunchAt = 0L
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -141,15 +169,12 @@ class SystemDisciplineService : AccessibilityService() {
 
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                // §5 — social quest lock
-                val socialLabel = SOCIAL_BLOCKED[pkg]
-                val mustLock = socialLabel != null && DisciplinePrefs.isSocialLockOn(this) &&
-                    !DisciplinePrefs.isQuestLockLifted(this)
-                if (mustLock) {
-                    showSocialLock(pkg, socialLabel!!)
-                } else if (overlayPkg != null && pkg != packageName && !AntiUninstallActivity.visible) {
-                    if (pkg != overlayPkg || overlayKey == "social:$pkg") {
-                        // the blocked app backgrounded — or the seal legitimately lifted mid-session
+                when (val seal = sealFor(pkg)) {
+                    Seal.LOCKDOWN -> showLockdownLock(pkg, LOCKDOWN_SET[pkg] ?: pkg)
+                    Seal.WINDOW -> showWindowLock(pkg, WINDOW_SET[pkg] ?: pkg)
+                    Seal.SOCIAL -> showSocialLock(pkg, SOCIAL_BLOCKED[pkg] ?: pkg)
+                    Seal.NONE -> if (overlayPkg != null && pkg != packageName && !AntiUninstallActivity.visible) {
+                        // the sealed app backgrounded, or every ward legitimately lifted mid-session
                         removeOverlay()
                     }
                 }
@@ -161,6 +186,7 @@ class SystemDisciplineService : AccessibilityService() {
             }
 
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                // §6 — adult-content interception (UI name: Block Adult Contents)
                 if (pkg in BROWSERS.keys && DisciplinePrefs.isPornShieldOn(this)) {
                     val now = System.currentTimeMillis()
                     if (now - lastBrowserScanAt >= 700) {
@@ -168,7 +194,50 @@ class SystemDisciplineService : AccessibilityService() {
                         scanBrowserUrl(pkg)
                     }
                 }
+                // vC54 §2 — YouTube & Shorts Blocker: reels die on sight
+                if (pkg == YOUTUBE_PKG && overlayKey == null && DisciplinePrefs.isYoutubeBlockOn(this)) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastShortsScanAt >= 900) {
+                        lastShortsScanAt = now
+                        killReelIfPlaying()
+                    }
+                }
             }
+        }
+    }
+
+    private enum class Seal { NONE, SOCIAL, WINDOW, LOCKDOWN }
+
+    /** The verdict tree — strictest law wins. */
+    private fun sealFor(pkg: String): Seal {
+        // vC54 §3 — crimson lockdown overrides every toggle on the trio
+        if (PenaltyLockdown.isActive(this) && pkg in LOCKDOWN_SET.keys) return Seal.LOCKDOWN
+
+        // vC54 §1 — a live quest window (or the running recovery break) hard-locks armed wards
+        if (pkg in WINDOW_SET.keys && windowWardOn(pkg) && QuestRhythm.isQuestWindowActive(this)) return Seal.WINDOW
+
+        // §5 + vC54 §2 — standing quest lock: master ward or the app's own granular ward
+        if (pkg in SOCIAL_BLOCKED.keys && wardOn(pkg) && !DisciplinePrefs.isQuestLockLifted(this)) return Seal.SOCIAL
+
+        return Seal.NONE
+    }
+
+    /** The hunter's own switches: master social ward OR this app's granular ward. */
+    private fun wardOn(pkg: String): Boolean {
+        if (DisciplinePrefs.isSocialLockOn(this)) return true
+        return when (pkg) {
+            "com.instagram.android", "com.instagram.lite" -> DisciplinePrefs.isInstagramBlockOn(this)
+            else -> false
+        }
+    }
+
+    /** Window law honors the same wards (YouTube enters via & Shorts Blocker here). */
+    private fun windowWardOn(pkg: String): Boolean {
+        if (DisciplinePrefs.isSocialLockOn(this)) return true
+        return when (pkg) {
+            "com.instagram.android", "com.instagram.lite" -> DisciplinePrefs.isInstagramBlockOn(this)
+            YOUTUBE_PKG -> DisciplinePrefs.isYoutubeBlockOn(this)
+            else -> false
         }
     }
 
@@ -177,17 +246,74 @@ class SystemDisciplineService : AccessibilityService() {
     // ═══════════════════════════════════════════════════════════════════════
 
     private fun showSocialLock(pkg: String, label: String) {
-        if (overlayKey == "social:$pkg") return
+        val key = "social:$pkg"
+        if (overlayKey == key) return
         removeOverlay()
         val view = SystemLockOverlayView.socialLock(this, label) {
             performGlobalAction(GLOBAL_ACTION_HOME)
             ui.postDelayed({ launchSelf("quests") }, 260)
         }
-        attach(view, key = "social:$pkg", pkg = pkg)
+        attach(view, key = key, pkg = pkg)
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // §6 — PORN SHIELD
+    // vC54 §1/§2 — QUEST WINDOW SEAL + GRANULAR WARDS
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private fun showWindowLock(pkg: String, label: String) {
+        val key = "window:$pkg"
+        if (overlayKey == key) return
+        removeOverlay()
+        val windowTitle = QuestRhythm.activeWindow(this)?.title ?: "Daily protocol"
+        val view = SystemLockOverlayView.questWindowLock(this, label, windowTitle) {
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            ui.postDelayed({ launchSelf("quests") }, 260)
+        }
+        attach(view, key = key, pkg = pkg)
+    }
+
+    /** The reel killer: the Shorts container id is the whole confession. */
+    private fun killReelIfPlaying() {
+        val root = rootInActiveWindow ?: return
+        val reels = runCatching { root.findAccessibilityNodeInfosByViewId(REEL_ROOT_ID) }.getOrNull()
+        val playing = !reels.isNullOrEmpty()
+        reels?.forEach { runCatching { it.recycle() } }
+        root.recycle()
+        if (!playing) return
+        // navigate away first, then flash the verdict — it auto-dissolves fast
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        showShortsFlash()
+    }
+
+    private fun showShortsFlash() {
+        if (overlayKey == "shorts") return
+        removeOverlay()
+        val view = SystemLockOverlayView.shortsKilled(this) {
+            removeOverlay()
+            performGlobalAction(GLOBAL_ACTION_HOME)
+        }
+        attach(view, key = "shorts", pkg = YOUTUBE_PKG)
+        ui.postDelayed({ if (overlayKey == "shorts") removeOverlay() }, 1800)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // vC54 §3 — CRIMSON LOCKDOWN
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private fun showLockdownLock(pkg: String, label: String) {
+        val key = "lockdown:$pkg"
+        if (overlayKey == key) return
+        removeOverlay()
+        val view = SystemLockOverlayView.lockdownLock(this, label, PenaltyLockdown.bannerLine(this)) {
+            removeOverlay()
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            ui.postDelayed({ launchSelf("quests") }, 260)
+        }
+        attach(view, key = key, pkg = pkg)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // §6 — ADULT CONTENT SHIELD  (UI speaks only "Block Adult Contents")
     // ═══════════════════════════════════════════════════════════════════════
 
     private fun scanBrowserUrl(pkg: String) {
@@ -216,21 +342,21 @@ class SystemDisciplineService : AccessibilityService() {
         if (adult) {
             // block: navigate away, then slam the red intervention
             performGlobalAction(GLOBAL_ACTION_BACK)
-            showPornViolation(pkg)
-        } else if (overlayKey == "porn") {
+            showAdultViolation(pkg)
+        } else if (overlayKey == "adult") {
             removeOverlay() // page is clean again — lift the intervention
         }
     }
 
-    private fun showPornViolation(pkg: String) {
-        if (overlayKey == "porn") return
+    private fun showAdultViolation(pkg: String) {
+        if (overlayKey == "adult") return
         removeOverlay()
         val view = SystemLockOverlayView.pornViolation(this) {
             removeOverlay()
             performGlobalAction(GLOBAL_ACTION_HOME)
             ui.postDelayed({ launchSelf("quests") }, 260)
         }
-        attach(view, key = "porn", pkg = pkg)
+        attach(view, key = "adult", pkg = pkg)
     }
 
     // ═══════════════════════════════════════════════════════════════════════

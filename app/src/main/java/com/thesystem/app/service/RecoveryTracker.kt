@@ -6,8 +6,10 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 
 /**
- * RECOVERY WINDOW — 2–5 minutes between protocol blocks (server-configurable
- * per quest via `daily_quests.rest_sec`).
+ * RECOVERY WINDOW — the mandatory post-quest break (vC54 §1): a 15–30 minute
+ * scientific recovery band. The server still proposes the rest per quest via
+ * `daily_quests.rest_sec`; the device clamps it into the band
+ * ([MIN_BREAK_SEC]…[MAX_BREAK_SEC]). Weak recovery is a lie.
  *
  * The deadline is persisted, so leaving the app, locking the screen or a
  * process restart never loses the countdown. The next block stays locked
@@ -16,11 +18,17 @@ import java.time.ZoneId
 object RecoveryTracker {
 
     private const val PREFS = "system_recovery"
+
+    /** vC54 §1 — the recovery band is law: 15–30 minutes, nothing less. */
+    const val MIN_BREAK_SEC = 900
+    const val MAX_BREAK_SEC = 1800
+
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    /** Called when a block completes — starts the recovery countdown. */
+    /** Called when a block completes — starts the mandatory recovery countdown. */
     fun markBlockDone(context: Context, date: String, seq: Int, restSec: Int) {
-        val until = System.currentTimeMillis() + restSec.coerceIn(0, 900) * 1000L
+        val bandSec = if (restSec <= 0) MIN_BREAK_SEC else restSec.coerceIn(MIN_BREAK_SEC, MAX_BREAK_SEC)
+        val until = System.currentTimeMillis() + bandSec * 1000L
         prefs(context).edit()
             .putLong("until_$date", until)
             .putInt("after_seq_$date", seq)

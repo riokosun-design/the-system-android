@@ -108,6 +108,9 @@ class DashboardViewModel @Inject constructor(
                 it.questDate == today && it.source != "PENALTY_TRIAL" && !it.isDone
             }
             system.stampQuestLock(today, openMandatory)
+            // vC54 §1/§3 — circadian windows re-arm, lockdown quest ledger refreshes,
+            // watchdog presence clock punches (all device-local, server stays judge).
+            system.syncDeviceRhythm(questsLoaded)
         }
         _state.value = DashboardState(
             loading = false,

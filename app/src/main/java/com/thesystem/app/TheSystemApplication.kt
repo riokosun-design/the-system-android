@@ -40,9 +40,29 @@ class TheSystemApplication : Application() {
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_REMINDER, "Scheduled wars", NotificationManager.IMPORTANCE_HIGH)
         )
+        // vC54 §1 — CIRCADIAN rail: quest windows open LOUD (alarm sound), the
+        // same rail carries watchdog verdicts (auto-reschedule + crimson lockdown).
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_CIRCADIAN, "Circadian alarms", NotificationManager.IMPORTANCE_HIGH).apply {
+                setSound(
+                    android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM),
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                )
+                enableVibration(true)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            }
+        )
         // vC53 §3 — chess audio covenant: re-arm the mute flag from disk BEFORE
         // any composable can read ChessSfx.isMuted() (cold start race closed).
         com.thesystem.app.ui.chess.ChessSfx.attach(this)
+        // vC54 §3 — the 24-hour watchdog wakes even if nobody returns: WorkManager
+        // + boundary alarm armed here; every process birth punches the presence clock.
+        com.thesystem.app.service.SystemWatchdog.markActivity(this)
+        runCatching { com.thesystem.app.service.SystemWatchdog.arm(this) }
+        runCatching { com.thesystem.app.service.QuestRhythm.armToday(this) }
     }
 
     companion object {
@@ -50,5 +70,7 @@ class TheSystemApplication : Application() {
         const val CHANNEL_QUESTS = "quests"
         const val CHANNEL_TRACKING = "tracking"
         const val CHANNEL_REMINDER = "reminder"
+        /** vC54 §1/§3 — circadian quest windows + watchdog verdicts (alarm sound). */
+        const val CHANNEL_CIRCADIAN = "circadian"
     }
 }

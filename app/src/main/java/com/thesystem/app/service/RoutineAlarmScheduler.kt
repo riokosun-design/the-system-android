@@ -122,6 +122,10 @@ class RoutineBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             RoutineAlarmScheduler.rescheduleAll(context)
+            // vC54 §3 — the watchdog and today's circadian war windows survive
+            // every reboot too; the System never forgets.
+            runCatching { SystemWatchdog.arm(context.applicationContext) }
+            runCatching { QuestRhythm.armToday(context.applicationContext) }
         }
     }
 }

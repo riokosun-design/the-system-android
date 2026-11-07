@@ -256,6 +256,11 @@ class BattleRoomViewModel @Inject constructor(
             iWon = b.winner == me,
             integrity = b.plausibility?.let { verdictLine(me, it) } ?: _state.value.integrity,
         )
+        // vC54 §3 — a server-judged arena victory feeds the redemption
+        // gauntlet (0/4 → the crimson seal lifts at 4).
+        if (me != null && b.winner == me) {
+            runCatching { com.thesystem.app.service.PenaltyLockdown.recordArenaWin(system.deviceContext()) }
+        }
     }
 
     private fun verdictLine(me: String?, v: JsonObject): String? {

@@ -144,5 +144,41 @@ class SystemLockOverlayView(
                 cta = "RETURN TO TRAINING",
                 onCta = onCta,
             )
+
+        /** vC54 §1/§2 — a live quest window seals the toggled entertainment apps. */
+        fun questWindowLock(context: Context, appLabel: String, windowTitle: String, onCta: () -> Unit) =
+            SystemLockOverlayView(
+                context = context,
+                accent = ACCENT_CYAN,
+                header = "[ ◷ ] QUEST WINDOW LIVE [ ◷ ]",
+                body = "A scheduled war is running right now: \"$windowTitle\". $appLabel is sealed " +
+                    "until the block and its recovery break are complete. Discipline first — dopamine later.",
+                cta = "COMPLETE THE BLOCK",
+                onCta = onCta,
+            )
+
+        /** vC54 §3 — crimson lockdown: the watchdog's sentence, counters included. */
+        fun lockdownLock(context: Context, appLabel: String, ledger: String, onCta: () -> Unit) =
+            SystemLockOverlayView(
+                context = context,
+                accent = ACCENT_RED,
+                header = "[ ▮ ] CRIMSON LOCKDOWN [ ▮ ]",
+                body = "The watchdog caught a breach, hunter. $appLabel stays sealed until the " +
+                    "redemption gauntlet is cleared.\n\n$ledger",
+                cta = "FACE THE GAUNTLET",
+                onCta = onCta,
+            )
+
+        /** vC54 §2 — a Shorts reel died on sight (auto-dismiss flash). */
+        fun shortsKilled(context: Context, onCta: () -> Unit) =
+            SystemLockOverlayView(
+                context = context,
+                accent = ACCENT_RED,
+                header = "[ ✕ ] SHORTS REEL KILLED [ ✕ ]",
+                body = "The YouTube & Shorts Blocker is armed. Reel feeds are detected and destroyed " +
+                    "on sight — the scroll trap does not exist for this vessel.",
+                cta = "UNDERSTOOD",
+                onCta = onCta,
+            )
     }
 }

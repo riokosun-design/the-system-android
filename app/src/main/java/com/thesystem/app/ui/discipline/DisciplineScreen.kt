@@ -56,9 +56,10 @@ import com.thesystem.app.service.SystemDnsGuardService
 /**
  * DISCIPLINE ENGINE — control room (v0.24.0, spec §5/§6/§7).
  *
- * One screen, four wards: quest-locked social blocker, always-on porn shield,
- * the optional DNS family filter, and the anti-uninstall guard. Status is
- * read live from Android itself — never from our own bravado.
+ * One screen, four wards: quest-locked social blocker, always-on
+ * adult-content shield, the optional DNS family filter, and the
+ * anti-uninstall guard. Status is read live from Android itself — never from
+ * our own bravado. (vC54 §2 copy law: the UI never uses the word "Porn".)
  */
 @Composable
 fun DisciplineScreen(nav: NavHostController) {
@@ -131,7 +132,7 @@ fun DisciplineScreen(nav: NavHostController) {
                         Column(Modifier.weight(1f)) {
                             Text("SYSTEM GUARDIAN", style = MonoLabel, color = PaperWhite)
                             Text(
-                                "The accessibility sentinel that powers the quest lock, the porn " +
+                                "The accessibility sentinel that powers the quest lock, the adult-content " +
                                     "shield and the anti-uninstall guard.",
                                 style = MaterialTheme.typography.bodySmall, color = LabelGray,
                             )
@@ -169,11 +170,12 @@ fun DisciplineScreen(nav: NavHostController) {
                 }
             }
 
-            // ── §6 porn shield ──────────────────────────────────────────────
+            // ── §6 adult-content shield (vC54 §2 copy law: the UI name is
+            //    "Block Adult Contents", period) ─────────────────────────────
             item {
                 GlowCard {
                     WardRow(
-                        title = "PORN SHIELD — ALWAYS ON",
+                        title = "BLOCK ADULT CONTENTS — ALWAYS ON",
                         body = "Every major browser is patrolled for adult domains, TLDs and explicit " +
                             "searches. A corrupted impulse slams a red System Intervention and seals " +
                             "the page. Zero network calls — the blocklist lives on-device.",
