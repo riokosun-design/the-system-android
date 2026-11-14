@@ -1,11 +1,7 @@
 package com.thesystem.app.ui.discipline
 
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.net.VpnService
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -49,35 +45,74 @@ import com.thesystem.app.core.ui.GhostButton
 import com.thesystem.app.core.ui.GlowCard
 import com.thesystem.app.core.ui.SectionTitle
 import com.thesystem.app.core.ui.SystemBackground
-import com.thesystem.app.service.SystemDeviceAdminReceiver
-import com.thesystem.app.service.SystemDisciplineService
+import com.thesystem.app.service.PermissionLair
 import com.thesystem.app.service.SystemDnsGuardService
 
 /**
- * DISCIPLINE ENGINE — control room (v0.24.0, spec §5/§6/§7).
+ * DISCIPLINE ENGINE — control room (v0.24.0 spec §5/§6/§7, vC56 §1/§3).
  *
  * One screen, four wards: quest-locked social blocker, always-on
  * adult-content shield, the optional DNS family filter, and the
- * anti-uninstall guard. Status is read live from Android itself — never from
- * our own bravado. (vC54 §2 copy law: the UI never uses the word "Porn".)
+ * anti-uninstall guard.
+ *
+ * vC56 §1 LAW — MANDATORY PERMISSION REDIRECT: no ward switch may flip ON
+ * against missing Android-level powers. A forbidden flip summons the System
+ * Permission Setup Dialog with the exact GRANT doors; the pending arming
+ * completes itself on ON_RESUME only when [PermissionLair.missing] returns
+ * empty. Status is read live from Android itself — never from our own
+ * bravado. (vC54 §2 copy law: the UI never uses the word "Porn".)
  */
 @Composable
 fun DisciplineScreen(nav: NavHostController) {
     val context = LocalContext.current
-    var accessibilityOn by remember { mutableStateOf(isDisciplineAccessibilityOn(context)) }
-    var deviceAdminOn by remember { mutableStateOf(isDeviceGuardOn(context)) }
+    var accessibilityOn by remember { mutableStateOf(PermissionLair.isAccessibilityOn(context)) }
+    var overlayOn by remember { mutableStateOf(PermissionLair.isOverlayOn(context)) }
+    var deviceAdminOn by remember { mutableStateOf(PermissionLair.isDeviceAdminOn(context)) }
     var dnsOn by remember { mutableStateOf(DisciplinePrefs.isDnsGuardOn(context) && SystemDnsGuardService.running) }
     var socialLock by remember { mutableStateOf(DisciplinePrefs.isSocialLockOn(context)) }
     var pornShield by remember { mutableStateOf(DisciplinePrefs.isPornShieldOn(context)) }
+    var uninstallGuard by remember { mutableStateOf(DisciplinePrefs.isUninstallGuardOn(context)) }
 
-    // re-audit every time the hunter returns from a system settings screen
+    // vC56 §1 — the pending arming + the powers it still lacks
+    var permDialog by remember { mutableStateOf<Set<PermissionLair.Perm>?>(null) }
+    var permDialogTitle by remember { mutableStateOf("") }
+    var pendingOn by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    /** The toggle gate: OFF is always free; ON demands every granted power. */
+    fun gate(on: Boolean, perms: Set<PermissionLair.Perm>, wardTitle: String, apply: () -> Unit) {
+        if (!on) { apply(); return }
+        val missing = PermissionLair.missing(context, perms)
+        if (missing.isEmpty()) {
+            apply()
+        } else {
+            pendingOn = apply
+            permDialogTitle = wardTitle
+            permDialog = missing
+        }
+    }
+
+    // re-audit every time the hunter returns from a system settings screen —
+    // and complete a pending arming the moment its grants all stand (vC56 §1)
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                accessibilityOn = isDisciplineAccessibilityOn(context)
-                deviceAdminOn = isDeviceGuardOn(context)
+                accessibilityOn = PermissionLair.isAccessibilityOn(context)
+                overlayOn = PermissionLair.isOverlayOn(context)
+                deviceAdminOn = PermissionLair.isDeviceAdminOn(context)
                 dnsOn = DisciplinePrefs.isDnsGuardOn(context) && SystemDnsGuardService.running
+                val pending = pendingOn
+                val needed = permDialog
+                if (pending != null && needed != null) {
+                    val still = PermissionLair.missing(context, needed)
+                    if (still.isEmpty()) {
+                        pending()
+                        pendingOn = null
+                        permDialog = null
+                    } else {
+                        permDialog = still
+                    }
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -142,7 +177,7 @@ fun DisciplineScreen(nav: NavHostController) {
                     Spacer(Modifier.height(Grid.S8))
                     if (!accessibilityOn) {
                         GhostButton("ENABLE IN ACCESSIBILITY SETTINGS", {
-                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                            PermissionLair.openAccessibilitySettings(context)
                         }, Modifier.fillMaxWidth())
                     } else {
                         Text(
@@ -153,7 +188,7 @@ fun DisciplineScreen(nav: NavHostController) {
                 }
             }
 
-            // ── §5 quest-locked social blocker ──────────────────────────────
+            // ── §5 quest-locked social blocker (vC56 §1 gated) ──────────────
             item {
                 GlowCard {
                     WardRow(
@@ -162,27 +197,31 @@ fun DisciplineScreen(nav: NavHostController) {
                             "System lock until every mandatory Daily Quest is done. Finish training, " +
                             "the seal lifts until midnight.",
                         checked = socialLock && accessibilityOn,
-                        enabled = accessibilityOn,
-                        onToggle = {
-                            socialLock = it; DisciplinePrefs.setSocialLock(context, it)
+                        enabled = true,
+                        onToggle = { on ->
+                            gate(on, PermissionLair.CONTENT_WARD_PERMS, "QUEST LOCK — SOCIAL MEDIA") {
+                                socialLock = on; DisciplinePrefs.setSocialLock(context, on)
+                            }
                         },
                     )
                 }
             }
 
             // ── §6 adult-content shield (vC54 §2 copy law: the UI name is
-            //    "Block Adult Contents", period) ─────────────────────────────
+            //    "Block Adult Contents", period; vC56 §1 gated) ───────────────
             item {
                 GlowCard {
                     WardRow(
                         title = "BLOCK ADULT CONTENTS — ALWAYS ON",
                         body = "Every major browser is patrolled for adult domains, TLDs and explicit " +
-                            "searches. A corrupted impulse slams a red System Intervention and seals " +
+                            "searches. A corrupted impulse slams the crimson System Violation and seals " +
                             "the page. Zero network calls — the blocklist lives on-device.",
                         checked = pornShield && accessibilityOn,
-                        enabled = accessibilityOn,
-                        onToggle = {
-                            pornShield = it; DisciplinePrefs.setPornShield(context, it)
+                        enabled = true,
+                        onToggle = { on ->
+                            gate(on, PermissionLair.CONTENT_WARD_PERMS, "BLOCK ADULT CONTENTS") {
+                                pornShield = on; DisciplinePrefs.setPornShield(context, on)
+                            }
                         },
                     )
                 }
@@ -224,27 +263,33 @@ fun DisciplineScreen(nav: NavHostController) {
                 }
             }
 
-            // ── §7 device guard ─────────────────────────────────────────────
+            // ── §7 + vC56 §3 anti-uninstall guard (triple-locked toggle) ────
             item {
                 GlowCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("DEVICE GUARD — ANTI-UNINSTALL", style = MonoLabel, color = PaperWhite)
-                            Text(
-                                "While active, Android refuses to uninstall THE SYSTEM outright — " +
-                                    "and any attempt to strip this permission wakes the System " +
-                                    "Abandonment Protocol.",
-                                style = MaterialTheme.typography.bodySmall, color = LabelGray,
-                            )
-                        }
-                        StatusPill(deviceAdminOn)
-                    }
+                    WardRow(
+                        title = "ANTI-UNINSTALL GUARD — COWARD'S PROTOCOL",
+                        body = "While armed, uninstalling THE SYSTEM or stripping its accessibility, " +
+                            "overlay or device-admin powers summons the System Abandonment Protocol: " +
+                            "a full-screen, un-dismissible overlay over Settings. Escape costs either " +
+                            "a perfect typed confession — or one honest oath.",
+                        checked = uninstallGuard && accessibilityOn && overlayOn && deviceAdminOn,
+                        enabled = true,
+                        onToggle = { on ->
+                            gate(on, PermissionLair.UNINSTALL_GUARD_PERMS, "ANTI-UNINSTALL GUARD") {
+                                uninstallGuard = on; DisciplinePrefs.setUninstallGuard(context, on)
+                            }
+                        },
+                    )
                     Spacer(Modifier.height(Grid.S8))
-                    if (!deviceAdminOn) {
-                        GhostButton("ACTIVATE DEVICE GUARD", { requestDeviceAdmin(context) }, Modifier.fillMaxWidth())
-                    } else {
-                        Text("[ ACTIVE — quitting now requires the confession ]", style = MonoLabel, color = SkyBlue)
-                    }
+                    Text(
+                        if (uninstallGuard && accessibilityOn && overlayOn && deviceAdminOn) {
+                            "[ ACTIVE — quitting now requires the confession ]"
+                        } else {
+                            "[ DORMANT — the switch arms only behind all three powers ]"
+                        },
+                        style = MonoLabel,
+                        color = if (uninstallGuard && accessibilityOn && overlayOn && deviceAdminOn) SkyBlue else FaintGray,
+                    )
                 }
             }
 
@@ -257,6 +302,19 @@ fun DisciplineScreen(nav: NavHostController) {
             }
 
             item { Spacer(Modifier.height(60.dp)) }
+        }
+
+        // vC56 §1 — the mandatory redirect; stands until granted or dismissed
+        val missingNow = permDialog
+        if (missingNow != null) {
+            SystemPermissionSetupDialog(
+                title = permDialogTitle,
+                missing = missingNow,
+                onDismiss = {
+                    permDialog = null
+                    pendingOn = null
+                },
+            )
         }
     }
 }
@@ -287,28 +345,4 @@ private fun StatusPill(active: Boolean) {
         if (active) "ACTIVE" else "OFF",
         style = MonoLabel, color = if (active) SkyBlue else FaintGray,
     )
-}
-
-private fun isDisciplineAccessibilityOn(context: Context): Boolean = runCatching {
-    val enabled = Settings.Secure.getString(
-        context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-    ) ?: return false
-    enabled.contains("SystemDisciplineService")
-}.getOrDefault(false) && SystemDisciplineService.alive
-
-private fun isDeviceGuardOn(context: Context): Boolean = runCatching {
-    val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-    dpm.isAdminActive(ComponentName(context, SystemDeviceAdminReceiver::class.java))
-}.getOrDefault(false)
-
-private fun requestDeviceAdmin(context: Context) {
-    val component = ComponentName(context, SystemDeviceAdminReceiver::class.java)
-    val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
-        .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
-        .putExtra(
-            DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-            "The Device Guard anchors the anti-uninstall law. Deactivating it summons the " +
-                "System Abandonment Protocol.",
-        )
-    context.startActivity(intent)
 }

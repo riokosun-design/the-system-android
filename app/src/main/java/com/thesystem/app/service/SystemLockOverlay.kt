@@ -27,6 +27,8 @@ class SystemLockOverlayView(
     body: String,
     cta: String,
     onCta: () -> Unit,
+    secondaryCta: String? = null,
+    onSecondary: (() -> Unit)? = null,
 ) : FrameLayout(context) {
 
     private val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -81,6 +83,26 @@ class SystemLockOverlayView(
         ).apply { topMargin = dp(26f).toInt() }
         column.addView(button, btnParams)
 
+        // vC56 §3 — the honest escape hatch (cyan oath) under a red verdict
+        if (secondaryCta != null && onSecondary != null) {
+            val escape = TextView(context).apply {
+                text = secondaryCta
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(ACCENT_CYAN)
+                typeface = Typeface.DEFAULT_BOLD
+                letterSpacing = 0.08f
+                gravity = Gravity.CENTER
+                setBackgroundColor(Color.rgb(10, 10, 16))
+                val hp = dp(18f).toInt(); val vp = dp(13f).toInt()
+                setPadding(hp, vp, hp, vp)
+                setOnClickListener { onSecondary() }
+            }
+            val escParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(14f).toInt() }
+            column.addView(escape, escParams)
+        }
+
         column.addView(
             label("THE SYSTEM IS WATCHING", 10f, Color.DKGRAY, 0.2f).apply {
                 setPadding(0, dp(30f).toInt(), 0, 0)
@@ -133,16 +155,45 @@ class SystemLockOverlayView(
                 onCta = onCta,
             )
 
-        /** §6 — adult content intervention. */
+        /** §6 + vC56 §2 — crimson SYSTEM VIOLATION: adult content intercepted. */
         fun pornViolation(context: Context, onCta: () -> Unit) =
             SystemLockOverlayView(
                 context = context,
                 accent = ACCENT_RED,
-                header = "[ ! ] SYSTEM INTERVENTION [ ! ]",
+                header = "[ ! ] SYSTEM VIOLATION [ ! ]",
                 body = "Corrupted impulse detected. You swore to become stronger, not a slave to " +
-                    "cheap urges. The System has sealed this page. Regain control immediately.",
+                    "cheap urges. The System has sealed this page and closed the route. " +
+                    "Regain control immediately.",
                 cta = "RETURN TO TRAINING",
                 onCta = onCta,
+            )
+
+        /** vC56 §2 — Instagram Reels killed on sight (exact directive copy). */
+        fun reelsKilled(context: Context, onCta: () -> Unit) =
+            SystemLockOverlayView(
+                context = context,
+                accent = ACCENT_RED,
+                header = "[ ! ] SYSTEM INTERVENTION [ ! ]",
+                body = "[ SYSTEM INTERVENTION: Reels dopamine trap blocked. Stay focused, Hunter. ]",
+                cta = "RETURN TO TRAINING",
+                onCta = onCta,
+            )
+
+        /** vC56 §3 — SYSTEM ABANDONMENT PROTOCOL over Settings/Play surgery
+         *  screens. TYPE_APPLICATION_OVERLAY, un-dismissible: confess or swear
+         *  the oath. */
+        fun abandonmentProtocol(context: Context, onConfess: () -> Unit, onEscape: () -> Unit) =
+            SystemLockOverlayView(
+                context = context,
+                accent = ACCENT_RED,
+                header = "[ ! ] SYSTEM ABANDONMENT PROTOCOL [ ! ]",
+                body = "You are one tap from quitting on yourself. The System does not hold " +
+                    "prisoners — but it demands honesty. Type the full confession to unlock " +
+                    "this screen for sixty seconds, or swear the oath and return to training.",
+                cta = "TYPE THE CONFESSION",
+                onCta = onConfess,
+                secondaryCta = "I AM NOT A COWARD — TAKE ME BACK TO MY TRAINING",
+                onSecondary = onEscape,
             )
 
         /** vC54 §1/§2 — a live quest window seals the toggled entertainment apps. */
@@ -169,14 +220,13 @@ class SystemLockOverlayView(
                 onCta = onCta,
             )
 
-        /** vC54 §2 — a Shorts reel died on sight (auto-dismiss flash). */
+        /** vC56 §2 — a Shorts reel died on sight: the SYSTEM WARNING flash. */
         fun shortsKilled(context: Context, onCta: () -> Unit) =
             SystemLockOverlayView(
                 context = context,
                 accent = ACCENT_RED,
-                header = "[ ✕ ] SHORTS REEL KILLED [ ✕ ]",
-                body = "The YouTube & Shorts Blocker is armed. Reel feeds are detected and destroyed " +
-                    "on sight — the scroll trap does not exist for this vessel.",
+                header = "[ ! ] SYSTEM WARNING [ ! ]",
+                body = "[ SYSTEM WARNING: Shorts dopamine trap blocked. Stay focused, Hunter. ]",
                 cta = "UNDERSTOOD",
                 onCta = onCta,
             )

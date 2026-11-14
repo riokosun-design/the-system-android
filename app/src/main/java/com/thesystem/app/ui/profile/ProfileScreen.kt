@@ -18,20 +18,26 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import coil3.compose.AsyncImage
 import com.thesystem.app.Routes
 import com.thesystem.app.core.SystemMath
+import com.thesystem.app.core.discipline.DisciplinePrefs
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
 import com.thesystem.app.data.model.ProductDto
 import com.thesystem.app.data.model.UserDto
+import com.thesystem.app.service.PermissionLair
+import com.thesystem.app.ui.discipline.SystemPermissionSetupDialog
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -250,17 +256,65 @@ private fun DisciplineCard(onOpen: () -> Unit) {
 }
 
 /**
- * vC54 §2 — GRANULAR BLOCKERS (Vault). Three independent wards, hunter-owned:
- * adult content, Instagram, YouTube & Shorts. Names stay clinical — the UI
- * never uses the word these shields fight. Enforcement rides on the System
- * Guardian accessibility sentinel (armed from the Discipline Engine).
+ * vC54 §2 + vC56 §1 — GRANULAR BLOCKERS (Vault). Three independent wards,
+ * hunter-owned: adult content, Instagram Reels, YouTube Shorts. Names stay
+ * clinical — the UI never uses the word these shields fight.
+ *
+ * vC56 §1 LAW: a switch may never flip ON while the System Guardian
+ * accessibility sentinel is missing — the tap opens the System Permission
+ * Setup Dialog instead, and ON_RESUME completes the pending arming only when
+ * every grant stands (toggles always mirror Android's real state).
  */
 @Composable
 private fun GranularBlockersCard() {
     val context = LocalContext.current
-    var adultBlock by remember { mutableStateOf(com.thesystem.app.core.discipline.DisciplinePrefs.isPornShieldOn(context)) }
-    var instagramBlock by remember { mutableStateOf(com.thesystem.app.core.discipline.DisciplinePrefs.isInstagramBlockOn(context)) }
-    var youtubeBlock by remember { mutableStateOf(com.thesystem.app.core.discipline.DisciplinePrefs.isYoutubeBlockOn(context)) }
+    var accessibilityOn by remember { mutableStateOf(PermissionLair.isAccessibilityOn(context)) }
+    var adultBlock by remember { mutableStateOf(DisciplinePrefs.isPornShieldOn(context)) }
+    var instagramBlock by remember { mutableStateOf(DisciplinePrefs.isInstagramBlockOn(context)) }
+    var youtubeBlock by remember { mutableStateOf(DisciplinePrefs.isYoutubeBlockOn(context)) }
+    var permDialog by remember { mutableStateOf<Set<PermissionLair.Perm>?>(null) }
+    var permDialogTitle by remember { mutableStateOf("") }
+    var pendingOn by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    /** The toggle gate: OFF is always free; ON demands the sentinel. */
+    fun gate(on: Boolean, wardTitle: String, apply: () -> Unit) {
+        if (!on) { apply(); return }
+        val missing = PermissionLair.missing(context, PermissionLair.CONTENT_WARD_PERMS)
+        if (missing.isEmpty()) {
+            apply()
+        } else {
+            pendingOn = apply
+            permDialogTitle = wardTitle
+            permDialog = missing
+        }
+    }
+
+    // vC56 §1 — ON_RESUME re-checks real grant states and syncs the toggles
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                accessibilityOn = PermissionLair.isAccessibilityOn(context)
+                adultBlock = DisciplinePrefs.isPornShieldOn(context)
+                instagramBlock = DisciplinePrefs.isInstagramBlockOn(context)
+                youtubeBlock = DisciplinePrefs.isYoutubeBlockOn(context)
+                val pending = pendingOn
+                val needed = permDialog
+                if (pending != null && needed != null) {
+                    val still = PermissionLair.missing(context, needed)
+                    if (still.isEmpty()) {
+                        pending()
+                        pendingOn = null
+                        permDialog = null
+                    } else {
+                        permDialog = still
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     GlowCard {
         Text("SELF-CONTROL PROTOCOL", style = MonoLabel, color = SkyBlue)
@@ -273,6 +327,13 @@ private fun GranularBlockersCard() {
             "Independent wards. Live quest windows hard-lock Instagram and YouTube while these stand.",
             style = MaterialTheme.typography.bodySmall, color = LabelGray,
         )
+        if (!accessibilityOn) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "[ SYSTEM GUARDIAN OFFLINE — tap a switch to open Permission Setup ]",
+                style = MonoLabel, color = FaintGray, fontSize = 9.sp,
+            )
+        }
         Spacer(Modifier.height(10.dp))
 
         @Composable
@@ -296,21 +357,46 @@ private fun GranularBlockersCard() {
 
         BlockerRow(
             title = "Block Adult Contents",
-            hint = "Every major browser is patrolled; a corrupted impulse meets the red System Intervention.",
-            checked = adultBlock,
-            onToggle = { adultBlock = it; com.thesystem.app.core.discipline.DisciplinePrefs.setPornShield(context, it) },
+            hint = "Every major browser is patrolled; a corrupted impulse meets the crimson System Violation.",
+            checked = adultBlock && accessibilityOn,
+            onToggle = { on ->
+                gate(on, "BLOCK ADULT CONTENTS") {
+                    adultBlock = on; DisciplinePrefs.setPornShield(context, on)
+                }
+            },
         )
         BlockerRow(
-            title = "Instagram Blocker",
-            hint = "Instagram stays sealed until today's quests are done — and through every live quest window.",
-            checked = instagramBlock,
-            onToggle = { instagramBlock = it; com.thesystem.app.core.discipline.DisciplinePrefs.setInstagramBlock(context, it) },
+            title = "Instagram Reels Blocker",
+            hint = "DMs and Profile stay free — every Reels surface is detected and killed on sight by the System Intervention.",
+            checked = instagramBlock && accessibilityOn,
+            onToggle = { on ->
+                gate(on, "INSTAGRAM REELS BLOCKER") {
+                    instagramBlock = on; DisciplinePrefs.setInstagramBlock(context, on)
+                }
+            },
         )
         BlockerRow(
-            title = "YouTube & Shorts Blocker",
-            hint = "Shorts reels are detected and killed on sight; YouTube hard-locks inside quest windows.",
-            checked = youtubeBlock,
-            onToggle = { youtubeBlock = it; com.thesystem.app.core.discipline.DisciplinePrefs.setYoutubeBlock(context, it) },
+            title = "YouTube Shorts Blocker",
+            hint = "Shorts reels are detected and killed on sight; long-form stays free unless a live quest window seals YouTube.",
+            checked = youtubeBlock && accessibilityOn,
+            onToggle = { on ->
+                gate(on, "YOUTUBE SHORTS BLOCKER") {
+                    youtubeBlock = on; DisciplinePrefs.setYoutubeBlock(context, on)
+                }
+            },
+        )
+    }
+
+    // vC56 §1 — the mandatory redirect; stands until granted or dismissed
+    val missingNow = permDialog
+    if (missingNow != null) {
+        SystemPermissionSetupDialog(
+            title = permDialogTitle,
+            missing = missingNow,
+            onDismiss = {
+                permDialog = null
+                pendingOn = null
+            },
         )
     }
 }

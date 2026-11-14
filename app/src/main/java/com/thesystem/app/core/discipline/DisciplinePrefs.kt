@@ -25,8 +25,9 @@ object DisciplinePrefs {
     private const val KEY_PORN_SHIELD = "porn_shield"          // §6: always-on adult interception (UI speaks only "Block Adult Contents")
     private const val KEY_SOCIAL_LOCK = "social_lock"          // §5: quest-locked social blocker
     private const val KEY_DNS_GUARD = "dns_guard"              // §6.3: opt-in DNS family filter
-    private const val KEY_INSTAGRAM_BLOCK = "instagram_block"  // vC54 §2: Instagram Blocker (granular)
-    private const val KEY_YOUTUBE_BLOCK = "youtube_block"      // vC54 §2: YouTube & Shorts Blocker (granular)
+    private const val KEY_INSTAGRAM_BLOCK = "instagram_block"  // vC54 §2: Instagram Reels Blocker (granular)
+    private const val KEY_YOUTUBE_BLOCK = "youtube_block"      // vC54 §2: YouTube Shorts Blocker (granular)
+    private const val KEY_UNINSTALL_GUARD = "uninstall_guard"  // vC56 §3: anti-uninstall typing guard (hunter-owned)
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -84,10 +85,21 @@ object DisciplinePrefs {
     fun setInstagramBlock(context: Context, on: Boolean) =
         prefs(context).edit().putBoolean(KEY_INSTAGRAM_BLOCK, on).apply()
 
-    /** YouTube & Shorts Blocker — kills Shorts reels on sight and hard-locks
+    /** YouTube Shorts Blocker — kills Shorts reels on sight and hard-locks
      *  YouTube during active quest windows; defaults ON. */
     fun isYoutubeBlockOn(context: Context): Boolean =
         prefs(context).getBoolean(KEY_YOUTUBE_BLOCK, true)
     fun setYoutubeBlock(context: Context, on: Boolean) =
         prefs(context).edit().putBoolean(KEY_YOUTUBE_BLOCK, on).apply()
+
+    // ── vC56 §3 — anti-uninstall guard (hunter-owned switch) ────────────────
+
+    /** The System Abandonment Protocol: armed by default, but the toggle is
+     *  only allowed ON once overlay + accessibility + device admin all stand
+     *  (vC56 §1 permission gate). When OFF, Settings/Play surgery screens are
+     *  not intercepted — the hunter chose the risk. */
+    fun isUninstallGuardOn(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_UNINSTALL_GUARD, true)
+    fun setUninstallGuard(context: Context, on: Boolean) =
+        prefs(context).edit().putBoolean(KEY_UNINSTALL_GUARD, on).apply()
 }

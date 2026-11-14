@@ -21,21 +21,30 @@ import com.thesystem.app.ui.discipline.AntiUninstallActivity
  *  §5 QUEST LOCK   — Instagram / YouTube / Facebook / X stay sealed behind an
  *                    un-dismissible Solo Leveling lock until the day's quests
  *                    are verifiably complete (server truth, locally cached).
- *  vC54 §1/§2      — GRANULAR WARDS: the Instagram Blocker and the YouTube &
- *                    Shorts Blocker are independent toggles; a LIVE quest
- *                    window (or the 15–30 min recovery break) hard-locks the
- *                    armed wards, and every YouTube Shorts reel is detected
- *                    (reel_watch_fragment_root) and killed on sight.
+ *  vC54 §1/§2      — GRANULAR WARDS: the Instagram Reels Blocker and the
+ *                    YouTube Shorts Blocker are independent toggles; a LIVE
+ *                    quest window (or the 15–30 min recovery break) hard-locks
+ *                    the armed wards, and reel surfaces are killed on sight.
+ *  vC56 §2         — REAL-TIME INTERCEPTION: Instagram DMs/Profile stay free
+ *                    unless globally locked, but clips_viewer_view_pager /
+ *                    reel_viewer_root / a selected "Reels" tab → instant BACK
+ *                    + the exact System Intervention. YouTube long-form stays
+ *                    free unless fully locked, but reel_watch_fragment_root /
+ *                    reel_player_page_container / a selected "Shorts" pivot →
+ *                    BACK + SYSTEM WARNING. Browsers: BACK + crimson
+ *                    SYSTEM VIOLATION.
  *  §6 ADULT SHIELD — browser address bars (and, failing that, the visible
  *                    window) are scanned against the adult blocklist; a hit
- *                    navigates back and slams the red System Intervention.
+ *                    navigates back and slams the crimson System Violation.
  *                    (UI speaks only "Block Adult Contents" — vC54 copy law.)
  *  vC54 §3         — CRIMSON LOCKDOWN: while PenaltyLockdown stands,
  *                    Instagram / YouTube / Snapchat seal regardless of the
  *                    standing toggles until the redemption gauntlet clears.
- *  §7 GUARDIAN     — Settings / package-installer screens trying to uninstall
- *                    THE SYSTEM or strip its permissions trigger the
- *                    System Abandonment Protocol (confession typing ritual).
+ *  §7 GUARDIAN     — Settings / package-installer / OEM-security screens
+ *                    trying to uninstall THE SYSTEM or strip its permissions
+ *                    trigger the System Abandonment Protocol (confession
+ *                    typing ritual). vC56 §3: with the overlay grant it stands
+ *                    as a TYPE_APPLICATION_OVERLAY; without it, the Activity.
  *
  * This service performs no network calls, keeps no user data, and answers
  * every verdict from local, deterministic state.
@@ -73,8 +82,19 @@ class SystemDisciplineService : AccessibilityService() {
         )
 
         private const val YOUTUBE_PKG = "com.google.android.youtube"
-        /** The Shorts player container — its presence alone is the verdict. */
-        private const val REEL_ROOT_ID = "$YOUTUBE_PKG:id/reel_watch_fragment_root"
+        private const val INSTAGRAM_PKG = "com.instagram.android"
+
+        /** vC56 §2 — the Shorts players: their presence alone is the verdict. */
+        private val YT_REEL_IDS = listOf(
+            "$YOUTUBE_PKG:id/reel_watch_fragment_root",
+            "$YOUTUBE_PKG:id/reel_player_page_container",
+        )
+
+        /** vC56 §2 — Instagram's Reels surfaces (DMs / Profile stay free). */
+        private val IG_REEL_IDS = listOf(
+            "$INSTAGRAM_PKG:id/clips_viewer_view_pager",
+            "$INSTAGRAM_PKG:id/reel_viewer_root",
+        )
 
         /** §6 browsers we patrol. */
         private val BROWSERS: Map<String, List<String>> = mapOf(
@@ -98,7 +118,8 @@ class SystemDisciplineService : AccessibilityService() {
             "com.vivaldi.browser" to listOf("com.vivaldi.browser:id/url_bar"),
         )
 
-        /** §7 — where uninstall / permission surgery happens. */
+        /** §7 + vC56 §3 — where uninstall / permission surgery happens
+         *  (AOSP, Google, Samsung, MIUI, ColorOS, Realme UI). */
         private val SETTINGS_PKGS = setOf(
             "com.android.settings",
             "com.google.android.packageinstaller",
@@ -106,6 +127,9 @@ class SystemDisciplineService : AccessibilityService() {
             "com.samsung.android.packageinstaller",
             "com.miui.packageinstaller",
             "com.coloros.sauhelper",
+            "com.miui.securitycenter",
+            "com.coloros.securitycenter",
+            "com.realme.securitycenter",
         )
 
         private val SETTINGS_DANGER_TERMS = listOf(
@@ -122,7 +146,7 @@ class SystemDisciplineService : AccessibilityService() {
     private var overlayKey: String? = null          // "social:<pkg>" | "window:<pkg>" | "lockdown:<pkg>" | "adult" | "shorts"
     private var overlayPkg: String? = null
     private var lastBrowserScanAt = 0L
-    private var lastShortsScanAt = 0L
+    private var lastTrapScanAt = 0L
     private var lastInterceptLaunchAt = 0L
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -179,8 +203,13 @@ class SystemDisciplineService : AccessibilityService() {
                     }
                 }
 
-                // §7 — anti-uninstall guardian
-                if (pkg in SETTINGS_PKGS && !DisciplinePrefs.uninstallGuardReleased(this)) {
+                // §7 + vC56 §3 — anti-uninstall guardian: armed only while the
+                // hunter's toggle stands ON and the device-admin anchor lives.
+                if (pkg in SETTINGS_PKGS &&
+                    DisciplinePrefs.isUninstallGuardOn(this) &&
+                    PermissionLair.isDeviceAdminOn(this) &&
+                    !DisciplinePrefs.uninstallGuardReleased(this)
+                ) {
                     auditSettingsScreen()
                 }
             }
@@ -194,11 +223,19 @@ class SystemDisciplineService : AccessibilityService() {
                         scanBrowserUrl(pkg)
                     }
                 }
-                // vC54 §2 — YouTube & Shorts Blocker: reels die on sight
+                val now = System.currentTimeMillis()
+                // vC56 §2 — Instagram Reels Blocker: reels die on sight; DMs,
+                // Profile and the rest stay free unless the app is fully sealed.
+                if (pkg == INSTAGRAM_PKG && overlayKey == null && DisciplinePrefs.isInstagramBlockOn(this)) {
+                    if (now - lastTrapScanAt >= 900) {
+                        lastTrapScanAt = now
+                        killIgReelIfPlaying()
+                    }
+                }
+                // vC54 §2 + vC56 §2 — YouTube Shorts Blocker: reels die on sight
                 if (pkg == YOUTUBE_PKG && overlayKey == null && DisciplinePrefs.isYoutubeBlockOn(this)) {
-                    val now = System.currentTimeMillis()
-                    if (now - lastShortsScanAt >= 900) {
-                        lastShortsScanAt = now
+                    if (now - lastTrapScanAt >= 900) {
+                        lastTrapScanAt = now
                         killReelIfPlaying()
                     }
                 }
@@ -272,28 +309,88 @@ class SystemDisciplineService : AccessibilityService() {
         attach(view, key = key, pkg = pkg)
     }
 
-    /** The reel killer: the Shorts container id is the whole confession. */
+    /** vC56 §2 — the Shorts killer: reel container ids or a selected "Shorts"
+     *  pivot are the whole confession. Long-form videos stay free. */
     private fun killReelIfPlaying() {
         val root = rootInActiveWindow ?: return
-        val reels = runCatching { root.findAccessibilityNodeInfosByViewId(REEL_ROOT_ID) }.getOrNull()
-        val playing = !reels.isNullOrEmpty()
-        reels?.forEach { runCatching { it.recycle() } }
+        var trapped = anyViewIdPresent(root, YT_REEL_IDS)
+        if (!trapped) trapped = selectedTrapTab(root, "Shorts")
         root.recycle()
-        if (!playing) return
+        if (!trapped) return
         // navigate away first, then flash the verdict — it auto-dissolves fast
         performGlobalAction(GLOBAL_ACTION_BACK)
-        showShortsFlash()
+        showTrapFlash(
+            view = SystemLockOverlayView.shortsKilled(this) {
+                removeOverlay()
+                performGlobalAction(GLOBAL_ACTION_HOME)
+            },
+            key = "shorts",
+            pkg = YOUTUBE_PKG,
+        )
     }
 
-    private fun showShortsFlash() {
-        if (overlayKey == "shorts") return
-        removeOverlay()
-        val view = SystemLockOverlayView.shortsKilled(this) {
-            removeOverlay()
-            performGlobalAction(GLOBAL_ACTION_HOME)
+    /** vC56 §2 — the Reels killer: clips_viewer_view_pager / reel_viewer_root
+     *  or a selected "Reels" bottom tab → instant BACK + exact intervention. */
+    private fun killIgReelIfPlaying() {
+        val root = rootInActiveWindow ?: return
+        var trapped = anyViewIdPresent(root, IG_REEL_IDS)
+        if (!trapped) trapped = selectedTrapTab(root, "Reels")
+        root.recycle()
+        if (!trapped) return
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        showTrapFlash(
+            view = SystemLockOverlayView.reelsKilled(this) {
+                removeOverlay()
+                performGlobalAction(GLOBAL_ACTION_HOME)
+            },
+            key = "reels",
+            pkg = INSTAGRAM_PKG,
+        )
+    }
+
+    /** True when any of [ids] resolves to at least one live node. */
+    private fun anyViewIdPresent(root: AccessibilityNodeInfo, ids: List<String>): Boolean {
+        var found = false
+        for (id in ids) {
+            val nodes = runCatching { root.findAccessibilityNodeInfosByViewId(id) }.getOrNull()
+            if (!nodes.isNullOrEmpty()) found = true
+            nodes?.forEach { runCatching { it.recycle() } }
         }
-        attach(view, key = "shorts", pkg = YOUTUBE_PKG)
-        ui.postDelayed({ if (overlayKey == "shorts") removeOverlay() }, 1800)
+        return found
+    }
+
+    /** True when a SELECTED tab/pivot in the tree is labelled [label] — the
+     *  bottom-nav confession (Instagram "Reels", YouTube "Shorts"). Budgeted
+     *  walk; every borrowed node is recycled on any path. */
+    private fun selectedTrapTab(root: AccessibilityNodeInfo, label: String): Boolean {
+        var budget = 300
+        var found = false
+        val stack = ArrayDeque<AccessibilityNodeInfo>()
+        stack.addLast(root)
+        while (stack.isNotEmpty() && budget > 0 && !found) {
+            val n = stack.removeLast()
+            budget--
+            runCatching {
+                if (n.isSelected) {
+                    val t = (n.contentDescription ?: n.text)?.toString()?.trim()
+                    if (t.equals(label, ignoreCase = true)) found = true
+                }
+                if (!found) {
+                    for (i in 0 until n.childCount) n.getChild(i)?.let { stack.addLast(it) }
+                }
+            }
+            if (n != root) n.recycle()
+        }
+        while (stack.isNotEmpty()) runCatching { stack.removeLast().recycle() }
+        return found
+    }
+
+    /** One machine for every trap flash: attach, auto-dissolve, CTA escapes. */
+    private fun showTrapFlash(view: SystemLockOverlayView, key: String, pkg: String) {
+        if (overlayKey == key) return
+        removeOverlay()
+        attach(view, key = key, pkg = pkg)
+        ui.postDelayed({ if (overlayKey == key) removeOverlay() }, 1800)
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -365,6 +462,7 @@ class SystemDisciplineService : AccessibilityService() {
 
     private fun auditSettingsScreen() {
         if (AntiUninstallActivity.visible) return
+        if (overlayKey == "abandon") return
         val now = System.currentTimeMillis()
         if (now - lastInterceptLaunchAt < 4_000) return
         val root = rootInActiveWindow ?: return
@@ -377,8 +475,61 @@ class SystemDisciplineService : AccessibilityService() {
         val danger = SETTINGS_DANGER_TERMS.any { flat.contains(it) }
         if (mentionsUs && danger) {
             lastInterceptLaunchAt = now
-            AntiUninstallActivity.launch(this)
+            soundAbandonmentProtocol()
         }
+    }
+
+    /** vC56 §3 — the Abandonment Protocol stands as a full-screen,
+     *  un-dismissible TYPE_APPLICATION_OVERLAY when the overlay grant exists;
+     *  without it the confession Activity takes the field instead. Either way
+     *  the typing ritual itself lives in [AntiUninstallActivity] — one ritual,
+     *  zero duplication. */
+    private fun soundAbandonmentProtocol() {
+        if (!PermissionLair.isOverlayOn(this)) {
+            AntiUninstallActivity.launch(this)
+            return
+        }
+        removeOverlay()
+        val view = SystemLockOverlayView.abandonmentProtocol(
+            this,
+            onConfess = {
+                removeOverlay()
+                AntiUninstallActivity.launch(this)
+            },
+            onEscape = {
+                removeOverlay()
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                ui.postDelayed({
+                    runCatching {
+                        packageManager.getLaunchIntentForPackage(packageName)
+                            ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                            ?.let { startActivity(it) }
+                    }
+                }, 260)
+            },
+        )
+        attachAbandonment(view)
+    }
+
+    private fun attachAbandonment(view: SystemLockOverlayView) {
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT,
+        )
+        runCatching { windowManager.addView(view, params) }
+            .onSuccess {
+                overlay = view
+                overlayKey = "abandon"
+                overlayPkg = "settings"
+            }
+            .onFailure {
+                // the grant evaporated mid-war — fall back to the Activity ritual
+                AntiUninstallActivity.launch(this)
+            }
     }
 
     // ═══════════════════════════════════════════════════════════════════════

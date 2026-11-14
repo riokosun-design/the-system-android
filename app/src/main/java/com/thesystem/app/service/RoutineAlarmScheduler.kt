@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import com.thesystem.app.core.QuietHours
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
@@ -85,10 +86,13 @@ object RoutineAlarmScheduler {
         return cal.timeInMillis
     }
 
+    /** vC56 §4 — a routine alarm stamped inside the 22:30–06:30 quiet window
+     *  is deferred to the morning gate; the hunter owns alarms, but the System
+     *  owns the night. */
     fun schedule(context: Context, alarm: RoutineAlarm) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pi = pending(context, alarm)
-        val at = nextTriggerMillis(alarm)
+        val at = QuietHours.defer(nextTriggerMillis(alarm))
         runCatching {
             if (Build.VERSION.SDK_INT >= 31 && !am.canScheduleExactAlarms()) {
                 am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)

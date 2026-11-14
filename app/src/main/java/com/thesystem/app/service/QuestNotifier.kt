@@ -12,6 +12,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.thesystem.app.MainActivity
 import com.thesystem.app.R
 import com.thesystem.app.TheSystemApplication
+import com.thesystem.app.core.QuietHours
 
 /**
  * SYSTEM-voice notifications.
@@ -49,8 +50,11 @@ object QuestNotifier {
         )
     }
 
-    /** Reminder before a scheduled war, or when the recovery window closes. */
+    /** Reminder before a scheduled war, or when the recovery window closes.
+     *  vC56 §4 — NIGHT QUIET HOURS: between 22:30 and 06:30 a reminder dies
+     *  silently instead of buzzing; the hunter's sleep is a protected stat. */
     fun reminder(context: Context, title: String, body: String, notifId: Int = NOTIF_REMINDER) {
+        if (!QuietHours.canPostNow()) return
         if (!allow(notifId, dedupeSec = 30)) return
         post(
             context = context,
@@ -65,8 +69,13 @@ object QuestNotifier {
 
     /** vC54 §1/§3 — circadian alarms & watchdog verdicts: MAX priority, ALARM
      *  category; the channel itself carries the alarm sound so a scheduled
-     *  window always arrives LOUD, even inside Doze. */
+     *  window always arrives LOUD, even inside Doze.
+     *  vC56 §4 — but never between 22:30 and 06:30: scheduled alarms are
+     *  deferred to the 06:30 gate at schedule time, and any straggler (inexact
+     *  fallback, retro-active audit) is silenced right here. Enforcement still
+     *  runs 24/7 — only the noise sleeps. */
     fun circadian(context: Context, title: String, body: String, notifId: Int) {
+        if (!QuietHours.canPostNow()) return
         val nm = context.getSystemService(NotificationManager::class.java) ?: return
         ensureChannel(nm, TheSystemApplication.CHANNEL_CIRCADIAN, title)
         val open = PendingIntent.getActivity(

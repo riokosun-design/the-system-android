@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import com.thesystem.app.core.QuietHours
 import com.thesystem.app.data.model.QuestDto
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -251,7 +252,11 @@ object QuestRhythm {
         return c.timeInMillis
     }
 
+    /** vC56 §4 — any war ping drifting into the 22:30–06:30 quiet window is
+     *  deferred to the next 06:30 gate; the System never buzzes a sleeping
+     *  hunter. */
     private fun exactAlarm(context: Context, at: Long, requestCode: Int, extras: Map<String, String>) {
+        val fireAt = QuietHours.defer(at)
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pi = PendingIntent.getBroadcast(
             context,
@@ -261,10 +266,10 @@ object QuestRhythm {
         )
         runCatching {
             if (Build.VERSION.SDK_INT >= 31 && !am.canScheduleExactAlarms()) {
-                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pi)
             } else {
-                runCatching { am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi) }
-                    .getOrElse { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi) }
+                runCatching { am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pi) }
+                    .getOrElse { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pi) }
             }
         }
     }

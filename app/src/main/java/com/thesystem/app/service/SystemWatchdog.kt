@@ -11,6 +11,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.thesystem.app.core.QuietHours
 import java.util.concurrent.TimeUnit
 
 /**
@@ -107,10 +108,15 @@ object SystemWatchdog {
 
     // ── the exact boundary fallback ─────────────────────────────────────────
 
+    /** vC56 §4 — a verdict alarm landing inside the 22:30–06:30 quiet window
+     *  slides to the 06:30 gate; overnight audits still happen, just silently
+     *  (nothing buzzes — [QuestNotifier.circadian] enforces the same gate). */
     fun scheduleNextAlarm(context: Context) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager ?: return
         val next = QuestRhythm.nextBoundaryMillis(context)
-        val at = if (next > 0L) next else System.currentTimeMillis() + 3 * 60 * 60 * 1000L
+        val at = QuietHours.defer(
+            if (next > 0L) next else System.currentTimeMillis() + 3 * 60 * 60 * 1000L,
+        )
         val pi = PendingIntent.getBroadcast(
             context,
             REQ_ALARM,
