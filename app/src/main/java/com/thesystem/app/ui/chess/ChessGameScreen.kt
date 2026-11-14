@@ -178,7 +178,7 @@ fun ChessGameScreen(
         val movingPiece = pre.sq[m.from]
         val mover = colorOf(movingPiece)
         val cap = if (m.flag == 1) PAWN or (if (mover == 0) BLACK_BIT else 0) else pre.sq[m.to]
-        anim = AnimMove(m.from, m.to, movingPiece, cap)
+        anim = AnimMove.of(m.from, m.to, movingPiece, cap)   // vC55 §A2 monotonic id → slide always fires
         val u = board.make(m)
         undos.add(m to u)
         playedMoves.add(m)
@@ -197,7 +197,26 @@ fun ChessGameScreen(
         val (st, _) = board.status()
         when (st) {
             Board.Status.KING_CRUSHED -> finish(if (board.kingCrushed == povColor) "LOSS" else "WIN", "KING CRUSHED")
-            Board.Status.CHECKMATE -> finish(if (sideAfter == povColor) "LOSS" else "WIN", "CHECKMATE")
+            Board.Status.CHECKMATE -> {
+                // vC55 §A1 — the war ends in PHYSICAL capture, never on paper:
+                // the attacking side lands the crushing blow itself (one final
+                // slide onto the king's square), then the finisher detonates.
+                val crush = board.crushFinisher()
+                if (crush != null) {
+                    val crushingPiece = board.sq[crush.from]
+                    val crownedPiece = board.sq[crush.to]
+                    anim = AnimMove.of(crush.from, crush.to, crushingPiece, crownedPiece)
+                    lastMove = crush.from to crush.to
+                    board.play(crush)
+                    fen = board.toFen()
+                    history.add(fen)
+                    // honest ledger entry for the striking blow (king symbol × target square, mated)
+                    sanLog.add("${pieceLetterOf(crushingPiece)}x${com.thesystem.app.chess.sqName(crush.to)}#crush")
+                    finish(if (board.kingCrushed == povColor) "LOSS" else "WIN", "KING CRUSHED")
+                } else {
+                    finish(if (sideAfter == povColor) "LOSS" else "WIN", "CHECKMATE")
+                }
+            }
             Board.Status.STALEMATE -> finish("DRAW", "STALEMATE")
             Board.Status.DRAW_50 -> finish("DRAW", "FIFTY-MOVE RULE")
             Board.Status.DRAW_MATERIAL -> finish("DRAW", "INSUFFICIENT MATERIAL")
@@ -973,4 +992,13 @@ private fun AnalysisLine(label: String, value: Int, invert: Boolean = false) {
             fontSize = 13.sp, fontFamily = SystemMono, fontWeight = FontWeight.Bold,
         )
     }
+}
+
+/** vC55 §A1 — SAN-flavored letter for the auto-crush ledger entry. */
+private fun pieceLetterOf(p: Int): String = when (typeOf(p)) {
+    com.thesystem.app.chess.KNIGHT -> "N"
+    com.thesystem.app.chess.BISHOP -> "B"
+    com.thesystem.app.chess.ROOK -> "R"
+    com.thesystem.app.chess.QUEEN -> "Q"
+    else -> "K"
 }

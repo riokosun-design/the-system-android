@@ -90,13 +90,22 @@ private fun DrawScope.drawPieceImg(images: Map<Int, ImageBitmap>, p: Int, x: Flo
     )
 }
 
-/** A move currently animating on the board — slides, never teleports. */
+/** A move currently animating on the board — slides, never teleports.
+ *  vC55 §A2: [moveId] is MONOTONIC — two identical retreats still re-animate. */
 data class AnimMove(
     val from: Int,
     val to: Int,
     val movingPiece: Int,   // piece BEFORE the move (pawn stays pawn for promo slide)
     val captured: Int,      // piece that stood on `to` before the move (EMPTY if none)
-)
+    val moveId: Int,        // vC55 §A2 — the LaunchedEffect key; never reused
+) {
+    companion object {
+        /** Process-wide monotonically increasing move-animation id. */
+        private var moveSeq = 0
+        fun of(from: Int, to: Int, movingPiece: Int, captured: Int): AnimMove =
+            AnimMove(from, to, movingPiece, captured, ++moveSeq)
+    }
+}
 
 /**
  * THE SYSTEM CHESSBOARD — one Canvas, real 8×8 geometry, hardware-drawn.
@@ -132,12 +141,14 @@ fun ChessBoard(
     /** vC53 §5.2 — light up only these drag-source squares (side to move). */
     draggable: Set<Int>? = null,
 ) {
-    // slide progress for the one moving piece
+    // vC55 §A2 — SLIDE LAW: 200 ms, FastOutSlowInEasing, keyed on the monotonic
+    // moveAnimationId so EVERY move (tap, drag-drop, AI reply, puzzle setup)
+    // re-fires the glide even when the geometry repeats. Zero teleportation.
     val progress = remember { Animatable(1f) }
-    LaunchedEffect(anim) {
+    LaunchedEffect(anim?.moveId) {
         if (anim != null) {
             progress.snapTo(0f)
-            progress.animateTo(1f, tween(190, easing = FastOutSlowInEasing))
+            progress.animateTo(1f, tween(200, easing = FastOutSlowInEasing))
             onAnimDone()
         }
     }

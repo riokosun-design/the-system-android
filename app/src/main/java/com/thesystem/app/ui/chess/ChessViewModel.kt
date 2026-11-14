@@ -118,6 +118,14 @@ class ChessViewModel @Inject constructor(
 
     suspend fun puzzleRepoTodayDailySolved(): Boolean = repo.todayCount("DAILY", "SOLVED") > 0
 
+    /** vC55 §A4 — lifetime never-repeat rail: server-stamped blacklist. */
+    suspend fun repoSolvedPuzzleIds(): Set<String> = repo.solvedPuzzleIds()
+
+    /** Fire-and-forget durable stamp — local vault already did the instant one. */
+    fun stampSolvedPuzzle(puzzleId: String, solveMs: Long) = viewModelScope.launch {
+        repo.markPuzzleSolved(puzzleId, solveMs)
+    }
+
     /** vC53 §1 — curriculum completion stamp. Unknown kinds no-op server-side. */
     fun viewModelReportLesson(lessonId: Int, title: String) =
         viewModelScope.launch {

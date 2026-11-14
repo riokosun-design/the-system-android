@@ -31,6 +31,7 @@ package com.thesystem.app.chess
 class PuzzleDirector(
     private val store: Store,
     private val pack: List<Puzzle> = PuzzlePack.ALL,
+    private val lifetimeSolved: Set<String> = emptySet(),   // vC55 §A4 — ABSOLUTE blacklist
 ) {
 
     /** Persistence abstraction — SharedPreferences on device, maps in sim. */
@@ -53,6 +54,9 @@ class PuzzleDirector(
         val cyclePosition: Int,     // "3rd of 6 in this tier cycle"
         val cycleSize: Int,
         val freshCycle: Boolean,    // started a new pass through the tier pool
+        /** vC55 §A4 — TRUE once the whole pack is lifetime-solved: the screen
+         *  shows the conquered wall and NEVER replays a solved puzzle. */
+        val arenaCleared: Boolean = false,
     )
 
     companion object {
@@ -128,8 +132,7 @@ class PuzzleDirector(
      */
     fun nextInTier(t: Int, currentId: String? = null, reason: String = "SPECIFIED DIFFICULTY"): Verdict {
         val tier = t.coerceIn(1, 10)
-        val rec = records()
-        return selectFrom(pool = poolFor(tier), rec = rec, currentId = currentId, t = tier, why = reason)
+        return serve(tier, reason, currentId, records())
     }
 
     /**
@@ -139,7 +142,32 @@ class PuzzleDirector(
     fun next(currentId: String? = null, practiceElo: Int = 400): Verdict {
         val rec = records()
         val (t, why) = tier(rec, practiceElo)
-        return selectFrom(pool = poolFor(t), rec = rec, currentId = currentId, t = t, why = why)
+        return serve(t, why, currentId, rec)
+    }
+
+    /**
+     * vC55 §A4 — LIFETIME NEVER-REPEAT LAW. The director first hunts inside
+     * the tier pool minus the absolute solved-blacklist; a DRAINED tier
+     * widens to the nearest unbeaten rating across the whole pack (blacklist
+     * still absolute — a solved puzzle is dead forever). Only when ALL 500+
+     * stand conquered does the arenaCleared verdict fly, and the screen
+     * raises the wall instead of a board.
+     */
+    private fun serve(tier: Int, why: String, currentId: String?, rec: List<Record>): Verdict {
+        val live = poolFor(tier).filter { it.id !in lifetimeSolved }
+        if (live.isNotEmpty())
+            return selectFrom(pool = live, rec = rec, currentId = currentId, t = tier, why = why)
+        val global = pack.filter { it.id !in lifetimeSolved }
+        if (global.isEmpty())
+            return Verdict(
+                puzzle = pack[0], tier = tier,
+                tierReason = "ARENA CLEARED — ${lifetimeSolved.size} CONQUERED · PACK EXHAUSTED",
+                cyclePosition = 1, cycleSize = 1, freshCycle = false, arenaCleared = true,
+            )
+        val nearest = global.sortedWith(compareBy({ kotlin.math.abs(it.rating - tier) }, { it.id }))
+            .take(WIDEN_MIN)
+        return selectFrom(pool = nearest, rec = rec, currentId = currentId, t = tier,
+            why = "$why · TIER CLEAN — NEAREST UNBEATEN RAIL")
     }
 
     private fun selectFrom(pool: List<Puzzle>, rec: List<Record>, currentId: String?, t: Int, why: String): Verdict {

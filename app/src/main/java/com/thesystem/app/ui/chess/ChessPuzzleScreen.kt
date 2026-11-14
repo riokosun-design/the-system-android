@@ -33,6 +33,7 @@ import com.thesystem.app.chess.PuzzlePack
 import com.thesystem.app.core.theme.*
 import com.thesystem.app.core.ui.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /** Solve-green — functional color for the §2 success verdict (chat precedent). */
@@ -81,8 +82,21 @@ fun ChessPuzzleScreen(
 ) {
     val haptics = rememberSystemHaptics()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("chess_puzzle_prefs", Context.MODE_PRIVATE) }
-    val director = remember { PuzzleDirector(store = PrefsPuzzleStore(prefs)) }
+
+    // vC55 §A4 — 500+ mega-pack (assets, decoded once per process) + the
+    // lifetime never-repeat blacklist (DataStore local rail, server merges in)
+    var pack by remember { mutableStateOf(PuzzlePack.ALL) }
+    var solvedIds by remember { mutableStateOf(setOf<String>()) }
+    LaunchedEffect(Unit) {
+        pack = PuzzlePackCache.load(context)
+        solvedIds = SolvedPuzzleVault.local(context)
+        solvedIds = SolvedPuzzleVault.mergeRemote(context, vm.repoSolvedPuzzleIds())
+    }
+    val director = remember(pack, solvedIds) {
+        PuzzleDirector(store = PrefsPuzzleStore(prefs), pack = pack, lifetimeSolved = solvedIds)
+    }
     var sfxMuted by remember { mutableStateOf(ChessSfx.isMuted()) }
 
     val chessUi by vm.state.collectAsStateWithLifecycle()
@@ -96,11 +110,12 @@ fun ChessPuzzleScreen(
     // The verdict is served ONCE per slot — never recomposed out from under an
     // in-progress attempt (profile arriving late must not swap the position).
     var verdict by remember { mutableStateOf<PuzzleDirector.Verdict?>(null) }
-    LaunchedEffect(daily, practiceElo) {
+    LaunchedEffect(daily, practiceElo, pack, solvedIds) {
         if (verdict == null) {
             verdict = if (daily) {
-                val p = PuzzlePack.daily(epochDay)
-                PuzzleDirector.Verdict(p, p.rating, "DAILY SEED · ONE SHOT PER DAY", 1, 1, false)
+                val p = PuzzlePack.daily(epochDay, pack, solvedIds)
+                PuzzleDirector.Verdict(p, p.rating, "DAILY SEED · ONE SHOT PER DAY", 1, 1, false,
+                    arenaCleared = pack.isNotEmpty() && pack.all { it.id in solvedIds })
             } else {
                 tierDraw = kotlin.random.Random.nextInt(1, 11)
                 director.nextInTier(tierDraw, currentId = null, reason = "DIFFICULTY $tierDraw/10")
@@ -160,6 +175,22 @@ fun ChessPuzzleScreen(
                 return@Column
             }
 
+            if (verdict?.arenaCleared == true) {
+                // §A4 — the whole pack stands conquered FOR LIFE. An honest
+                // wall: the vault never serves a corpse, not even once.
+                Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("ARENA CLEARED", color = SolveGreen, fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "All ${solvedIds.size} puzzles conquered for life.\nA solved puzzle never returns — on any device, ever.",
+                        style = MonoLabel, color = LabelGray,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    GhostButton("BACK TO HUB", onBack, Modifier.fillMaxWidth())
+                }
+                return@Column
+            }
+
             if (puzzle == null) {
                 // selection is local + instant — this frame exists at most once
                 Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.Center) {
@@ -187,6 +218,13 @@ fun ChessPuzzleScreen(
                 onOutcome = { solved, solveMs ->
                     playedThisSession = true
                     director.record(puzzle.id, solved, solveMs, epochDay)   // the single write path
+                    if (solved && puzzle.id !in solvedIds) {
+                        // §A4 — lifetime blacklist, dual rail: local DataStore
+                        // NOW (instant), Supabase stamp behind it (durable)
+                        solvedIds = solvedIds + puzzle.id
+                        scope.launch { SolvedPuzzleVault.stamp(context, puzzle.id) }
+                        vm.stampSolvedPuzzle(puzzle.id, solveMs)
+                    }
                     vm.reportPuzzle(
                         kind = if (daily) "DAILY" else "PUZZLE",
                         mode = if (daily) "DAILY_CHALLENGE" else "PUZZLE",
@@ -248,7 +286,7 @@ private fun PuzzleBoard(
             val mv = board.legalMoves().firstOrNull { it.uci() == s }
             if (mv != null) {
                 val pre = Board.fromFen(board.toFen())
-                anim = AnimMove(mv.from, mv.to, pre.sq[mv.from], pre.sq[mv.to])
+                anim = AnimMove.of(mv.from, mv.to, pre.sq[mv.from], pre.sq[mv.to])
                 board.make(mv)
                 fen = board.toFen()              // board lands; the 190ms slide rides on top
                 ChessSfx.play(if (pre.sq[mv.to] != com.thesystem.app.chess.EMPTY) ChessSfx.Sfx.CAPTURE else ChessSfx.Sfx.MOVE)
@@ -278,7 +316,7 @@ private fun PuzzleBoard(
             val mv = board.legalMoves().firstOrNull { it.uci() == reply }
             if (mv != null) {
                 val pre = Board.fromFen(preFen)
-                anim = AnimMove(mv.from, mv.to, pre.sq[mv.from], pre.sq[mv.to])
+                anim = AnimMove.of(mv.from, mv.to, pre.sq[mv.from], pre.sq[mv.to])
                 board.play(mv)
             } else {
                 board.playUci(reply)
@@ -301,7 +339,7 @@ private fun PuzzleBoard(
         val expected = puzzle.line.getOrNull(ply) ?: return
         if (m.uci() == expected) {
             val pre = Board.fromFen(fen)
-            anim = AnimMove(m.from, m.to, pre.sq[m.from], pre.sq[m.to])
+            anim = AnimMove.of(m.from, m.to, pre.sq[m.from], pre.sq[m.to])
             board.play(m)
             fen = board.toFen()
             haptics.tick()

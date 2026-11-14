@@ -154,4 +154,37 @@ class ChessRepository @Inject constructor(
     private data class MentalClaimDto(
         @kotlinx.serialization.SerialName("title") val title: String,
     )
+
+    // ── vC55 §A4 — lifetime never-repeat puzzle rail (mig 041) ─────────────
+
+    /** Server-stamped solved ids — the cross-device blacklist source of truth. */
+    suspend fun solvedPuzzleIds(): Set<String> = withContext(Dispatchers.IO) {
+        val me = uid ?: return@withContext emptySet()
+        runCatching {
+            client.postgrest.from("user_solved_puzzles")
+                .select { filter { eq("user_id", me) } }
+                .decodeList<SolvedPuzzleDto>()
+                .map { it.puzzleId }.toSet()
+        }.getOrDefault(emptySet())
+    }
+
+    /** One-shot durable stamp. Primary-key kill makes replays no-ops (a 409
+     *  on re-stamp is swallowed by design — "already conquered" IS success);
+     *  fire-and-forget — the local DataStore vault already blacklisted it. */
+    suspend fun markPuzzleSolved(puzzleId: String, solveMs: Long) = withContext(Dispatchers.IO) {
+        val me = uid ?: return@withContext
+        runCatching {
+            client.postgrest.from("user_solved_puzzles")
+                .upsert(buildJsonObject {
+                    put("user_id", me)
+                    put("puzzle_id", puzzleId)
+                    put("solve_ms", solveMs.coerceIn(0L, 3_600_000L))
+                })
+        }
+    }
+
+    @kotlinx.serialization.Serializable
+    private data class SolvedPuzzleDto(
+        @kotlinx.serialization.SerialName("puzzle_id") val puzzleId: String,
+    )
 }

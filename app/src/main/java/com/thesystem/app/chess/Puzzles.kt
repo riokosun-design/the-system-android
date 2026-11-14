@@ -162,4 +162,112 @@ object PuzzlePack {
 
     /** Date-seeded daily pick — deterministic worldwide, rotates the full pack. */
     fun daily(epochDay: Long): Puzzle = ALL[(epochDay % ALL.size).toInt()]
+
+    /** vC55 §A4 — daily from the MERGED pack, skipping lifetime-solved ids:
+     *  walks forward from the world-seeded index until an unconquered puzzle
+     *  stands. Deterministic per (day, solved-set) — no clock randomness. */
+    fun daily(epochDay: Long, pack: List<Puzzle>, solved: Set<String>): Puzzle {
+        if (pack.isEmpty()) return ALL[0]
+        var i = ((epochDay % pack.size + pack.size) % pack.size).toInt()
+        repeat(pack.size) {
+            val p = pack[i]
+            if (p.id !in solved) return p
+            i = (i + 1) % pack.size
+        }
+        return pack[i]   // arena fully conquered — the seed stands, honestly
+    }
+
+    /** vC55 §A4 — builtin 49 seed + decoded asset mega-pack, deduplicated by
+     *  id AND board fingerprint (id collisions or FEN twins never double). */
+    fun merged(extra: List<Puzzle>?): List<Puzzle> {
+        if (extra.isNullOrEmpty()) return ALL
+        val ids = ALL.mapTo(HashSet()) { it.id }
+        val fens = ALL.mapTo(HashSet()) { it.fen.substringBefore(' ') }
+        val out = ArrayList<Puzzle>(ALL.size + extra.size).also { it.addAll(ALL) }
+        for (p in extra) {
+            if (p.rating !in 1..10 || p.line.isEmpty()) continue   // corrupt entry dies silent
+            if (p.id in ids) continue
+            if (p.fen.substringBefore(' ') in fens) continue
+            ids += p.id; fens += p.fen.substringBefore(' '); out += p
+        }
+        return out
+    }
+
+    /**
+     * vC55 §A4 — ASSET MEGA-PACK DECODER. Pure-Kotlin minimal JSON reader
+     * (objects, arrays, strings, numbers, bools, null) — ZERO dependencies,
+     * android-free: the sim harness parses the exact asset bytes the app
+     * ships and replays every line through the in-app engine. Corrupt input
+     * yields an empty list, never a crash (2GB-device covenant).
+     */
+    fun decode(json: String): List<Puzzle> = runCatching { decodeStrict(json) }.getOrDefault(emptyList())
+
+    private fun decodeStrict(json: String): List<Puzzle> {
+        val out = ArrayList<Puzzle>()
+        val r = JsonReader(json)
+        val root = r.readValue() as? Map<*, *> ?: return emptyList()
+        val arr = root["puzzles"] as? List<*> ?: return emptyList()
+        for (e in arr) {
+            val o = e as? Map<*, *> ?: continue
+            val id = o["id"] as? String ?: continue
+            val fen = o["fen"] as? String ?: continue
+            val line = (o["line"] as? List<*>)?.mapNotNull { it as? String } ?: continue
+            val motif = o["motif"] as? String ?: "TACTIC"
+            val diff = (o["diff"] as? Number)?.toInt() ?: 1
+            val rating = (o["rating"] as? Number)?.toInt() ?: 1
+            val hint = o["hint"] as? String ?: ""
+            val setup = (o["setup"] as? String)?.takeIf { it.isNotBlank() }
+            if (line.isEmpty()) continue
+            out += Puzzle(id, fen, line, motif, diff.coerceIn(1, 3), rating.coerceIn(1, 10), hint, setup)
+        }
+        return out
+    }
+
+    /** Micro recursive-descent reader — strict enough for our own forge output. */
+    private class JsonReader(private val s: String) {
+        private var i = 0
+        private fun ws() { while (i < s.length && s[i] <= ' ') i++ }
+        private fun expect(c: Char) { require(i < s.length && s[i] == c) { "expected $c at $i" }; i++ }
+
+        fun readValue(): Any? {
+            ws()
+            if (i >= s.length) return null
+            return when (s[i]) {
+                '{' -> { i++; val m = LinkedHashMap<String, Any?>(); ws()
+                    if (i < s.length && s[i] == '}') { i++; return m }
+                    while (true) { ws(); val k = readString(); ws(); expect(':'); m[k] = readValue(); ws()
+                        if (i < s.length && s[i] == ',') { i++; continue }; break }
+                    expect('}'); m }
+                '[' -> { i++; val l = ArrayList<Any?>(); ws()
+                    if (i < s.length && s[i] == ']') { i++; return l }
+                    while (true) { l.add(readValue()); ws()
+                        if (i < s.length && s[i] == ',') { i++; continue }; break }
+                    expect(']'); l }
+                '"' -> readString()
+                't' -> { i += 4; true }
+                'f' -> { i += 5; false }
+                'n' -> { i += 4; null }
+                else -> { val st = i
+                    while (i < s.length && (s[i].isDigit() || s[i] in "+-.eE")) i++
+                    s.substring(st, i).toDoubleOrNull() }
+            }
+        }
+
+        private fun readString(): String {
+            expect('"')
+            val b = StringBuilder()
+            while (i < s.length) {
+                val c = s[i++]
+                if (c == '"') break
+                if (c == '\\' && i < s.length) {
+                    when (val e = s[i++]) {
+                        'n' -> b.append('\n'); 't' -> b.append('\t'); 'r' -> b.append('\r')
+                        'u' -> { if (i + 4 <= s.length) { b.append(s.substring(i, i + 4).toInt(16).toChar()); i += 4 } }
+                        else -> b.append(e)
+                    }
+                } else b.append(c)
+            }
+            return b.toString()
+        }
+    }
 }

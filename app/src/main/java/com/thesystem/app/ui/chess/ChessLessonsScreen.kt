@@ -240,7 +240,7 @@ private fun LessonRunner(
     fun applyUci(uci: String, onAfter: (() -> Unit) = {}) {
         val mv = board.legalMoves().firstOrNull { it.uci() == uci } ?: return
         val pre = Board.fromFen(fen)
-        anim = AnimMove(mv.from, mv.to, pre.sq[mv.from], pre.sq[mv.to])
+        anim = AnimMove.of(mv.from, mv.to, pre.sq[mv.from], pre.sq[mv.to])
         board.make(mv)
         fen = board.toFen()
         lastMove = mv.from to mv.to
@@ -291,7 +291,7 @@ private fun LessonRunner(
         for (u in s.moves) {
             val mv = board.legalMoves().firstOrNull { it.uci() == u } ?: break
             val pre = Board.fromFen(fen)
-            anim = AnimMove(mv.from, mv.to, pre.sq[mv.from], pre.sq[mv.to])
+            anim = AnimMove.of(mv.from, mv.to, pre.sq[mv.from], pre.sq[mv.to])
             board.make(mv)
             fen = board.toFen()
             lastMove = mv.from to mv.to
