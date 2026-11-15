@@ -28,6 +28,7 @@ object DisciplinePrefs {
     private const val KEY_INSTAGRAM_BLOCK = "instagram_block"  // vC54 §2: Instagram Reels Blocker (granular)
     private const val KEY_YOUTUBE_BLOCK = "youtube_block"      // vC54 §2: YouTube Shorts Blocker (granular)
     private const val KEY_UNINSTALL_GUARD = "uninstall_guard"  // vC56 §3: anti-uninstall typing guard (hunter-owned)
+    private const val KEY_GUARD_NAG_DATE = "guard_nag_date"    // vC57 §3: guard-unarmed ping, at most once/day
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -102,4 +103,15 @@ object DisciplinePrefs {
         prefs(context).getBoolean(KEY_UNINSTALL_GUARD, true)
     fun setUninstallGuard(context: Context, on: Boolean) =
         prefs(context).edit().putBoolean(KEY_UNINSTALL_GUARD, on).apply()
+
+    // ── vC57 §3 — guard-unarmed nag (once per local day, per vessel) ────────
+
+    fun guardNagStampedToday(context: Context): Boolean =
+        prefs(context).getString(KEY_GUARD_NAG_DATE, null) == LocalDate.now().toString()
+
+    fun stampGuardNag(context: Context) {
+        runCatching {
+            prefs(context).edit().putString(KEY_GUARD_NAG_DATE, LocalDate.now().toString()).apply()
+        }
+    }
 }

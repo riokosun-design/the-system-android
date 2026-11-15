@@ -40,11 +40,16 @@ import com.thesystem.app.ui.discipline.AntiUninstallActivity
  *  vC54 §3         — CRIMSON LOCKDOWN: while PenaltyLockdown stands,
  *                    Instagram / YouTube / Snapchat seal regardless of the
  *                    standing toggles until the redemption gauntlet clears.
- *  §7 GUARDIAN     — Settings / package-installer / OEM-security screens
- *                    trying to uninstall THE SYSTEM or strip its permissions
- *                    trigger the System Abandonment Protocol (confession
- *                    typing ritual). vC56 §3: with the overlay grant it stands
- *                    as a TYPE_APPLICATION_OVERLAY; without it, the Activity.
+ *  §7 GUARDIAN     — Settings / package-installer / OEM-security / Play-Store
+ *                    screens trying to uninstall THE SYSTEM or strip its
+ *                    permissions trigger the System Abandonment Protocol
+ *                    (confession typing ritual). vC56 §3: with the overlay
+ *                    grant it stands as a TYPE_APPLICATION_OVERLAY; without
+ *                    it, the Activity. vC57 §3: the watch answers to the
+ *                    hunter's toggle alone — admin state only classifies
+ *                    "device admin" screens (activation = free pass), and the
+ *                    admin description/activation copy is sanitized so the
+ *                    arming flow can never trip its own ambush.
  *
  * This service performs no network calls, keeps no user data, and answers
  * every verdict from local, deterministic state.
@@ -118,8 +123,9 @@ class SystemDisciplineService : AccessibilityService() {
             "com.vivaldi.browser" to listOf("com.vivaldi.browser:id/url_bar"),
         )
 
-        /** §7 + vC56 §3 — where uninstall / permission surgery happens
-         *  (AOSP, Google, Samsung, MIUI, ColorOS, Realme UI). */
+        /** §7 + vC56 §3 + vC57 §3 — where uninstall / permission surgery
+         *  happens (AOSP, Google, Samsung, MIUI, ColorOS, Realme UI, and the
+         *  Play Store's own uninstall page). */
         private val SETTINGS_PKGS = setOf(
             "com.android.settings",
             "com.google.android.packageinstaller",
@@ -130,12 +136,21 @@ class SystemDisciplineService : AccessibilityService() {
             "com.miui.securitycenter",
             "com.coloros.securitycenter",
             "com.realme.securitycenter",
+            "com.android.vending",
         )
 
-        private val SETTINGS_DANGER_TERMS = listOf(
-            "uninstall", "force stop", "force quit", "device admin",
+        /** vC57 §3 — hard-danger: these screens are NEVER part of arming a
+         *  ward, so they trigger the protocol regardless of admin state. */
+        private val SETTINGS_HARD_TERMS = listOf(
+            "uninstall", "force stop", "force quit",
             "deactivate", "accessibility", "app info",
         )
+
+        /** vC57 §3 — "device admin" screens are hostile ONLY while the admin
+         *  anchor lives (the hunter came to strip it). While unarmed that same
+         *  surface is the ACTIVATION flow — a free pass, or the guard could
+         *  never be granted without a fight. */
+        private const val SETTINGS_ADMIN_TERM = "device admin"
     }
 
     private val ui = Handler(Looper.getMainLooper())
@@ -203,11 +218,12 @@ class SystemDisciplineService : AccessibilityService() {
                     }
                 }
 
-                // §7 + vC56 §3 — anti-uninstall guardian: armed only while the
-                // hunter's toggle stands ON and the device-admin anchor lives.
+                // §7 + vC57 §3 — anti-uninstall guardian: the hunter's toggle
+                // alone arms the WATCH. Device-admin state no longer gates the
+                // interception (an un-anchored hunter deserves the warning too);
+                // it only decides whether "device admin" screens are hostile.
                 if (pkg in SETTINGS_PKGS &&
                     DisciplinePrefs.isUninstallGuardOn(this) &&
-                    PermissionLair.isDeviceAdminOn(this) &&
                     !DisciplinePrefs.uninstallGuardReleased(this)
                 ) {
                     auditSettingsScreen()
@@ -472,7 +488,8 @@ class SystemDisciplineService : AccessibilityService() {
         val flat = texts.toString().lowercase()
         if (flat.isEmpty()) return
         val mentionsUs = flat.contains("the system") || flat.contains("com.thesystem.app")
-        val danger = SETTINGS_DANGER_TERMS.any { flat.contains(it) }
+        val danger = SETTINGS_HARD_TERMS.any { flat.contains(it) } ||
+            (PermissionLair.isDeviceAdminOn(this) && flat.contains(SETTINGS_ADMIN_TERM))
         if (mentionsUs && danger) {
             lastInterceptLaunchAt = now
             soundAbandonmentProtocol()

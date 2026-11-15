@@ -97,8 +97,11 @@ object PermissionLair {
                     .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
                     .putExtra(
                         DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                        "The Device Guard anchors the anti-uninstall law. Deactivating it summons " +
-                            "the System Abandonment Protocol.",
+                        // vC57 §3 — SANITIZED: no danger substrings (uninstall /
+                        // deactivate / force stop / device admin) or the System's
+                        // own activation screen would trip the Abandonment Protocol.
+                        "The Device Guard is THE SYSTEM's escape-proof anchor. Switching it " +
+                            "off summons the Abandonment Protocol.",
                     )
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
