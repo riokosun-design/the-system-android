@@ -85,7 +85,7 @@ class FeatureHarvester(
     }
 
     companion object {
-        const val ENGINE_TAG = "v4.1-movenet"
+        const val ENGINE_TAG = "v5.0-rtmpose"   // vC58: corpus lineage flips with the backbone
         val EMPTY_META = buildJsonObject { }
     }
 }

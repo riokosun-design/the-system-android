@@ -133,7 +133,7 @@ fun BattleRoomScreen(battleId: String, onExit: () -> Unit, vm: BattleRoomViewMod
         onDispose { witness?.stop() }
     }
 
-    // PHASE 1 pose ownership (router: MoveNet primary / ML Kit failover)
+    // PHASE 1 pose ownership (router: RTMPose-M primary / RTMPose-S fallback, NCNN)
     val router = remember(spectating) { if (spectating) null else PoseEstimatorRouter(context) }
     DisposableEffect(router) { onDispose { router?.close() } }
 

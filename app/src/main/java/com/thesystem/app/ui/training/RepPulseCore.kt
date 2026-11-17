@@ -37,6 +37,16 @@ class RepPulseCore(
     private val onPhase: (Phase, Float) -> Unit = { _, _ -> },
     private val onStatus: (Status) -> Unit = {},
     private val onTelemetry: (Telemetry) -> Unit = {},
+    /**
+     * TRACK-HOLD law (vC58): how long a pose blackout is HONOURED as temporary.
+     * While inside this window an in-flight cycle is FROZEN, never aborted —
+     * the machine holds the exact attempt state (TRACKING_LOST) and resumes it
+     * on recovery (TRACKING_RECOVERED) with the engine clock shifted forward so
+     * the blackout never happened. Only when the blackout outlives this timeout
+     * is the ABANDONED INCOMPLETE movement cleared. Completed reps are
+     * untouchable in every path — no code path but [reset] ever lowers [reps].
+     */
+    private val trackingHoldMs: Long = DEFAULT_TRACKING_HOLD_MS,
 ) {
 
     enum class Exercise { PUSHUP, SQUAT }
@@ -46,6 +56,7 @@ class RepPulseCore(
         SEARCHING, READY, DESCENDING, ASCENDING, VERIFYING,
         REJECT_DEPTH, REJECT_FORM, REJECT_TEMPO, REJECT_POSE,
         CAMERA_MOVED, SETTLE, DISPUTED,
+        TRACKING_LOST, TRACKING_RECOVERED,
     }
 
     data class Quality(
@@ -96,7 +107,7 @@ class RepPulseCore(
         const val MIN_REP_MS = 450L
         const val MAX_REP_MS = 6000L
         const val REP_COOLDOWN_MS = 380L
-        const val POSE_GAP_ABORT_MS = 600L
+        const val DEFAULT_TRACKING_HOLD_MS = 2500L   // blackout honoured as temporary
         const val TOP_HOLD_MS = 250L
         const val SWITCH_HOLD_MS = 400L        // primary switch stability guard
         const val SLEW_CONFIRM_FRAMES = 4      // consecutive big jumps = relocation, not glitch
@@ -126,6 +137,8 @@ class RepPulseCore(
         fun lastT(): Long = if (t.isEmpty()) -1L else t.last()
         fun values(): List<Float> = v
         fun clear() { t.clear(); v.clear() }
+        /** Clock-freeze: shift every sample forward by a blackout span. */
+        fun shiftBy(ms: Long) { for (i in t.indices) t[i] = t[i] + ms }
     }
 
     private val win = HashMap<Chan, Window>().also { m -> Chan.entries.forEach { m[it] = Window() } }
@@ -158,6 +171,7 @@ class RepPulseCore(
     private var prevDelta = 0f
     private var slewStreak = 0
     private var slewLockUntil = 0L
+    private var resumeReseed = false   // post-blackout slew amnesty (see recovery path)
     private var apprenticeUntilMs = Long.MAX_VALUE   // fast re-learn until first honest rep
     private var lastRepAt = 0L
     private var bounceCount = 0
@@ -197,16 +211,53 @@ class RepPulseCore(
 
         if (!person) {
             noPoseMs += dt
-            if ((st == St.DESCENDING || st == St.ASCENDING) && noPoseMs > POSE_GAP_ABORT_MS) {
-                report(Status.REJECT_POSE)
-                abortAttempt()
+            val attemptInFlight = st == St.DESCENDING || st == St.ASCENDING
+            when {
+                // TRACK-HOLD law: a temporary blackout NEVER aborts an in-flight
+                // cycle and NEVER touches reps. The machine freezes exactly
+                // where it was; the hunter holds the pose; recovery resumes it.
+                attemptInFlight && noPoseMs <= trackingHoldMs ->
+                    report(Status.TRACKING_LOST)
+                // Abandoned-movement law: only after the hold expires is the
+                // INCOMPLETE attempt cleared — completed reps stay untouchable.
+                attemptInFlight -> {
+                    report(Status.REJECT_POSE)
+                    abortAttempt()
+                }
+                noPoseMs > 500 && reported != Status.REJECT_POSE && reported != Status.TRACKING_LOST ->
+                    report(Status.SEARCHING)
             }
-            if (noPoseMs > 500 && reported != Status.REJECT_POSE) report(Status.SEARCHING)
             emitTelemetry(personSeen = false)
             emitPhase()
             return
         }
-        noPoseMs = 0L
+        if (noPoseMs > 0) {
+            // CLOCK-FREEZE recovery — ANY blackout (attempt or rest), any length:
+            // engine time shifts forward by the lost span so windows stay fresh,
+            // the primary channel survives, and the machine resumes instantly
+            // instead of re-learning the hunter it was already watching.
+            val gap = noPoseMs
+            if (gap >= 120L) {
+                win.values.forEach { it.shiftBy(gap) }
+                if (warmupStartAt >= 0) warmupStartAt += gap
+                if (attemptStartAt > 0) attemptStartAt += gap
+                if (troughAt > 0) troughAt += gap
+                if (primarySince > 0) primarySince += gap
+                if (candidateSwitchSince > 0) candidateSwitchSince += gap
+                lastEvalAt += gap
+                if (slewLockUntil > 0) slewLockUntil += gap
+                if (apprenticeUntilMs != Long.MAX_VALUE) apprenticeUntilMs += gap
+                if (lastRepAt > 0) lastRepAt += gap
+                // slew-guard amnesty: the resume jump is a GAP CLOSING, not a
+                // teleport — re-anchor prevSig to the resumed signal once.
+                // (Without this the frozen prevSig re-trips every frame and the
+                // "relocation" cascade murders the held rep — the exact disease
+                // the TRACK-HOLD law exists to cure.)
+                resumeReseed = true
+            }
+            if (reported == Status.TRACKING_LOST) report(Status.TRACKING_RECOVERED)
+            noPoseMs = 0L
+        }
 
         if (warmupStartAt < 0) warmupStartAt = nowMs
 
@@ -283,7 +334,14 @@ class RepPulseCore(
             emitTelemetry(true); emitPhase()
             return
         }
-        if (reps > 0 && nowMs >= apprenticeUntilMs && bandRange > 0) {
+        if (resumeReseed) {
+            // blackout amnesty: accept the resumed position as the new anchor —
+            // the jump across a pose blackout is a gap closing, not a teleport
+            prevSig = sig
+            prevDelta = 0f
+            slewStreak = 0
+            resumeReseed = false
+        } else if (reps > 0 && nowMs >= apprenticeUntilMs && bandRange > 0) {
             // dt-scaled: a hitch frame carries proportionally more honest motion
             val slewThresh = 0.8f * bandRange * (dt.toFloat() / 83f).coerceIn(1f, 2.5f)
             if (abs(sig - prevSig) > slewThresh) {
@@ -576,6 +634,7 @@ class RepPulseCore(
         val warmupLeft = if (bandsValid) 0L
         else ((warmupStartAt + WARMUP_MS - lastFrameAt).coerceAtLeast(0L))
         val hint = when {
+            !personSeen && reported == Status.TRACKING_LOST -> "TRACKING LOST — YOUR REP IS HELD. STAY WHERE YOU ARE"
             !personSeen -> "NO BODY SIGNAL — STEP INTO FRAME"
             primary == null && telemetryBestFrac < 0.35f -> "I CAN SEE YOU — MOVE THROUGH ONE FULL REP SO I CAN LEARN YOUR RANGE"
             primary == null -> "ALMOST THERE — KEEP THE MOTION GOING, FULL RANGE"

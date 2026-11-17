@@ -20,3 +20,6 @@ keystore/*.base64.txt
 .kotlin/
 artwork-src/
 ml/__pycache__/
+
+# vC58 — NCNN SDK is vendored at build time by CI, never committed
+app/src/main/cpp/ncnn-sdk/

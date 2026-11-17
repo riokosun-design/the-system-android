@@ -143,6 +143,7 @@ class RepPulseEngineV5(
                     else -> PoseRepCounter.PoseStatus.TRACKING
                 }
                 RepPulseCore.Status.REJECT_POSE -> PoseRepCounter.PoseStatus.POSE_NOT_DETECTED
+                RepPulseCore.Status.TRACKING_LOST -> PoseRepCounter.PoseStatus.LOST_HOLD
                 RepPulseCore.Status.REJECT_DEPTH, RepPulseCore.Status.REJECT_FORM -> PoseRepCounter.PoseStatus.BAD_ANGLE
                 RepPulseCore.Status.CAMERA_MOVED, RepPulseCore.Status.SETTLE -> PoseRepCounter.PoseStatus.WAITING
                 else -> PoseRepCounter.PoseStatus.TRACKING
@@ -151,6 +152,8 @@ class RepPulseEngineV5(
         when (s) {
             RepPulseCore.Status.CAMERA_MOVED -> onDecision("ABORT_IMU")
             RepPulseCore.Status.SETTLE -> onDecision("RELOCATE_SETTLE")
+            RepPulseCore.Status.TRACKING_LOST -> onDecision("TRACK_HOLD")
+            RepPulseCore.Status.TRACKING_RECOVERED -> onDecision("TRACK_RECOVERED")
             RepPulseCore.Status.REJECT_DEPTH -> onDecision("REJECT_DEPTH")
             RepPulseCore.Status.REJECT_TEMPO -> onDecision("REJECT_TEMPO")
             RepPulseCore.Status.REJECT_POSE -> onDecision("ABORT_POSE")

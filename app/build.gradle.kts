@@ -20,12 +20,20 @@ android {
         applicationId = "com.thesystem.app"
         minSdk = 26 // low-end / older Android first
         targetSdk = 35
-        versionCode = 57
+        versionCode = 58
         versionName = "0.23.0-LIVE"
 
-        // 2GB-first install weight: drop emulator-only native ABIs (MediaPipe+
-        // ML Kit ship x86/x86_64 .so blobs nobody's phone uses ≈60MB unpacked).
+        // 2GB-first install weight: drop emulator-only native ABIs.
         ndk { abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a")) }
+
+        // vC58 — RTMPose/NCNN native inference bridge
+        ndkVersion = "27.0.12077973"
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++17"
+                arguments += "-DANDROID_STL=c++_shared"
+            }
+        }
 
         buildConfigField("String", "SUPABASE_URL", "\"${backendProp("SUPABASE_URL", "https://YOUR_PROJECT_REF.supabase.co")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${backendProp("SUPABASE_ANON_KEY", "YOUR_PUBLIC_ANON_KEY")}\"")
@@ -80,6 +88,9 @@ android {
     }
     kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
     buildFeatures { compose = true; buildConfig = true }
+    externalNativeBuild {
+        cmake { path = file("src/main/cpp/CMakeLists.txt") }
+    }
     packaging { resources { excludes += setOf("/META-INF/DEPENDENCIES", "/META-INF/LICENSE", "/META-INF/LICENSE.txt", "/META-INF/NOTICE", "/META-INF/*.kotlin_module") } }
 }
 
@@ -119,8 +130,6 @@ dependencies {
     implementation(libs.androidx.datastore)
     implementation(libs.lifecycle.service)
     implementation(libs.androidx.work.runtime) // vC54 §3 — 24h watchdog (periodic audit while the app is dead)
-    implementation(libs.mlkit.pose)
-    implementation(libs.tensorflow.lite)
     implementation(libs.mediapipe.tasks.genai) // on-device LLM runtime (AI engine §6) — models download on demand, never bundled
     implementation(libs.androidx.profileinstaller)
     implementation(libs.camera.core)

@@ -54,7 +54,7 @@ import java.util.concurrent.Executors
  *
  *  CAMERA : push-ups AND squats run the sim-proven REP PULSE v5 core —
  *           geometry-agnostic adaptive-band counting over the shared pose
- *           router (MoveNet primary / ML Kit failover), IMU witness, live
+ *           router (RTMPose-M primary / RTMPose-S fallback, NCNN on-device), IMU witness, live
  *           skeleton overlay throughout. No calibration ritual: the engine
  *           learns the hunter's range from the first honest rep.
  *  STEPS  : foreground HEALTH service keeps counting through music, app switch
@@ -424,6 +424,7 @@ private fun BoxScope.SquatPulseBox(s: QuestProofState, vm: QuestProofViewModel, 
         PoseRepCounter.PoseStatus.MOVE_BACK -> "MOVE BACK" to PaperWhite
         PoseRepCounter.PoseStatus.FULL_BODY_NOT_VISIBLE -> "FULL BODY NOT VISIBLE" to PaperWhite
         PoseRepCounter.PoseStatus.BAD_ANGLE -> "BAD ANGLE — STRAIGHTEN THE LINE" to PaperWhite
+        PoseRepCounter.PoseStatus.LOST_HOLD -> "TRACKING LOST — REP HELD, STAY PUT" to PaperWhite
         PoseRepCounter.PoseStatus.TRACKING -> when (phase) {
             PoseRepCounter.RepPhase.BOTTOM -> if (s.exercise == PoseRepCounter.RepExercise.SQUAT) "DEEP — DRIVE UP" else "BOTTOM — PUSH"
             PoseRepCounter.RepPhase.ASCENDING -> "UP"
@@ -470,7 +471,7 @@ private fun BoxScope.PushupPulseBox(s: QuestProofState, vm: QuestProofViewModel,
         onDispose { witness.stop() }
     }
 
-    // MoveNet Thunder primary, ML Kit failover, ROI lock, parity probe (§Phase 1/2)
+    // RTMPose-M primary, RTMPose-S fallback (RAM-aware), fail-flip, parity probe (§Phase 1/2)
     val router = remember { PoseEstimatorRouter(context) }
     DisposableEffect(router) { onDispose { router.close() } }
 
@@ -563,6 +564,8 @@ private fun BoxScope.PushupPulseBox(s: QuestProofState, vm: QuestProofViewModel,
         PushupEngineV4.EngineStatus.REJECT_POSE -> "REP LOST — STAY IN FRAME" to PaperWhite
         PushupEngineV4.EngineStatus.CAMERA_MOVED -> "CAMERA MOVED — RE-LOCKING" to PaperWhite
         PushupEngineV4.EngineStatus.SETTLE -> "HOLD THE TOP — RE-ANCHORING" to PaperWhite
+        PushupEngineV4.EngineStatus.TRACKING_LOST -> "TRACKING LOST — REP HELD, STAY PUT" to PaperWhite
+        PushupEngineV4.EngineStatus.TRACKING_RECOVERED -> "TRACKING BACK — RESUME" to SkyBlue
         PushupEngineV4.EngineStatus.DISPUTED -> "ANTI-CHEAT HOLD — CLEAN REPS ONLY" to PaperWhite
         null -> "ENGINE LIVE — FRAME YOUR SET" to SkyBlue
     }
