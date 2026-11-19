@@ -112,12 +112,6 @@ private fun PermissionRow(perm: PermissionLair.Perm, onGrant: () -> Unit) {
                 "the Abandonment Protocol over Settings.",
             "Enable 'Allow display over other apps' for THE SYSTEM.",
         )
-        PermissionLair.Perm.DEVICE_ADMIN -> Triple(
-            "DEVICE ADMIN — ANTI-UNINSTALL",
-            "Anchors the anti-uninstall law: Android refuses to delete THE SYSTEM while " +
-                "this guard stands.",
-            "Tap 'Activate' on the Device Admin screen.",
-        )
     }
 
     Column(

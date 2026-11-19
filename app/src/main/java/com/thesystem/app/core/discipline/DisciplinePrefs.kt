@@ -10,7 +10,7 @@ import java.time.LocalDate
  * window event, so the app-side sync path (dashboard refresh, quest
  * completion) stamps the *server-confirmed* daily-quest verdict here.
  * Reading it is synchronous, offline-safe, and never client-authoritative
- * for XP/VC — it only gates the entertainment blocker.
+ * for XP — it only gates the entertainment blocker.
  *
  * Default posture = DENIED: if the app was never opened today, quests are
  * treated as incomplete and social media stays locked. Weak hunters do not

@@ -356,9 +356,9 @@ fun StreakTile(days: Int, modifier: Modifier = Modifier) {
     }
 }
 
-/** VC readout: white diamond + mono amount, quiet hairline chip. */
+/** XP readout: white diamond + mono amount, quiet hairline chip. */
 @Composable
-fun VcChip(amount: Long, modifier: Modifier = Modifier) {
+fun XpChip(amount: Long, modifier: Modifier = Modifier) {
     Row(
         modifier
             .clip(RoundedCornerShape(6.dp))
@@ -367,9 +367,9 @@ fun VcChip(amount: Long, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Icon(Icons.Filled.Diamond, contentDescription = "VC", tint = PaperWhite, modifier = Modifier.size(10.dp))
+        Icon(Icons.Filled.Diamond, contentDescription = "XP", tint = PaperWhite, modifier = Modifier.size(10.dp))
         AnimatedCounter(target = amount, color = PaperWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-            format = { SystemMath.formatVc(it) })
+            format = { SystemMath.formatXp(it) })
     }
 }
 

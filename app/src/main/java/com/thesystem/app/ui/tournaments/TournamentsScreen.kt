@@ -81,19 +81,19 @@ class TournamentsViewModel @Inject constructor(
 
     fun close() { _state.value = _state.value.copy(active = null, fixtures = emptyList()) }
 
-    /** Entry fee is charged atomically server-side by join_tournament — client never touches VC. */
+    /** v1.0 §1: entry is free — glory is the stake. join_tournament owns the roster. */
     fun join(t: TournamentDto) {
         if (_state.value.joining) return
         viewModelScope.launch {
             _state.value = _state.value.copy(joining = true)
             arena.joinTournament(t.id).fold(
                 onSuccess = {
-                    _state.value = _state.value.copy(notice = "ENTERED — ${t.entryFeeVc} VC staked. Fixtures drop when the bracket opens.")
+                    _state.value = _state.value.copy(notice = "ENTERED — fixtures drop when the bracket opens.")
                     refresh(silent = true)
                 },
                 onFailure = {
                     _state.value = _state.value.copy(error = when {
-                        it.message?.contains("insufficient") == true -> "NOT ENOUGH VC — top up in the Wallet first."
+                        it.message?.contains("insufficient") == true -> "The System found you wanting — train and return."
                         it.message?.contains("already") == true -> "Already registered, hunter."
                         it.message?.contains("status") == true || it.message?.contains("not_open") == true -> "Registration is closed for this one."
                         else -> "ENTRY FAILED — ${it.message?.take(100) ?: "retry"}"
@@ -165,9 +165,9 @@ private fun TournamentCard(t: TournamentDto, registered: Boolean, onOpen: () -> 
         }
         Spacer(Modifier.height(8.dp))
         Row {
-            Text("ENTRY ${t.entryFeeVc} VC", style = MonoLabel, color = HunterGold)
+            Text("FREE ENTRY", style = MonoLabel, color = HunterGold)
             Spacer(Modifier.width(14.dp))
-            Text("PRIZE ${t.prizePoolVc} VC", style = MonoLabel, color = SkyBlue)
+            Text("PRIZE — 500 XP GLORY", style = MonoLabel, color = SkyBlue)
             if (registered) { Spacer(Modifier.width(14.dp)); Text("● REGISTERED", style = MonoLabel, color = ElectricBlue) }
         }
         t.startsAt?.let {
@@ -188,13 +188,13 @@ private fun TournamentDetail(s: TournamentsState, t: TournamentDto, vm: Tourname
                 Spacer(Modifier.height(4.dp))
                 Text(t.status, style = MonoLabel, color = tournamentStatusColor(t.status))
                 Spacer(Modifier.height(8.dp))
-                Text("ENTRY ${t.entryFeeVc} VC · PRIZE POOL ${t.prizePoolVc} VC · ${t.type}", style = MonoLabel, color = HunterGold)
+                Text("FREE ENTRY · 500 XP PRIZE · ${t.type}", style = MonoLabel, color = HunterGold)
                 t.startsAt?.let { Text("Starts ${it.take(16).replace('T', ' ')}", style = MonoLabel, color = LabelGray) }
                 t.endsAt?.let { Text("Ends ${it.take(16).replace('T', ' ')}", style = MonoLabel, color = LabelGray) }
                 Spacer(Modifier.height(10.dp))
                 when {
                     joinable -> GhostButton(
-                        if (s.joining) "ENTERING…" else "JOIN — STAKE ${t.entryFeeVc} VC",
+                        if (s.joining) "ENTERING…" else "JOIN THE BRACKET",
                         { vm.join(t) }, Modifier.fillMaxWidth(),
                     )
                     registered -> Text("REGISTERED — entry fee staked. Fixtures below once the bracket draws.", style = MonoLabel, color = ElectricBlue)

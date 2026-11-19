@@ -214,10 +214,8 @@ fun OpsTab(ops: AdminOpsViewModel = hiltViewModel()) {
         item { SectionTitle("Vault Economy") }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                AnimatedStatTile("VC Issued", m.num("vc_issued") ?: 0, ElectricBlue, Modifier.weight(1f))
-                AnimatedStatTile("VC Spent", m.num("vc_spent") ?: 0, CrimsonRed, Modifier.weight(1f))
-                AnimatedStatTile("Outstanding", m.num("vc_outstanding") ?: 0, PaperWhite, Modifier.weight(1f))
-                AnimatedStatTile("Held", m.num("vc_held") ?: 0, HunterGold, Modifier.weight(1f))
+                AnimatedStatTile("Hunters", m.num("hunters") ?: 0, ElectricBlue, Modifier.weight(1f))
+                AnimatedStatTile("Active Today", m.num("active_today") ?: 0, VenomGreen, Modifier.weight(1f))
             }
         }
         item { SectionTitle("Money Rail — ARCHIVE (manual rail removed 0.24.0)") }

@@ -76,20 +76,8 @@
             </intent-filter>
         </service>
 
-        <!-- §7 DEVICE GUARD — anchors the anti-uninstall law. -->
-        <receiver
-            android:name=".service.SystemDeviceAdminReceiver"
-            android:exported="true"
-            android:label="@string/app_name"
-            android:description="@string/device_guard_desc"
-            android:permission="android.permission.BIND_DEVICE_ADMIN">
-            <meta-data
-                android:name="android.app.device_admin"
-                android:resource="@xml/device_admin_policies" />
-            <intent-filter>
-                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
-            </intent-filter>
-        </receiver>
+        <!-- §1 v1.0: the Device Admin receiver is REMOVED — anti-uninstall is
+             pure AccessibilityService + SYSTEM_ALERT_WINDOW (Abandonment Protocol). -->
 
         <!-- §7 SYSTEM ABANDONMENT PROTOCOL — the confession ritual. -->
         <activity

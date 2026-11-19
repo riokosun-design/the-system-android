@@ -157,7 +157,7 @@ object Routes {
     const val SQUAD_COMMAND = "squadCommand"
     /** STEP 8: supply is a pushed route from the Vault, no longer a tab. */
     const val MARKET = "market"
-    /** 0.22.0→0.24.0: VC vault (balance + immutable ledger), support inbox, tournament brackets. */
+    /** v1.0: the purchase gate, support inbox, tournament brackets. */
     const val WALLET = "wallet"
     const val SUPPORT = "support"
     const val TOURNAMENTS = "tournaments"
@@ -203,11 +203,11 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // vC57 §3 — GUARD-UNARMED NAG: the anti-uninstall toggle ships ON, but
-        // without its Android powers (esp. DEVICE ADMIN — the only true
-        // uninstall wall) Android will still delete THE SYSTEM in one tap.
-        // One honest ping per day until the hunter arms all three. Reminder
-        // routing applies the 22:30–06:30 quiet-hours gate on its own.
+        // vC57 §3 + v1.0 §1 — GUARD-UNARMED NAG: the anti-uninstall toggle ships
+        // ON, but without its two Android powers (Accessibility sentinel +
+        // overlay) the Abandonment Protocol cannot stand. One honest ping per
+        // day until the hunter arms both. Reminder routing applies the
+        // 22:30–06:30 quiet-hours gate on its own.
         runCatching {
             if (DisciplinePrefs.isUninstallGuardOn(this) &&
                 PermissionLair.missing(this, PermissionLair.UNINSTALL_GUARD_PERMS).isNotEmpty() &&
@@ -218,8 +218,8 @@ class MainActivity : ComponentActivity() {
                     this,
                     title = "GUARD UNARMED",
                     body = "The anti-uninstall guard is switched ON but its powers are missing — " +
-                        "without DEVICE ADMIN, Android will let anyone delete THE SYSTEM in one tap. " +
-                        "Open the Discipline Engine and grant all three powers.",
+                        "without the Accessibility sentinel and overlay, the Abandonment Protocol cannot stand. " +
+                        "Open the Discipline Engine and grant both powers.",
                     notifId = 7301,
                 )
             }

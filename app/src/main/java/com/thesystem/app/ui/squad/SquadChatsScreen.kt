@@ -65,7 +65,7 @@ import javax.inject.Inject
 //   · filter chips: ALL · GUILDS · DIRECT MESSAGES · UNREAD
 //   · guilds chip → persistent YOUR GUILD banner (or CREATE / BROWSE doors)
 //   · WhatsApp row: 50dp avatar · title + timestamp · preview + unread badge
-//   · FAB (cyan, 20dp above the rail) → START DIRECT CHAT / CREATE GUILD 500 VC
+//   · FAB (cyan, 20dp above the rail) → START DIRECT CHAT / CREATE GUILD
 //
 // DATA LAW: every row is a REAL thread — clan room history + DM streams from
 // messages_with_sender. Unread counts are measured against locally stored
@@ -509,7 +509,7 @@ private fun NoGuildBanner(onCreate: () -> Unit, onBrowse: () -> Unit) {
         Text("A guild multiplies discipline. Forge one or join an existing hall.", style = MonoLabel, color = PreviewGray)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            NeonButton("CREATE GUILD (500 VC)", onCreate, Modifier.weight(1f), color = SkyBlue)
+            NeonButton("CREATE GUILD", onCreate, Modifier.weight(1f), color = SkyBlue)
             GhostButton("BROWSE GUILDS", onBrowse, Modifier.weight(1f))
         }
     }

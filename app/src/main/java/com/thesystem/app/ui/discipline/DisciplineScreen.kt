@@ -67,7 +67,6 @@ fun DisciplineScreen(nav: NavHostController) {
     val context = LocalContext.current
     var accessibilityOn by remember { mutableStateOf(PermissionLair.isAccessibilityOn(context)) }
     var overlayOn by remember { mutableStateOf(PermissionLair.isOverlayOn(context)) }
-    var deviceAdminOn by remember { mutableStateOf(PermissionLair.isDeviceAdminOn(context)) }
     var dnsOn by remember { mutableStateOf(DisciplinePrefs.isDnsGuardOn(context) && SystemDnsGuardService.running) }
     var socialLock by remember { mutableStateOf(DisciplinePrefs.isSocialLockOn(context)) }
     var pornShield by remember { mutableStateOf(DisciplinePrefs.isPornShieldOn(context)) }
@@ -99,7 +98,6 @@ fun DisciplineScreen(nav: NavHostController) {
             if (event == Lifecycle.Event.ON_RESUME) {
                 accessibilityOn = PermissionLair.isAccessibilityOn(context)
                 overlayOn = PermissionLair.isOverlayOn(context)
-                deviceAdminOn = PermissionLair.isDeviceAdminOn(context)
                 dnsOn = DisciplinePrefs.isDnsGuardOn(context) && SystemDnsGuardService.running
                 val pending = pendingOn
                 val needed = permDialog
@@ -272,7 +270,7 @@ fun DisciplineScreen(nav: NavHostController) {
                             "overlay or device-admin powers summons the System Abandonment Protocol: " +
                             "a full-screen, un-dismissible overlay over Settings. Escape costs either " +
                             "a perfect typed confession — or one honest oath.",
-                        checked = uninstallGuard && accessibilityOn && overlayOn && deviceAdminOn,
+                        checked = uninstallGuard && accessibilityOn && overlayOn,
                         enabled = true,
                         onToggle = { on ->
                             gate(on, PermissionLair.UNINSTALL_GUARD_PERMS, "ANTI-UNINSTALL GUARD") {
@@ -282,13 +280,13 @@ fun DisciplineScreen(nav: NavHostController) {
                     )
                     Spacer(Modifier.height(Grid.S8))
                     Text(
-                        if (uninstallGuard && accessibilityOn && overlayOn && deviceAdminOn) {
+                        if (uninstallGuard && accessibilityOn && overlayOn) {
                             "[ ACTIVE — quitting now requires the confession ]"
                         } else {
                             "[ DORMANT — the switch arms only behind all three powers ]"
                         },
                         style = MonoLabel,
-                        color = if (uninstallGuard && accessibilityOn && overlayOn && deviceAdminOn) SkyBlue else FaintGray,
+                        color = if (uninstallGuard && accessibilityOn && overlayOn) SkyBlue else FaintGray,
                     )
                 }
             }

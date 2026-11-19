@@ -93,8 +93,8 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
                             Text("ARENA", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 22.sp, letterSpacing = 1.sp)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text("VAULT", style = MonoLabel, color = LabelGray)
-                            Text("${s.myProfile?.vcBalance ?: 0} VC", style = MonoData, color = SkyBlue)
+                            Text("HUNTER", style = MonoLabel, color = LabelGray)
+                            Text("LV ${s.myProfile?.level ?: 1}", style = MonoData, color = SkyBlue)
                         }
                     }
                 }
@@ -228,7 +228,7 @@ fun ArenaScreen(nav: NavHostController, vm: ArenaViewModel = hiltViewModel()) {
                                         Column(Modifier.weight(1f)) {
                                             Text(c.exercise, color = PaperWhite, style = MaterialTheme.typography.titleMedium)
                                             Text(
-                                                "WON TODAY ${c.wins}/${c.required} · +120 XP · +25 VC",
+                                                "WON TODAY ${c.wins}/${c.required} · +120 XP",
                                                 style = MaterialTheme.typography.bodySmall, color = LabelGray,
                                             )
                                         }
@@ -513,9 +513,7 @@ private fun ArenaTournamentsCarousel(nav: NavHostController) {
                         )
                         Spacer(Modifier.height(3.dp))
                         Text(
-                            buildString {
-                                append("ENTRY ${t.entryFeeVc} VC · POOL ${t.prizePoolVc} VC")
-                            },
+                            "FREE ENTRY · XP GLORY",
                             style = MonoLabel, color = LabelGray, maxLines = 1,
                         )
                         Spacer(Modifier.height(3.dp))

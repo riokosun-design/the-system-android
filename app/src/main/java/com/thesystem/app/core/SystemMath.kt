@@ -134,8 +134,6 @@ object SystemMath {
 
     // ── Clan / Shadow Guild gates ────────────────────────────────────────────
     const val CLAN_MIN_LEVEL = 30
-    const val CLAN_CREATE_COST_VC = 500L
-    const val GUILD_TAX_BPS = 500 // 5% of XP-equivalent VC from non-members in shielded zones
     const val TERRITORY_ZONE_RADIUS_METERS = 1000f
     const val TERRITORY_GEOHASH_PRECISION = 6 // ≈ 1.2km x 0.61km cells
 
@@ -143,9 +141,7 @@ object SystemMath {
     const val REF_CUT_MERCH = 0.10        // 10% merch (5-10 band, configured server-side per item)
     const val REF_CUT_BLACK_ROOM = 0.10   // 10% Black Room unlocks
     const val REF_CUT_TOURNAMENT = 0.05   // 5% of tournament winnings
-    const val REF_CUT_CPA = 0.02          // 2% of CPA VC earnings
 
     // ── Formatting ───────────────────────────────────────────────────────────
-    fun formatVc(v: Long): String = "%,d VC".format(v)
     fun formatXp(v: Long): String = "%,d XP".format(v)
 }

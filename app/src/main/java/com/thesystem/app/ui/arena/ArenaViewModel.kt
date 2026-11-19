@@ -177,7 +177,7 @@ class ArenaViewModel @Inject constructor(
     // ── SECTION 3 — daily challenge blocks ──────────────────────────────────
     fun claimChallenge(kind: String) = viewModelScope.launch {
         arena.claimBattleChallenge(kind)
-            .onSuccess { _state.value = _state.value.copy(notice = "$kind challenge claimed — +120 XP, +25 VC."); refresh() }
+            .onSuccess { _state.value = _state.value.copy(notice = "$kind challenge claimed — +120 XP."); refresh() }
             .onFailure { _state.value = _state.value.copy(error = friendly(it.message)) }
     }
 

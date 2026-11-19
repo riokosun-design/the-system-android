@@ -43,14 +43,12 @@ import javax.inject.Inject
 
 /**
  * MARKET — one counter for everything the System sells:
- *   VC top-up · affiliate products · training courses · Black Room · digital goods.
- * Existing economy untouched: VC stays server-authoritative, and every price
- * is admin/server-controlled. §4 (0.24.0): the manual payment rail is removed;
- * checkout returns through the official Razorpay gateway (PaymentGateways seam).
+ *   affiliate products · training courses · Black Room · digital goods.
+ * v1.0 §1: no coin economy — every price is admin/server-controlled and
+ * checkout rides the official Razorpay gateway (PaymentGateways seam).
  */
 data class MarketState(
     val loading: Boolean = true,
-    val vc: Long = 0,
     val products: List<ProductDto> = emptyList(),
     val courses: List<CourseDto> = emptyList(),
     val myCourses: List<UserCourseDto> = emptyList(),
@@ -61,8 +59,6 @@ data class MarketState(
     val nutritionNote: String? = null,
     val error: String? = null,
     // ── vC52 §2: VC→discount redemption rail ─────────────────────────────────
-    val redeemBusy: Boolean = false,
-    val redeemNote: String? = null,
 ) {
     fun enrollmentOf(c: CourseDto): UserCourseDto? = myCourses.firstOrNull { it.courseId == c.id }
     val digital: List<ProductDto> get() = products.filter { it.category == "DIGITAL" }
@@ -84,32 +80,11 @@ class MarketViewModel @Inject constructor(
 
     init { refresh() }
 
-    /** vC52 §2: one tap = one atomic server redemption (mig 040 RPC). */
-    fun redeemDiscount(p: ProductDto) = viewModelScope.launch {
-        if (_state.value.redeemBusy) return@launch
-        _state.value = _state.value.copy(redeemBusy = true, redeemNote = null)
-        commerce.redeemVcDiscount(p.id)
-            .onSuccess { msg ->
-                _state.value = _state.value.copy(redeemBusy = false, redeemNote = msg)
-                refresh() // VcChip must reflect the debit truth
-            }
-            .onFailure { e ->
-                val m = e.message ?: "redeem_failed"
-                _state.value = _state.value.copy(redeemBusy = false, redeemNote = when {
-                    "insufficient_vc" in m -> "NOT ENOUGH VC — the bounty board funds discounts."
-                    "no_vc_discount" in m -> "This shelf carries no VC discount."
-                    else -> "REDEEM FAILED — $m"
-                })
-            }
-    }
-
     fun refresh() = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true)
-        val me = system.profile()
         val products = commerce.products()
         _state.value = _state.value.copy(
             loading = false,
-            vc = me?.vcBalance ?: 0,
             products = products,
             courses = training.courses("MUSCLE") + training.courses("SPECIAL") + training.courses("FORBIDDEN"),
             myCourses = training.myCourses(),
@@ -170,29 +145,15 @@ fun MarketScreen(nav: NavHostController, vm: MarketViewModel = hiltViewModel()) 
                     Column(Modifier.weight(1f)) {
                         Text("SYSTEM", style = MonoLabel, color = SkyBlue)
                         Text("MARKET", color = PaperWhite, fontWeight = FontWeight.Bold, fontSize = 26.sp, letterSpacing = 1.5.sp)
-                        Text("VC IS CPA-EARNED · SPEND: TOURNAMENT STAKES & PRODUCT DISCOUNTS", style = MonoLabel, color = FaintGray)
+                        Text("RANK-GATED ARSENAL · SETTLED THROUGH THE GATE", style = MonoLabel, color = FaintGray)
                     }
-                    VcChip(s.vc)
                 }
             }
 
             // vC52 §2: redemption verdict strip — success and failure told straight
-            s.redeemNote?.let {
-                item { Text(it, style = MonoLabel, color = if (it.startsWith("VC REDEEMED")) HunterGold else CrimsonRed) }
-            }
 
-            // ── VC / wallet (server balance, read-only here) ──────────────────
+            // ── v1.0 §1: the coin economy is dead — nothing to show here ────
             item {
-                GlowCard(modifier = Modifier.fillMaxWidth()) {
-                    SectionTitle("VC WALLET", PaperWhite)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Virtual coins are earned from cleared protocol blocks, wars and challenges. " +
-                            "They are spent inside the System — never withdrawn, never cashed out.",
-                        style = MaterialTheme.typography.bodySmall, color = LabelGray,
-                    )
-                }
-            }
 
             // ── DAILY FUEL — AI nutrition planner (§9/§10: real inventory only) ──
             item {
@@ -229,7 +190,7 @@ fun MarketScreen(nav: NavHostController, vm: MarketViewModel = hiltViewModel()) 
             item { SectionTitle("DIGITAL PRODUCTS") }
             if (s.digital.isNotEmpty()) {
                 items(s.digital, key = { it.id }) { p ->
-                    ProductCard(p, s.vc, s.redeemBusy) { haptics.select(); vm.redeemDiscount(p) }
+                    ProductCard(p)
                 }
             } else {
                 item {
@@ -244,7 +205,7 @@ fun MarketScreen(nav: NavHostController, vm: MarketViewModel = hiltViewModel()) 
             item { SectionTitle("AFFILIATE SHELVES") }
             if (s.affiliate.isNotEmpty()) {
                 items(s.affiliate, key = { it.id }) { p ->
-                    ProductCard(p, s.vc, s.redeemBusy) { haptics.select(); vm.redeemDiscount(p) }
+                    ProductCard(p)
                 }
             } else {
                 item { EmptyShelf("No offers available yet.") }
@@ -310,7 +271,7 @@ private fun MarketCourseRow(c: CourseDto, enrollment: UserCourseDto?, onTap: () 
 }
 
 @Composable
-private fun ProductCard(p: ProductDto, vc: Long, redeemBusy: Boolean, onRedeem: () -> Unit) {
+private fun ProductCard(p: ProductDto) {
     GlowCard(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -326,20 +287,7 @@ private fun ProductCard(p: ProductDto, vc: Long, redeemBusy: Boolean, onRedeem: 
             Text("₹%.0f".format(p.priceInr), color = PaperWhite, fontFamily = SystemMono,
                 fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
-        // vC52 §2: VC redeems DISCOUNTS only (ratio is admin-set per product)
-        if (p.vcDiscountCost > 0 && (p.discountPercentage > 0 || p.discountFlatInr > 0.0)) {
-            val off = if (p.discountFlatInr > 0.0) "₹${p.discountFlatInr.toInt()} OFF" else "${p.discountPercentage}% OFF"
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Redeem ${p.vcDiscountCost} VC for $off", style = MonoLabel, color = HunterGold)
-                Spacer(Modifier.weight(1f))
-                GhostButton(
-                    if (vc >= p.vcDiscountCost) "REDEEM VC" else "NEED ${p.vcDiscountCost - vc} VC",
-                    onRedeem,
-                    enabled = !redeemBusy && vc >= p.vcDiscountCost,
-                )
-            }
-        }
+
     }
 }
 

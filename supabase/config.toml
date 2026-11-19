@@ -11,8 +11,6 @@ verify_jwt = false    # admin app invokes with the user's JWT; SQL is is_admin()
 [functions.apply-daily-penalties]
 verify_jwt = false
 
-[functions.cpa-postback]
-verify_jwt = false    # offerwall server-to-server postback; protected by ?secret=
 
 [auth]
 # Enable Google provider in the dashboard: Auth → Providers → Google

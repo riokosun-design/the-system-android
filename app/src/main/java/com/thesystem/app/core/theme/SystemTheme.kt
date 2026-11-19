@@ -70,7 +70,7 @@ object Grid {
 
 // ── TYPE FACES ───────────────────────────────────────────────────────────────
 // Chakra Petch — geometric/technical sans for every label & heading.
-// JetBrains Mono — instrument readouts only: XP, VC, levels, zones, scores.
+// JetBrains Mono — instrument readouts only: XP, levels, zones, scores.
 val SystemSans = FontFamily(
     Font(R.font.chakra_petch_regular, FontWeight.Normal),
     Font(R.font.chakra_petch_medium, FontWeight.Medium),
@@ -119,7 +119,7 @@ private val SystemTypography = Typography(
     labelSmall = TextStyle(fontFamily = SystemSans, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.5.sp, lineHeight = 14.sp, color = LabelGray),
 )
 
-// ── MONO INSTRUMENT STYLES (XP / VC / scores / coordinates) ─────────────────
+// ── MONO INSTRUMENT STYLES (XP / scores / coordinates) ─────────────────
 val MonoDisplay = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 30.sp, letterSpacing = 0.sp, color = PaperWhite)
 val MonoTitle   = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = 0.sp, color = PaperWhite)
 val MonoData    = TextStyle(fontFamily = SystemMono, fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 0.sp, color = PaperWhite)

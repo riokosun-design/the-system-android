@@ -85,11 +85,10 @@ class ProtocolViewModel @Inject constructor(
     // ── Guilds ───────────────────────────────────────────────────────────────
     fun createClan(name: String, tag: String) = viewModelScope.launch {
         social.createClan(name, tag)
-            .onSuccess { _state.value = _state.value.copy(notice = "Shadow Guild founded. −${SystemMath.formatVc(SystemMath.CLAN_CREATE_COST_VC)}"); refresh() }
+            .onSuccess { _state.value = _state.value.copy(notice = "Shadow Guild founded."); refresh() }
             .onFailure {
                 _state.value = _state.value.copy(error = when {
                     it.message?.contains("level_req") == true -> "Guild creation requires level ${SystemMath.CLAN_MIN_LEVEL}+."
-                    it.message?.contains("insufficient_vc") == true -> "Guild creation costs ${SystemMath.formatVc(SystemMath.CLAN_CREATE_COST_VC)}."
                     else -> it.message?.take(140)
                 })
             }

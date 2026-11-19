@@ -139,18 +139,15 @@ class SystemDisciplineService : AccessibilityService() {
             "com.android.vending",
         )
 
-        /** vC57 §3 — hard-danger: these screens are NEVER part of arming a
-         *  ward, so they trigger the protocol regardless of admin state. */
+        /** v1.0 §1 — hard-danger: these screens are NEVER part of arming a
+         *  ward, so they trigger the protocol unconditionally. With the Device
+         *  Admin anchor deleted there is no legitimate "device admin" surface
+         *  left that mentions THE SYSTEM. */
         private val SETTINGS_HARD_TERMS = listOf(
             "uninstall", "force stop", "force quit",
             "deactivate", "accessibility", "app info",
+            "device admin",
         )
-
-        /** vC57 §3 — "device admin" screens are hostile ONLY while the admin
-         *  anchor lives (the hunter came to strip it). While unarmed that same
-         *  surface is the ACTIVATION flow — a free pass, or the guard could
-         *  never be granted without a fight. */
-        private const val SETTINGS_ADMIN_TERM = "device admin"
     }
 
     private val ui = Handler(Looper.getMainLooper())
@@ -488,10 +485,12 @@ class SystemDisciplineService : AccessibilityService() {
         val flat = texts.toString().lowercase()
         if (flat.isEmpty()) return
         val mentionsUs = flat.contains("the system") || flat.contains("com.thesystem.app")
-        val danger = SETTINGS_HARD_TERMS.any { flat.contains(it) } ||
-            (PermissionLair.isDeviceAdminOn(this) && flat.contains(SETTINGS_ADMIN_TERM))
+        val danger = SETTINGS_HARD_TERMS.any { flat.contains(it) }
         if (mentionsUs && danger) {
             lastInterceptLaunchAt = now
+            // v1.0 §1 LAW — evict first (HOME), then the un-dismissible
+            // Abandonment Protocol overlay stands over everything.
+            performGlobalAction(GLOBAL_ACTION_HOME)
             soundAbandonmentProtocol()
         }
     }

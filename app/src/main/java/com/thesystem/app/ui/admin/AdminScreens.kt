@@ -205,7 +205,6 @@ private fun ProductEditor(p: ProductDto, vm: AdminViewModel, onClose: () -> Unit
     var category by remember { mutableStateOf(p.category) }
     var minRank by remember { mutableStateOf(p.minRankRequired) }
     var commission by remember { mutableStateOf(p.affiliateCommissionPct.toString()) }
-    var vcCost by remember { mutableStateOf(if (p.vcDiscountCost > 0) p.vcDiscountCost.toString() else "") }
     var discPct by remember { mutableStateOf(if (p.discountPercentage > 0) p.discountPercentage.toString() else "") }
     var discFlat by remember { mutableStateOf(if (p.discountFlatInr > 0.0) p.discountFlatInr.toString() else "") }
     var active by remember { mutableStateOf(p.active) }
@@ -224,8 +223,6 @@ private fun ProductEditor(p: ProductDto, vm: AdminViewModel, onClose: () -> Unit
                 field(price, { price = it.filter { c -> c.isDigit() || c == '.' } }, "Price (INR)")
                 field(url, { url = it }, "Outbound / affiliate URL")
                 field(commission, { commission = it.filter { c -> c.isDigit() || c == '.' } }, "Affiliate % (10–15)")
-                // vC52 §2: the admin-owned VC→discount ratio (marketplace utility law)
-                field(vcCost, { vcCost = it.filter { c -> c.isDigit() } }, "VC discount cost (0 = no VC discount)")
                 field(discPct, { discPct = it.filter { c -> c.isDigit() } }, "Discount % off (0–90)")
                 field(discFlat, { discFlat = it.filter { c -> c.isDigit() || c == '.' } }, "OR flat ₹ off (wins when > 0)")
                 field(image, { image = it }, "Image URL (or upload →)")
@@ -253,7 +250,6 @@ private fun ProductEditor(p: ProductDto, vm: AdminViewModel, onClose: () -> Unit
                     p.copy(name = name, description = desc, priceInr = price.toDoubleOrNull() ?: 0.0, outboundUrl = url,
                         imageUrl = image.ifBlank { null }, category = category, minRankRequired = minRank,
                         affiliateCommissionPct = commission.toDoubleOrNull() ?: 0.0, active = active,
-                        vcDiscountCost = vcCost.toLongOrNull() ?: 0L,
                         discountPercentage = (discPct.toIntOrNull() ?: 0).coerceIn(0, 90),
                         discountFlatInr = discFlat.toDoubleOrNull() ?: 0.0)
                 ); onClose()
@@ -268,7 +264,6 @@ private fun ProductEditor(p: ProductDto, vm: AdminViewModel, onClose: () -> Unit
 private fun TournamentTab(s: AdminState, vm: AdminViewModel) {
     val haptics = rememberSystemHaptics()
     var title by remember { mutableStateOf("") }
-    var fee by remember { mutableStateOf("250") }
     var type by remember { mutableStateOf("SOLO") }
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
@@ -277,15 +272,12 @@ private fun TournamentTab(s: AdminState, vm: AdminViewModel) {
                 OutlinedTextField(title, { title = it }, label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = HunterGold, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary))
                 Spacer(Modifier.height(6.dp))
-                OutlinedTextField(fee, { fee = it.filter(Char::isDigit).take(9) }, label = { Text("Entry fee (VC)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = HunterGold, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary))
-                Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NeonButton("SOLO 1v1", { type = "SOLO" }, Modifier.weight(1f), color = if (type == "SOLO") HunterGold else TextMuted)
                     NeonButton("CLAN WAR", { type = "CLAN" }, Modifier.weight(1f), color = if (type == "CLAN") NeonPurple else TextMuted)
                 }
                 Spacer(Modifier.height(8.dp))
-                NeonButton("CREATE & OPEN REGISTRATION", { haptics.success(); vm.createTournament(title, type, fee.toLongOrNull() ?: 0L); title = "" },
+                NeonButton("CREATE & OPEN REGISTRATION", { haptics.success(); vm.createTournament(title, type); title = "" },
                     Modifier.fillMaxWidth(), color = HunterGold, enabled = title.length >= 4)
             }
         }
@@ -294,7 +286,7 @@ private fun TournamentTab(s: AdminState, vm: AdminViewModel) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(t.title, color = TextPrimary, style = MaterialTheme.typography.titleMedium)
-                        Text("${t.type} · ${t.status} · entry ${SystemMath.formatVc(t.entryFeeVc)}", style = MaterialTheme.typography.bodyMedium)
+                        Text("${t.type} · ${t.status}", style = MaterialTheme.typography.bodyMedium)
                     }
                     when (t.status) {
                         "OPEN" -> NeonButton("LOCK", { haptics.select(); vm.setTournamentStatus(t.id, "LOCKED") }, color = WarningAmber)

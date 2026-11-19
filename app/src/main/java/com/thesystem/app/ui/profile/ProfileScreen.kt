@@ -44,7 +44,7 @@ import java.util.Locale
 /** Grayscale filter — even product photography obeys the monochrome contract. */
 private val grayscaleFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
 
-/** Tab 5 — Profile & Vault: stats, forms, wallet, referrals + CPA offerwall, level-gated store, chat, admin. */
+/** Tab 5 — Profile & Gate: stats, forms, the purchase gate, referrals, level-gated store, chat, admin. */
 @Composable
 fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Unit, vm: ProfileViewModel = hiltViewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -63,8 +63,8 @@ fun ProfileScreen(profile: UserDto, nav: NavHostController, onSignOut: () -> Uni
             contentPadding = PaddingValues(vertical = 14.dp),
         ) {
             item { Box(Modifier.enterAnim(0)) { ProfileHeader(me, vm, onOpenChat = { haptics.tick(); nav.navigate(Routes.CHAT) }, onSignOut = { haptics.select(); onSignOut() }) } }
-            // 0.22.0: VC Wallet door — balance + ledger, rail offline pending gateway (0.24.0)
-            item { Box(Modifier.enterAnim(1)) { WalletCard(me = me, onOpen = { haptics.tick(); nav.navigate(Routes.WALLET) }) } }
+            // v1.0: THE GATE door — the Razorpay-ready purchase rail (no coin economy)
+            item { Box(Modifier.enterAnim(1)) { GateCard(onOpen = { haptics.tick(); nav.navigate(Routes.WALLET) }) } }
             // 0.24.0: DISCIPLINE ENGINE — quest lock, porn shield, anti-uninstall guards
             item { Box(Modifier.enterAnim(1)) { DisciplineCard(onOpen = { haptics.tick(); nav.navigate(Routes.DISCIPLINE) }) } }
             item { Box(Modifier.enterAnim(1)) { GranularBlockersCard() } }
@@ -113,7 +113,7 @@ private fun ProfileHeader(me: UserDto, vm: ProfileViewModel, onOpenChat: () -> U
                 }
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RankBadge(rank); VcChip(me.vcBalance)
+                    RankBadge(rank); XpChip(me.xp)
                 }
             }
             XpRing(xp = me.xp, level = me.level, modifier = Modifier.size(64.dp), color = rankColor(rank))
@@ -231,8 +231,8 @@ private fun IdentityDialog(me: UserDto, vm: ProfileViewModel, onDismiss: () -> U
     )
 }
 
-/** 0.24.0 — VAULT CREDITS door. Balances are read-only here (server is the only
- *  authority); the screen inside shows the immutable ledger. Gateway: Razorpay pending. */
+/** v1.0 — THE GATE door: the Razorpay-ready purchase rail (PENDING orders settle
+ *  only through the live gateway webhook). */
 /** 0.24.0 — DISCIPLINE ENGINE door: the on-device wards (§5/§6/§7). */
 @Composable
 private fun DisciplineCard(onOpen: () -> Unit) {
@@ -402,36 +402,17 @@ private fun GranularBlockersCard() {
 }
 
 @Composable
-private fun WalletCard(me: UserDto, onOpen: () -> Unit) {
+private fun GateCard(onOpen: () -> Unit) {
     GlowCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("VAULT CURRENCY", style = MonoLabel, color = SkyBlue)
+                Text("THE GATE", style = MonoLabel, color = SkyBlue)
                 Text(
-                    "VC WALLET",
-                    color = PaperWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono,
+                    "BLACK ROOM · MEDALS · PROTOCOLS · MARKET",
+                    color = PaperWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono,
                 )
             }
             GhostButton("OPEN", onOpen)
-        }
-        Spacer(Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("BALANCE", style = MonoLabel, color = FaintGray)
-                Text(
-                    "%,d VC".format(java.util.Locale.US, me.vcBalance),
-                    color = PaperWhite, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono,
-                )
-            }
-            if (me.vcHeld > 0) {
-                Column {
-                    Text("HELD", style = MonoLabel, color = FaintGray)
-                    Text(
-                        "%,d VC".format(java.util.Locale.US, me.vcHeld),
-                        color = LabelGray, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono,
-                    )
-                }
-            }
         }
     }
 }
@@ -555,37 +536,8 @@ private fun FormsCard(s: ProfileState, me: UserDto) {
 }
 
 @Composable
-private fun WalletCard(s: ProfileState) {
-    GlowCard(glow = HunterGold) {
-        Text("VC WALLET", style = MaterialTheme.typography.labelLarge, color = HunterGold)
-        Spacer(Modifier.height(6.dp))
-        if (s.ledger.isEmpty()) Text("No transactions yet. Grind quests, win battles, pull the bounty board.", style = MaterialTheme.typography.bodyMedium)
-        s.ledger.take(15).forEach { tx ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                Text(tx.reason, style = MaterialTheme.typography.labelSmall, color = TextMuted, modifier = Modifier.width(140.dp))
-                Text(
-                    (if (tx.amount >= 0) "+" else "") + SystemMath.formatVc(tx.amount),
-                    color = if (tx.amount >= 0) PaperWhite else LabelGray,
-                    fontFamily = SystemMono,
-                    fontSize = 12.sp,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-    }
-}
 
 @Composable
-private fun BountyBoardCard(url: String?) {
-    val uriHandler = LocalUriHandler.current
-    GlowCard {
-        Text("BOUNTY BOARD", style = MaterialTheme.typography.labelLarge, color = PaperWhite)
-        Text("Complete partner commissions — VC lands in your wallet via postback. Referrers earn a 2% lifetime cut of your bounty VC.",
-            style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(10.dp))
-        NeonButton("OPEN BOARD", { url?.let(uriHandler::openUri) }, Modifier.fillMaxWidth(), enabled = url != null)
-    }
-}
 
 @Composable
 private fun ReferralCard(me: UserDto, s: ProfileState) {
@@ -596,7 +548,7 @@ private fun ReferralCard(me: UserDto, s: ProfileState) {
     GlowCard(glow = HunterGold, pulse = nextTier != null) {
         Text("REFERRAL HALL OF FAME", style = MaterialTheme.typography.labelLarge, color = HunterGold)
         Text("Your code: ${me.referralCode} · ${s.myReferrals} hunters summoned", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
-        Text("Lifetime cuts: 5–10% merch · 10% Black Room · 5% tournament wins · 2% CPA VC.", style = MaterialTheme.typography.labelSmall)
+        Text("Lifetime cuts: 5–10% merch · 10% Black Room · 5% tournament wins.", style = MaterialTheme.typography.labelSmall)
         nextTier?.let { (count, label) ->
             Text("NEXT: $label — ${count - s.myReferrals} summons away.", color = HunterGold, style = MaterialTheme.typography.labelSmall)
         }
@@ -727,7 +679,7 @@ private fun PerformanceCard(bests: com.thesystem.app.data.model.VerifiedBestsDto
     }
 }
 
-/** ACCOUNT — utilities: bounty board, referral summon, compact rows. */
+/** ACCOUNT — utilities: referral summon, compact rows. */
 
 /** STEP 10 picker — modest, extensible, data-shaped. Codes are free-form
  *  ^[A-Z]{2}$ server-side; ZZ = OTHER/undisclosed (USD rail). */
@@ -744,7 +696,6 @@ private fun AccountCard(me: UserDto, s: ProfileState, vm: ProfileViewModel) {
     val context = LocalContext.current
     var countryOpen by remember { mutableStateOf(false) }
     GlowCard {
-        AccountRow("BOUNTY BOARD", "partner offers → VC") { s.offerwallUrl?.let(uriHandler::openUri) }
         AccountRow("SUMMON HUNTERS", "code ${me.referralCode} · ${s.myReferrals} summoned") {
             val send = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"

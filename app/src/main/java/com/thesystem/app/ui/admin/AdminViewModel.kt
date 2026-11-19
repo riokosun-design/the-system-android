@@ -79,8 +79,8 @@ class AdminViewModel @Inject constructor(
         onDone(bytes?.let { admin.uploadProductImage(it).getOrNull() })
     }
 
-    fun createTournament(title: String, type: String, fee: Long) =
-        run({ admin.createTournament(title, type, fee, null, null) }, "Tournament opened with $fee VC entry.")
+    fun createTournament(title: String, type: String) =
+        run({ admin.createTournament(title, type, null, null) }, "Tournament opened — entry is free.")
 
     fun setTournamentStatus(id: String, status: String) = run({ admin.setTournamentStatus(id, status) }, "Tournament → $status.")
 
@@ -112,7 +112,6 @@ class AdminViewModel @Inject constructor(
 
     fun setConfig(key: String, value: String) = run({ admin.setSystemConfig(key, value) }, "Config '$key' updated.")
 
-    fun adjustVc(userId: String, amount: Long, note: String) = run({ admin.adjustVc(userId, amount, note) }, "VC adjusted.")
 
     fun consumeNotice() { _state.value = _state.value.copy(notice = null, error = null) }
 

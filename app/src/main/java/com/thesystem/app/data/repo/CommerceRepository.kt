@@ -11,27 +11,21 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * v1.0-RELEASE §1/§2 — the VC coin economy is DEAD. Rewards are XP, rank and
+ * prestige only. What remains here: the store shelf, workout-verification
+ * media, and the Razorpay-ready purchase rails (Medal Trials, Dungeon
+ * Protocols, Black Room). Every rail mints a PENDING_PAYMENT order
+ * server-side; only the live gateway webhook settles it. No client money math.
+ */
 @Singleton
 class CommerceRepository @Inject constructor(private val supabase: SupabaseClient) {
 
     private val uid: String? get() = supabase.auth.currentSessionOrNull()?.user?.id
-
-    /** vC52 §2: atomic VC→discount redemption (mig 040). Idempotent by tx UUID. */
-    suspend fun redeemVcDiscount(productId: String): Result<String> = runCatching {
-        val raw = supabase.postgrest.rpc("redeem_vc_discount", buildJsonObject {
-            put("p_product", productId); put("p_tx", UUID.randomUUID().toString())
-        }).data
-        val j = Json.parseToJsonElement(raw).jsonObject
-        val spent = j["vc_spent"]?.jsonPrimitive?.content ?: "0"
-        val disc = j["discount_inr"]?.jsonPrimitive?.content ?: "0"
-        val fin = j["final_price_inr"]?.jsonPrimitive?.content ?: "0"
-        "VC REDEEMED — −$spent VC → ₹$disc OFF · final ₹$fin. Show this at checkout."
-    }
 
     // ── Store (level-gated merch + affiliate supplements) ────────────────────
     suspend fun products(): List<ProductDto> = runCatching {
@@ -51,22 +45,73 @@ class CommerceRepository @Inject constructor(private val supabase: SupabaseClien
         Unit
     }
 
-    // ── VC wallet ledger ─────────────────────────────────────────────────────
-    suspend fun walletLedger(): List<VcTxnDto> {
+    // ── §2 MEDAL TRIALS ──────────────────────────────────────────────────────
+    suspend fun medalTrials(): List<MedalTrialDto> = runCatching {
+        supabase.from("medal_trials").select {
+            filter { eq("active", true) }; order("price_inr", Order.ASCENDING)
+        }.decodeList<MedalTrialDto>()
+    }.getOrDefault(emptyList())
+
+    suspend fun myMedalEnrollments(): List<MedalEnrollmentDto> {
         val me = uid ?: return emptyList()
         return runCatching {
-            supabase.from("vc_transactions").select {
-                filter { eq("user_id", me) }; order("created_at", Order.DESCENDING); limit(100)
-            }.decodeList<VcTxnDto>()
+            supabase.from("medal_trial_enrollments").select {
+                filter { eq("user_id", me) }; order("created_at", Order.DESCENDING)
+            }.decodeList<MedalEnrollmentDto>()
         }.getOrDefault(emptyList())
     }
 
-    // ── MONETIZATION (v0.24.0, spec §4): the manual rail is REMOVED — no QR,
-    //    no reference numbers, no screenshot proofs, no manual withdrawals.
-    //    Money movement returns only through PaymentGateways (Razorpay wiring).
-    //    Server-side functions/tables remain for financial history; execute was
-    //    revoked server-side in migration 033. ──────────────────────────────
+    /** Mints (or idempotently returns) the PENDING_PAYMENT order for a trial. */
+    suspend fun medalTrialEnroll(trialId: String): Result<PurchaseOrder> = runCatching {
+        supabase.postgrest.rpc("medal_trial_enroll", buildJsonObject {
+            put("p_trial", trialId)
+        }).decodeAs<PurchaseOrder>()
+    }
 
-    /** CPA offerwall deep link with the hunter bound as subid. */
-    fun offerwallUrl(base: String): String = "${base.trimEnd('/')}${if (base.contains("?")) "&" else "?"}subid=${uid ?: "guest"}"
+    /** 100% completion → shipping form → physical dog-tag claim (server-judged). */
+    suspend fun medalTrialClaimCompletion(enrollmentId: String, shippingJson: String): Result<String> = runCatching {
+        val raw = supabase.postgrest.rpc("medal_trial_claim_completion", buildJsonObject {
+            put("p_enrollment", enrollmentId)
+            put("p_shipping", Json.parseToJsonElement(shippingJson))
+        }).data
+        val j = Json.parseToJsonElement(raw).jsonObject
+        if (j["ok"]?.jsonPrimitive?.content == "true") j["medal"]?.jsonPrimitive?.content ?: "MEDAL"
+        else error(j["err"]?.jsonPrimitive?.content ?: "claim_failed")
+    }
+
+    // ── §2 DUNGEON PROTOCOLS (one-time DLC unlocks) ──────────────────────────
+    suspend fun dungeonProtocols(): List<DungeonProtocolDto> = runCatching {
+        supabase.from("dungeon_protocols").select {
+            filter { eq("active", true) }; order("price_inr", Order.ASCENDING)
+        }.decodeList<DungeonProtocolDto>()
+    }.getOrDefault(emptyList())
+
+    suspend fun myDungeonUnlocks(): List<DungeonUnlockDto> {
+        val me = uid ?: return emptyList()
+        return runCatching {
+            supabase.from("dungeon_unlocks").select {
+                filter { eq("user_id", me) }
+            }.decodeList<DungeonUnlockDto>()
+        }.getOrDefault(emptyList())
+    }
+
+    suspend fun dungeonUnlockRequest(protocolId: String): Result<PurchaseOrder> = runCatching {
+        supabase.postgrest.rpc("dungeon_unlock_request", buildJsonObject {
+            put("p_protocol", protocolId)
+        }).decodeAs<PurchaseOrder>()
+    }
+
+    // ── §2 BLACK ROOM — 3-year arc, exactly 2 payments (UNLOCK → 6mo RENEWAL) ─
+    suspend fun blackRoomOrderRequest(): Result<PurchaseOrder> = runCatching {
+        supabase.postgrest.rpc("black_room_order_request", buildJsonObject {}).decodeAs<PurchaseOrder>()
+    }
+
+    suspend fun myBlackRoomOrders(): List<BlackRoomOrderDto> {
+        val me = uid ?: return emptyList()
+        return runCatching {
+            supabase.from("black_room_orders").select {
+                filter { eq("user_id", me) }; order("created_at", Order.DESCENDING)
+            }.decodeList<BlackRoomOrderDto>()
+        }.getOrDefault(emptyList())
+    }
 }

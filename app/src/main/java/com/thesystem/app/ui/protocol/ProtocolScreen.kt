@@ -204,14 +204,14 @@ private fun GuildsTab(s: ProtocolState, vm: ProtocolViewModel, nav: NavHostContr
     var name by remember { mutableStateOf("") }
     var tag by remember { mutableStateOf("") }
     val me = s.profile
-    val canCreate = (me?.level ?: 0) >= SystemMath.CLAN_MIN_LEVEL && (me?.vcBalance ?: 0) >= SystemMath.CLAN_CREATE_COST_VC && s.myMembership == null
+    val canCreate = (me?.level ?: 0) >= SystemMath.CLAN_MIN_LEVEL && s.myMembership == null
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
         if (s.myMembership == null) {
             item {
                 GlowCard(glow = NeonPurple) {
                     Text("FOUND A SHADOW GUILD", style = MaterialTheme.typography.titleMedium, color = NeonPurple)
-                    Text("Gate: Level ${SystemMath.CLAN_MIN_LEVEL}+ AND ${SystemMath.formatVc(SystemMath.CLAN_CREATE_COST_VC)}. Roles: GUILD_MASTER, VICE_CAPTAIN, ELITE_HUNTER, MEMBER.",
+                    Text("Gate: Level ${SystemMath.CLAN_MIN_LEVEL}+. Roles: GUILD_MASTER, VICE_CAPTAIN, ELITE_HUNTER, MEMBER.",
                         style = MaterialTheme.typography.bodyMedium)
                     OutlinedTextField(value = name, onValueChange = { name = it.take(32) }, label = { Text("Guild name") }, singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -221,8 +221,8 @@ private fun GuildsTab(s: ProtocolState, vm: ProtocolViewModel, nav: NavHostContr
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NeonPurple, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary))
                     Spacer(Modifier.height(8.dp))
-                    if (!canCreate) RestrictionBanner("Requires LV ${SystemMath.CLAN_MIN_LEVEL} + ${SystemMath.formatVc(SystemMath.CLAN_CREATE_COST_VC)}")
-                    else NeonButton("FORGE GUILD (−${SystemMath.formatVc(SystemMath.CLAN_CREATE_COST_VC)})", { vm.createClan(name, tag) },
+                    if (!canCreate) RestrictionBanner("Requires LV ${SystemMath.CLAN_MIN_LEVEL}")
+                    else NeonButton("FORGE GUILD", { vm.createClan(name, tag) },
                         Modifier.fillMaxWidth(), color = NeonPurple, enabled = name.length >= 3 && tag.length >= 2)
                 }
             }
@@ -232,7 +232,7 @@ private fun GuildsTab(s: ProtocolState, vm: ProtocolViewModel, nav: NavHostContr
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("[${clan.tag}] ${clan.name}", style = MaterialTheme.typography.titleLarge, color = NeonPurple)
-                            Text("Guild Level ${clan.level} · Treasury ${SystemMath.formatVc(clan.treasuryVc)}", style = MaterialTheme.typography.bodyMedium)
+                            Text("Guild Level ${clan.level}", style = MaterialTheme.typography.bodyMedium)
                             Text("Your role: ${s.myMembership.role}", style = MaterialTheme.typography.labelSmall, color = HunterGold)
                         }
                         Column(horizontalAlignment = Alignment.End) {
@@ -259,7 +259,7 @@ private fun GuildsTab(s: ProtocolState, vm: ProtocolViewModel, nav: NavHostContr
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("[${c.tag}] ${c.name}", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
-                        Text("${c.memberCount ?: "?"} hunters · treasury ${SystemMath.formatVc(c.treasuryVc)}", style = MaterialTheme.typography.bodyMedium)
+                        Text("${c.memberCount ?: "?"} hunters", style = MaterialTheme.typography.bodyMedium)
                     }
                     if (s.myMembership == null) NeonButton("JOIN", { vm.joinClan(c) }, color = NeonPurple)
                 }

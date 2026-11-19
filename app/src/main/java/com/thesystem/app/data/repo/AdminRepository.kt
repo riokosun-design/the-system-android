@@ -63,10 +63,10 @@ class AdminRepository @Inject constructor(private val supabase: SupabaseClient) 
         supabase.from("ecommerce_products").select { order("created_at", Order.DESCENDING) }.decodeList<ProductDto>()
     }.getOrDefault(emptyList())
 
-    // ── Tournament management (dynamic entry fees, solo & clan) ─────────────
-    suspend fun createTournament(title: String, type: String, entryFeeVc: Long, startsAt: String?, endsAt: String?): Result<Unit> = runCatching {
+    // ── Tournament management (v1.0 §1: entry is free — glory is the stake) ──
+    suspend fun createTournament(title: String, type: String, startsAt: String?, endsAt: String?): Result<Unit> = runCatching {
         supabase.from("tournaments").insert(buildJsonObject {
-            put("title", title); put("type", type); put("entry_fee_vc", entryFeeVc)
+            put("title", title); put("type", type)
             put("status", "OPEN"); put("created_by", supabase.auth.currentSessionOrNull()?.user?.id)
             startsAt?.let { put("starts_at", it) }; endsAt?.let { put("ends_at", it) }
         }); Unit
@@ -160,11 +160,6 @@ class AdminRepository @Inject constructor(private val supabase: SupabaseClient) 
     }
 
     // ── User administration ──────────────────────────────────────────────────
-    suspend fun adjustVc(userId: String, amount: Long, note: String): Result<Unit> = runCatching {
-        supabase.postgrest.rpc("admin_adjust_vc", buildJsonObject {
-            put("p_target", userId); put("p_amount", amount); put("p_note", note)
-        }); Unit
-    }
 
     suspend fun setSystemConfig(key: String, value: String): Result<Unit> = runCatching {
         supabase.from("system_config").upsert(buildJsonObject { put("key", key); put("value", value) })

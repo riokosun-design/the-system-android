@@ -189,14 +189,17 @@ function parsePlan(text: string): Record<string, unknown> | null {
 
 interface RouteWin { parsed: Record<string, unknown>; provider: string; model: string }
 
-async function routeAI(userPrompt: string): Promise<RouteWin | null> {
+async function routeAI(
+  userPrompt: string,
+  parse: (t: string) => Record<string, unknown> | null = parsePlan,
+): Promise<RouteWin | null> {
   const slots = liveSlots();
   if (slots.length === 0) return null;
   for (let i = 0; i < slots.length; i++) {
     const slot = slots[(rrCursor + i) % slots.length];
     try {
       const text = await callSlot(slot, userPrompt);
-      const parsed = parsePlan(text);
+      const parsed = parse(text);
       if (parsed) {
         rrCursor = (rrCursor + i + 1) % slots.length;   // next call starts AFTER the winner
         console.log(`ai_provider_used=${slot.label}:${slot.model}`);
@@ -208,6 +211,54 @@ async function routeAI(userPrompt: string): Promise<RouteWin | null> {
     }
   }
   return null;
+}
+
+// ── §7 SHARED LOCAL QUESTS (v1.0 directive) ────────────────────────────────
+// One living AI quest per locale: every hunter in the same city+district reads
+// the SAME quest (mig 043 RLS law). The first plan (re)generation after the
+// previous one expires mints the next; issue_local_shared_quest REPLACES —
+// it never stacks. Failures never block the hunter's own plan.
+function parseLocalQuest(text: string): Record<string, unknown> | null {
+  try {
+    const j = JSON.parse(text);
+    if (typeof j?.title !== "string" || j.title.length === 0) return null;
+    return j;
+  } catch { return null; }
+}
+
+async function ensureLocalSharedQuest(
+  admin: ReturnType<typeof createClient>,
+  city: string, district: string | null, state: string | null, tier: string,
+): Promise<void> {
+  try {
+    let q = admin.from("special_quests").select("id")
+      .eq("scope", "LOCAL").eq("source", "AI").eq("city", city)
+      .gt("expires_at", new Date().toISOString()).limit(1);
+    q = district ? q.eq("district", district) : q.is("district", null);
+    const { data: live } = await q;
+    if ((live ?? []).length > 0) return;   // locale already has a live quest
+
+    let title = `${city.toUpperCase()} DAWN PROTOCOL`;
+    let detail = "Local hunters rise together: clear today's Daily Quest before sunset. Same city, same grind, same glory.";
+    let xp = 200;
+    const win = await routeAI(
+      `Locale: ${city}${district ? ", " + district : ""}${state ? ", " + state : ""} | rank band ${tier}.
+Emit ONE shared local quest as JSON {"title":string,"detail":string,"xp":number}. Title: cold system-window register, <=48 chars, mentions the city. Detail <=160 chars, a household-executable group objective. xp 100-500. No medical claims, no fantasy violence.`,
+      parseLocalQuest,
+    );
+    const lq = win?.parsed;
+    if (lq) {
+      title = String(lq.title).toUpperCase().slice(0, 48);
+      detail = String(lq.detail ?? detail).slice(0, 160);
+      xp = Math.min(Math.max(Math.round(Number(lq.xp) || 200), 100), 500);
+    }
+    await admin.rpc("issue_local_shared_quest", {
+      p_city: city, p_district: district, p_state: state,
+      p_title: title, p_detail: detail, p_xp: xp,
+    });
+  } catch (e) {
+    console.warn(`local quest mint skipped: ${String(e).slice(0, 90)}`);
+  }
 }
 
 // ── MAIN ───────────────────────────────────────────────────────────────────
@@ -232,7 +283,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const { data: p } = await admin.from("users")
-    .select("weight_kg,height_cm,age,gender,level,activity_level,username,display_name,sport,sport_experience_level,training_location,streak_days")
+    .select("weight_kg,height_cm,age,gender,level,activity_level,username,display_name,sport,sport_experience_level,training_location,streak_days,city,district,state")
     .eq("id", user.id).maybeSingle();
   if (!p?.weight_kg || !p?.height_cm || !p?.age) {
     return Response.json({ error: "biometrics_incomplete", detail: "Finish IDENTIFY YOUR VESSEL first." }, { status: 422 });
@@ -337,6 +388,18 @@ If a primary course exists, exactly one daily_routine block MUST drill its craft
   };
   const { error: upErr } = await admin.from("user_system_plans").upsert(row, { onConflict: "user_id" });
   if (upErr) return Response.json({ error: upErr.message.slice(0, 140) }, { status: 500 });
+
+  // §7 — this (re)generation opportunistically mints the hunter's locale quest.
+  // Same city+district = same quest, for every hunter, via mig 043.
+  const city = String((p as Record<string, unknown>).city ?? "").trim();
+  if (city.length > 0) {
+    await ensureLocalSharedQuest(
+      admin, city,
+      p.district ? String(p.district) : null,
+      p.state ? String(p.state) : null,
+      tier,
+    );
+  }
 
   return Response.json({ plan: { ...row, cached: false } });
 });

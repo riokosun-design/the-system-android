@@ -67,7 +67,7 @@ import javax.inject.Inject
 /**
  * SQUAD (STEPs 11–14) — the social spine. Two honest states:
  *
- *   NO PACK  → FORM PACK (real gate: Level 30 + 500 VC, enforced server-side),
+ *   NO PACK  → FORM PACK (real gate: Level 30, enforced server-side),
  *              JOIN PACK (every pack that exists, real member counts),
  *              FIND HUNTERS (live username search → DM via the existing chat).
  *   IN PACK  → MASTER (name/tag/treasury/level), WAR SCORE with the three
@@ -255,7 +255,6 @@ private fun MasterCard(st: SquadStatusDto, memberCount: Int, onLeave: () -> Unit
         Spacer(Modifier.height(Grid.S8))
         Row(horizontalArrangement = Arrangement.spacedBy(Grid.S16)) {
             Text("LEVEL ${st.storedLevel}", style = MonoData, color = LabelGray)
-            Text("TREASURY ${num(st.treasuryVc)} VC", style = MonoData, color = LabelGray)
         }
         Spacer(Modifier.height(Grid.S12))
         GhostButton("LEAVE PACK", onClick = onLeave)
@@ -395,7 +394,7 @@ private fun CreateCard(busy: Boolean, onCreate: (String, String) -> Unit) {
     GlowCard(modifier = Modifier.fillMaxWidth()) {
         Text("FORM A PACK", style = MonoLabel, color = LabelGray)
         Spacer(Modifier.height(4.dp))
-        Text("GATE: LEVEL 30 · COSTS 500 VC", style = MonoLabel, color = PaperWhite)
+        Text("GATE: LEVEL 30", style = MonoLabel, color = PaperWhite)
         Spacer(Modifier.height(Grid.S8))
         OutlinedTextField(
             value = name, onValueChange = { name = it },

@@ -17,11 +17,9 @@ data class ProfileState(
     val loading: Boolean = true,
     val profile: UserDto? = null,
     val forms: List<FormDto> = emptyList(),
-    val ledger: List<VcTxnDto> = emptyList(),
     val products: List<ProductDto> = emptyList(),
     val hall: List<ReferralHallDto> = emptyList(),
     val myReferrals: Long = 0,
-    val offerwallUrl: String? = null,
     val bests: com.thesystem.app.data.model.VerifiedBestsDto? = null,
     val notice: String? = null,
     val error: String? = null,
@@ -37,7 +35,7 @@ val REFERRAL_TIERS = listOf(
     100L to "SUPERCAR — 'Monarch' grand tourer tier",
     25L to "CHRONOGRAPH — Swiss luxury watch tier",
     5L to "SHADOW MERCH — full S-Rank apparel set",
-    1L to "ARISEN — 250 VC welcome blessing",
+    1L to "ARISEN — the welcome blessing of the System",
 )
 
 @HiltViewModel
@@ -56,17 +54,14 @@ class ProfileViewModel @Inject constructor(
         _state.value = _state.value.copy(loading = true)
         val p = async { system.profile() }
         val forms = async { system.myForms() }
-        val ledger = async { commerce.walletLedger() }
         val prods = async { commerce.products() }
         val hall = async { social.referralHallOfFame() }
         val refs = async { social.myReferralCount() }
-        val offerwallBase = async { system.config("offerwall_url") }
         val bestsD = async { system.verifiedBests() }
         _state.value = _state.value.copy(
             loading = false,
-            profile = p.await(), forms = forms.await(), ledger = ledger.await(),
+            profile = p.await(), forms = forms.await(),
             products = prods.await(), hall = hall.await(), myReferrals = refs.await(),
-            offerwallUrl = offerwallBase.await()?.let { commerce.offerwallUrl(it) },
             bests = bestsD.await(),
         )
     }

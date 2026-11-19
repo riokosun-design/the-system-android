@@ -20,10 +20,10 @@ data class UserDto(
     val role: String = "USER",
     val level: Int = 1,
     val xp: Long = 0,
-    @SerialName("vc_balance") val vcBalance: Long = 0,
-    /** mig 030: VC locked in an in-flight withdrawal request. Server-owned (hold/release only in RPCs). */
-    @SerialName("vc_held") val vcHeld: Long = 0,
-    /** mig 031: presence heartbeat (touch_presence RPC). Drives "Online"/"Last seen" in chat (§4.1). */
+    /** §4 geo identity (mig 043): user-declared locale for the LOCAL leaderboard tier. */
+    val city: String? = null,
+    val district: String? = null,
+    val state: String? = null,
     @SerialName("last_seen_at") val lastSeenAt: String? = null,
     @SerialName("penalty_state") val penaltyState: String = "CLEAR",
     @SerialName("missed_days") val missedDays: Int = 0,
@@ -98,8 +98,6 @@ data class ProductDto(
     @SerialName("affiliate_commission_pct") val affiliateCommissionPct: Double = 0.0,
     @SerialName("min_rank_required") val minRankRequired: String = "AVERAGE",
     val active: Boolean = true,
-    /** vC52 §2: admin-set VC→discount ratio. 0 = no discount on this shelf item. */
-    @SerialName("vc_discount_cost") val vcDiscountCost: Long = 0,
     @SerialName("discount_percentage") val discountPercentage: Int = 0,
     @SerialName("discount_flat_inr") val discountFlatInr: Double = 0.0,
 )
@@ -187,7 +185,6 @@ data class ClanDto(
     @SerialName("crest_path") val crestPath: String? = null,
     @SerialName("guild_master") val guildMaster: String,
     val level: Int = 1,
-    @SerialName("treasury_vc") val treasuryVc: Long = 0,
     @SerialName("member_count") val memberCount: Int? = null, // joined view column
 )
 
@@ -208,7 +205,6 @@ data class SquadStatusDto(
     val name: String = "",
     val tag: String = "",
     @SerialName("stored_level") val storedLevel: Int = 1,
-    @SerialName("treasury_vc") val treasuryVc: Long = 0,
     @SerialName("guild_master") val guildMaster: String? = null,
     val score: Int = 0,
     @SerialName("work_component") val workComponent: Double = 0.0,
@@ -258,8 +254,6 @@ data class TournamentDto(
     val title: String,
     val type: String = "SOLO", // SOLO | CLAN
     val status: String = "DRAFT", // DRAFT | OPEN | LOCKED | IN_PROGRESS | COMPLETED | CANCELLED
-    @SerialName("entry_fee_vc") val entryFeeVc: Long = 0,
-    @SerialName("prize_pool_vc") val prizePoolVc: Long = 0,
     @SerialName("max_participants") val maxParticipants: Int = 64,
     @SerialName("starts_at") val startsAt: String? = null,
     @SerialName("ends_at") val endsAt: String? = null,
@@ -417,19 +411,89 @@ data class AdminAuditDto(
 )
 
 @Serializable
-data class VcTxnDto(
-    val id: Long,
-    @SerialName("user_id") val userId: String,
-    val amount: Long,
-    val reason: String,
-    val reference: String? = null,
-    @SerialName("created_at") val createdAt: String? = null,
-)
-
-@Serializable
 data class ReferralHallDto(
     val username: String,
     @SerialName("referral_count") val referralCount: Long,
+)
+
+// ── v1.0-RELEASE §2/§4/§7/§8 rails (mig 043) ────────────────────────────────
+
+/** Generic Razorpay-ready purchase order minted server-side (PENDING until the gateway settles). */
+@Serializable
+data class PurchaseOrder(
+    val ok: Boolean = false,
+    @SerialName("order_ref") val orderRef: String? = null,
+    @SerialName("amount_inr") val amountInr: Int? = null,
+    val status: String? = null,
+    val stage: String? = null,
+    val idempotent: Boolean = false,
+    val err: String? = null,
+)
+
+@Serializable
+data class MedalTrialDto(
+    val id: String,
+    val title: String,
+    val days: Int,
+    @SerialName("target_reps") val targetReps: Int = 0,
+    @SerialName("target_km") val targetKm: Double = 0.0,
+    @SerialName("price_inr") val priceInr: Int,
+    @SerialName("medal_name") val medalName: String,
+)
+
+@Serializable
+data class MedalEnrollmentDto(
+    val id: String,
+    @SerialName("trial_id") val trialId: String,
+    val status: String = "PENDING_PAYMENT",
+    @SerialName("order_ref") val orderRef: String? = null,
+    @SerialName("reps_done") val repsDone: Int = 0,
+    @SerialName("km_done") val kmDone: Double = 0.0,
+    @SerialName("started_at") val startedAt: String? = null,
+    @SerialName("deadline_at") val deadlineAt: String? = null,
+    @SerialName("completed_at") val completedAt: String? = null,
+)
+
+@Serializable
+data class DungeonProtocolDto(
+    val id: String,
+    val title: String,
+    val days: Int,
+    val focus: String,
+    @SerialName("price_inr") val priceInr: Int,
+)
+
+@Serializable
+data class DungeonUnlockDto(
+    @SerialName("protocol_id") val protocolId: String,
+    val status: String = "PENDING_PAYMENT",
+    @SerialName("order_ref") val orderRef: String? = null,
+    @SerialName("unlocked_at") val unlockedAt: String? = null,
+)
+
+@Serializable
+data class BlackRoomOrderDto(
+    val id: String,
+    val stage: String,
+    @SerialName("order_ref") val orderRef: String? = null,
+    @SerialName("amount_inr") val amountInr: Int = 0,
+    val status: String = "PENDING_PAYMENT",
+    @SerialName("settled_at") val settledAt: String? = null,
+)
+
+/** §7 — admin-broadcast / AI-minted shared quest (RLS geo-scopes the read). */
+@Serializable
+data class SpecialQuestDto(
+    val id: String,
+    val title: String,
+    val detail: String = "",
+    @SerialName("xp_reward") val xpReward: Int = 0,
+    val scope: String = "GLOBAL",
+    val city: String? = null,
+    val district: String? = null,
+    val source: String = "ADMIN",
+    @SerialName("expires_at") val expiresAt: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
 )
 
 @Serializable

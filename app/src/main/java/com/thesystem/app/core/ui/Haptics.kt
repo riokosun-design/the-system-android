@@ -32,13 +32,13 @@ class SystemHaptics internal constructor(private val view: View?) {
     /** Selection — tab switches, quest LOG taps. */
     fun select() = fire(HapticFeedbackConstants.VIRTUAL_KEY)
 
-    /** Dopamine thump — quest cleared, VC earned, battle won. */
+    /** Dopamine thump — quest cleared, battle won. */
     fun success() = fireConfirmFamily(HapticFeedbackConstants.CONFIRM, HapticFeedbackConstants.LONG_PRESS)
 
     /** Heavy slam reserved for LEVEL UP. */
     fun slam() = fire(HapticFeedbackConstants.LONG_PRESS)
 
-    /** Denied — insufficient VC, locked gate, decay armed. */
+    /** Denied — locked gate, decay armed. */
     fun error() = fireConfirmFamily(HapticFeedbackConstants.REJECT, HapticFeedbackConstants.LONG_PRESS)
 }
 
