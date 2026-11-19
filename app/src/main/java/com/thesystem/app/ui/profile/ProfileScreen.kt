@@ -139,6 +139,9 @@ private fun IdentityDialog(me: UserDto, vm: ProfileViewModel, onDismiss: () -> U
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var bio by remember(me.bio) { mutableStateOf(me.bio ?: "") }
+    var city by remember(me.city) { mutableStateOf(me.city ?: "") }
+    var district by remember(me.district) { mutableStateOf(me.district ?: "") }
+    var stateField by remember(me.state) { mutableStateOf(me.state ?: "") }
     var avatarPick by remember(me.avatarUrl) { mutableStateOf(me.avatarUrl ?: SYSTEM_AVATARS.first()) }
     var uploading by remember { mutableStateOf(false) }
     val pickImage = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -217,11 +220,28 @@ private fun IdentityDialog(me: UserDto, vm: ProfileViewModel, onDismiss: () -> U
                     { if (!uploading) pickImage.launch("image/*") },
                     Modifier.fillMaxWidth(),
                 )
+                Spacer(Modifier.height(12.dp))
+                // §4 v1.0 — declared locale: the LOCAL leaderboard tier reads
+                // this. Typed by the hunter, never sensed.
+                Text("LOCAL GROUND (LEADERBOARD)", style = MonoLabel, color = SkyBlue)
+                Spacer(Modifier.height(6.dp))
+                @Composable fun geoField(v: String, on: (String) -> Unit, label: String) =
+                    OutlinedTextField(
+                        value = v, onValueChange = on, label = { Text(label) }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SkyBlue, focusedTextColor = PaperWhite, unfocusedTextColor = PaperWhite),
+                    )
+                geoField(city, { city = it.take(60) }, "City")
+                Spacer(Modifier.height(6.dp))
+                geoField(district, { district = it.take(60) }, "District")
+                Spacer(Modifier.height(6.dp))
+                geoField(stateField, { stateField = it.take(60) }, "State")
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 vm.saveIdentity(bio.trim(), avatarPick)
+                vm.saveGeoLocale(city, district, stateField)
                 onDismiss()
             }) { Text("SAVE", color = SkyBlue, fontWeight = FontWeight.Bold) }
         },

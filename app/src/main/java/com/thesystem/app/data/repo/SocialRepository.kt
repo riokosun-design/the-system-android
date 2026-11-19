@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -85,6 +87,13 @@ class SocialRepository @Inject constructor(private val supabase: SupabaseClient)
     /** Creation gate enforced server-side: Level 30+ and 500 VC (debited atomically). */
     suspend fun createClan(name: String, tag: String): Result<Unit> = runCatching {
         supabase.postgrest.rpc("create_clan", buildJsonObject { put("p_name", name); put("p_tag", tag) }); Unit
+    }
+
+    /** §8 v1.0 — extend a hand: Brotherhood Rally (server: 1/pair/24h, notice-stamped). */
+    suspend fun extendAHand(userId: String): Result<Unit> = runCatching {
+        val raw = supabase.postgrest.rpc("extend_a_hand", buildJsonObject { put("p_to", userId) }).data
+        val j = kotlinx.serialization.json.Json.parseToJsonElement(raw).jsonObject
+        if (j["ok"]?.jsonPrimitive?.content != "true") error(j["err"]?.jsonPrimitive?.content ?: "rally_failed")
     }
 
     // ── SQUAD CORE (mig 026): measured progression, never invented numbers ────

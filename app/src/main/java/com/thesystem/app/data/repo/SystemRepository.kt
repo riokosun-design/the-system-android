@@ -334,6 +334,18 @@ class SystemRepository @Inject constructor(
         Unit
     }
 
+    /** §4 v1.0 (mig 043): user-declared locale for the LOCAL leaderboard tier —
+     *  same privacy law as country: typed by the hunter, never IP/GPS-derived. */
+    suspend fun setGeoLocale(city: String?, district: String?, state: String?): Result<Unit> = runCatching {
+        val me = uid ?: error("Not signed in")
+        supabase.from("users").update({
+            set("city", city?.trim()?.take(60)?.ifBlank { null })
+            set("district", district?.trim()?.take(60)?.ifBlank { null })
+            set("state", state?.trim()?.take(60)?.ifBlank { null })
+        }) { filter { eq("id", me) } }
+        Unit
+    }
+
     /** Sequential protocol bookkeeping lives server-side; the client only mirrors it. */
     suspend fun dailyQuestsStatus(): List<QuestDto> = dailyQuests()
 

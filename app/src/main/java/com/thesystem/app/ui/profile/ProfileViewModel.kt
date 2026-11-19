@@ -89,6 +89,13 @@ class ProfileViewModel @Inject constructor(
             .onFailure { _state.value = _state.value.copy(error = it.message) }
     }
 
+    /** §4 v1.0 — LOCAL leaderboard locale: declared, never sensed. */
+    fun saveGeoLocale(city: String, district: String, state: String) = viewModelScope.launch {
+        runCatching { system.setGeoLocale(city, district, state).getOrThrow() }
+            .onSuccess { _state.value = _state.value.copy(notice = "LOCALE LOCKED — the LOCAL board now knows your ground."); refresh() }
+            .onFailure { _state.value = _state.value.copy(error = it.message) }
+    }
+
     /** Custom photo → storage bucket; onDone hands back the public URL (or null offline). */
     fun uploadAvatar(bytes: ByteArray, onDone: (String?) -> Unit) = viewModelScope.launch {
         val me = _state.value.profile

@@ -4,6 +4,7 @@ import com.thesystem.app.data.model.UserDto
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
+import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.from
@@ -27,6 +28,23 @@ class AuthRepository @Inject constructor(private val supabase: SupabaseClient) {
             this.idToken = idToken
             provider = Google
             nonce = rawNonce
+        }
+    }
+
+    /** §6 v1.0 — Email + password awakening. supabase.auth.signUpWith(Email)
+     *  creates the hunter (handle_new_user trigger seeds the profile row). */
+    suspend fun signUpWithEmail(email: String, password: String) {
+        supabase.auth.signUpWith(Email) {
+            this.email = email.trim()
+            this.password = password
+        }
+    }
+
+    /** §6 v1.0 — Email + password return. */
+    suspend fun signInWithEmail(email: String, password: String) {
+        supabase.auth.signInWith(Email) {
+            this.email = email.trim()
+            this.password = password
         }
     }
 

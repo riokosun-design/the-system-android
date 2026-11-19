@@ -128,6 +128,50 @@ class OnboardingViewModel @Inject constructor(
         }
     }
 
+    // ── §6 v1.0 — Email + password gate (alongside Google, same contract) ───
+    fun signInWithEmail(emailAddr: String, password: String, isSignUp: Boolean) {
+        if (_ui.value.signingIn) return
+        val cleanEmail = emailAddr.trim()
+        if (!isSignUp && (cleanEmail.isEmpty() || password.isEmpty())) {
+            _ui.value = _ui.value.copy(authError = "Email and password — both. The gate does not guess.")
+            return
+        }
+        if (isSignUp && password.length < 6) {
+            _ui.value = _ui.value.copy(authError = "Password must be 6+ characters.")
+            return
+        }
+        _ui.value = _ui.value.copy(signingIn = true, authError = null)
+        viewModelScope.launch {
+            runCatching {
+                if (isSignUp) auth.signUpWithEmail(cleanEmail, password) else auth.signInWithEmail(cleanEmail, password)
+                auth.myProfile()
+            }.onSuccess { profile ->
+                if (profile != null) {
+                    // §2: no page teleports — the flow's LaunchedEffect routes
+                    // existing-hunter vs new-vessel off signedInProfile itself.
+                    _ui.value = _ui.value.copy(signingIn = false, signedInProfile = profile)
+                } else {
+                    // Sign-up accepted but email confirmation stands between the
+                    // hunter and a session (Supabase project setting).
+                    _ui.value = _ui.value.copy(
+                        signingIn = false,
+                        authError = if (isSignUp) "Awakening registered — confirm the link THE SYSTEM sent to your inbox, then LOG IN."
+                        else "The gate rejected those credentials.",
+                    )
+                }
+            }.onFailure { e ->
+                val raw = e.message ?: ""
+                _ui.value = _ui.value.copy(signingIn = false, authError = when {
+                    raw.contains("Invalid login credentials", true) -> "Invalid credentials — the gate rejects you."
+                    raw.contains("User already registered", true) -> "That email already serves THE SYSTEM — LOG IN instead."
+                    raw.contains("Unable to validate email", true) || raw.contains("invalid", true) && raw.contains("email", true) -> "That email address is malformed."
+                    raw.contains("network", true) || raw.contains("timeout", true) || raw.contains("Unable to resolve", true) -> "No signal. Check your connection and strike again."
+                    else -> raw.take(140).ifBlank { "The gate rejected you." }
+                })
+            }
+        }
+    }
+
     // ── Unique @handle with 400ms debounce + live availability ──────────────
     // STEP 16: the hunter's typed case is PRESERVED for display (SaN stays SaN);
     // the server normalizes for uniqueness and enforces the reserved list.

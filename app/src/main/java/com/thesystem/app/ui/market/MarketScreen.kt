@@ -150,10 +150,7 @@ fun MarketScreen(nav: NavHostController, vm: MarketViewModel = hiltViewModel()) 
                 }
             }
 
-            // vC52 §2: redemption verdict strip — success and failure told straight
-
             // ── v1.0 §1: the coin economy is dead — nothing to show here ────
-            item {
 
             // ── DAILY FUEL — AI nutrition planner (§9/§10: real inventory only) ──
             item {

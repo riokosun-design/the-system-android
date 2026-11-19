@@ -1,6 +1,7 @@
 package com.thesystem.app.ui.tabs
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,7 +24,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -72,6 +77,7 @@ fun MainTabs(
     val hubVm: com.thesystem.app.ui.arena.NotificationsViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val hub by hubVm.state.collectAsStateWithLifecycle()
     var hubOpen by remember { mutableStateOf(false) }
+    var drawerOpen by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = InkBlack,
@@ -100,6 +106,22 @@ fun MainTabs(
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // §3 v1.0 — the hamburger: every door of the System lives
+                    // behind this mark now.
+                    Box(
+                        Modifier.size(38.dp).pressScale(0.88f).clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { haptics.tick(); drawerOpen = true },
+                        ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Default.Menu, contentDescription = "system menu",
+                            tint = PaperWhite, modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
                     Text(
                         "THE SYSTEM",
                         color = PaperWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp,
@@ -168,6 +190,125 @@ fun MainTabs(
             onMarkRead = { hubVm.markNoticesRead() },
             onDismiss = { hubOpen = false; hubVm.clearNotice() },
         )
+    }
+
+    // §3 v1.0 — the command drawer
+    if (drawerOpen) {
+        SystemDrawer(
+            isAdmin = profile.isAdmin,
+            onDismiss = { drawerOpen = false },
+            onNavigate = { route ->
+                drawerOpen = false
+                haptics.select()
+                nav.navigate(route)
+            },
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// §3 v1.0 — SYSTEM DRAWER: #0B0E14 glass, #00F0FF cyan edge, staggered slide-in
+// ═══════════════════════════════════════════════════════════════════════════
+private val DrawerInk = Color(0xFF0B0E14)
+private val DrawerCyan = Color(0xFF00F0FF)
+
+private data class DrawerDoor(val label: String, val sigil: ImageVector, val route: String)
+
+@Composable
+private fun SystemDrawer(isAdmin: Boolean, onDismiss: () -> Unit, onNavigate: (String) -> Unit) {
+    val doors = buildList {
+        add(DrawerDoor("LIVE LEADERBOARDS", Icons.Default.EmojiEvents, Routes.LEADERBOARDS))
+        add(DrawerDoor("MEDAL TRIALS", Icons.Default.MilitaryTech, Routes.MEDAL_TRIALS))
+        add(DrawerDoor("DUNGEON PROTOCOLS", Icons.Default.Lock, Routes.DUNGEON_PROTOCOLS))
+        add(DrawerDoor("BLACK ROOM", Icons.Default.NightsStay, Routes.BLACK_ROOM))
+        add(DrawerDoor("MARKETPLACE", Icons.Default.Storefront, Routes.MARKET))
+        add(DrawerDoor("BROTHERHOOD HUB", Icons.Default.Groups, Routes.SQUAD_COMMAND))
+        add(DrawerDoor("SETTINGS & DISCIPLINE", Icons.Default.Tune, Routes.DISCIPLINE))
+        if (isAdmin) add(DrawerDoor("ADMIN PANEL", Icons.Default.AdminPanelSettings, Routes.ADMIN))
+    }
+
+    // backdrop scrim — tap anywhere outside to dismiss
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.62f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss,
+                ),
+        )
+        Row(Modifier.fillMaxSize()) {
+            Column(
+                Modifier
+                    .fillMaxHeight()
+                    .width(292.dp)
+                    .background(DrawerInk.copy(alpha = 0.94f))
+                    // the cyan edge glow — a 1.5dp vertical blade on the drawer lip
+                    .drawBehind {
+                        drawRect(
+                            Brush.horizontalGradient(
+                                listOf(DrawerCyan.copy(alpha = 0.85f), Color.Transparent),
+                                startX = size.width - 6.dp.toPx(), endX = size.width,
+                            ),
+                            topLeft = androidx.compose.ui.geometry.Offset(size.width - 6.dp.toPx(), 0f),
+                            size = androidx.compose.ui.geometry.Size(6.dp.toPx(), size.height),
+                        )
+                    }
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
+            ) {
+                Text("THE SYSTEM", color = PaperWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                Text("COMMAND MENU", color = DrawerCyan, fontSize = 9.sp, letterSpacing = 3.sp)
+                Spacer(Modifier.height(22.dp))
+                doors.forEachIndexed { i, door ->
+                    // staggered slide-in: each door arrives 40ms after the last
+                    var shown by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(40L * i)
+                        shown = true
+                    }
+                    val slide by animateFloatAsState(
+                        targetValue = if (shown) 0f else -36f,
+                        animationSpec = tween(280), label = "doorSlide$i",
+                    )
+                    val fade by animateFloatAsState(
+                        targetValue = if (shown) 1f else 0f,
+                        animationSpec = tween(280), label = "doorFade$i",
+                    )
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer { translationX = slide.dp.toPx(); alpha = fade }
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.White.copy(alpha = 0.03f))
+                            .clickable { onNavigate(door.route) }
+                            .padding(horizontal = 12.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(door.sigil, contentDescription = null, tint = DrawerCyan, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text(door.label, color = PaperWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "RISE. OR DECAY.",
+                    color = FaintGray, fontSize = 9.sp, letterSpacing = 3.sp,
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
+            }
+            // tap-through zone right of the drawer
+            Box(Modifier.weight(1f).fillMaxHeight().clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss,
+            ))
+        }
     }
 }
 

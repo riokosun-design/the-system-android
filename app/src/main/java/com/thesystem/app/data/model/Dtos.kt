@@ -496,6 +496,19 @@ data class SpecialQuestDto(
     @SerialName("created_at") val createdAt: String? = null,
 )
 
+/** §4 — MEDAL TRIALS board row (mig 044 RPC: public-safe columns only). */
+@Serializable
+data class MedalBoardRowDto(
+    val username: String? = null,
+    val level: Int = 1,
+    @SerialName("trial_id") val trialId: String = "",
+    val status: String = "ACTIVE",
+    @SerialName("reps_done") val repsDone: Int = 0,
+    @SerialName("km_done") val kmDone: Double = 0.0,
+    val city: String? = null,
+    val country: String? = null,
+)
+
 @Serializable
 data class SystemConfigDto(
     val key: String,

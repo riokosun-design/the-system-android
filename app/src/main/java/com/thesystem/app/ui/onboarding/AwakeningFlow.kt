@@ -46,6 +46,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -80,6 +82,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.util.lerp
@@ -1365,6 +1369,57 @@ private fun P12_FinalGate(ui: OnboardingUiState, vm: OnboardingViewModel, haptic
                     enabled = !ui.signingIn && !ui.busy,
                     accent = VenomGreen,
                     onClick = { haptics.select(); vm.signInWithGoogle(context) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            // §6 v1.0 — email + password gate: LOG IN / SIGN UP, inline errors.
+            var emailMode by remember { mutableStateOf(false) }   // false = Google card only; true = email form open
+            var email by remember { mutableStateOf("") }
+            var password by remember { mutableStateOf("") }
+            var isSignUp by remember { mutableStateOf(false) }
+            val fieldColors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = ElectricBlue, unfocusedBorderColor = Color(0xFF22313D),
+                focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary,
+                focusedLabelColor = ElectricBlue, unfocusedLabelColor = TextMuted,
+            )
+            if (!emailMode) {
+                Spacer(Modifier.height(12.dp))
+                TextButton(onClick = { haptics.tick(); emailMode = true }) {
+                    Text("OR USE EMAIL + PASSWORD", color = ElectricBlue, fontSize = 11.sp, letterSpacing = 2.sp)
+                }
+            } else {
+                Spacer(Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = email, onValueChange = { email = it.take(120) },
+                    label = { Text("EMAIL") }, singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Email),
+                    modifier = Modifier.fillMaxWidth(), colors = fieldColors,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = password, onValueChange = { password = it.take(72) },
+                    label = { Text("PASSWORD (6+)") }, singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth(), colors = fieldColors,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { haptics.tick(); isSignUp = false }, Modifier.weight(1f)) {
+                        Text("LOG IN", color = if (!isSignUp) VenomGreen else TextMuted, fontSize = 12.sp, letterSpacing = 2.sp)
+                    }
+                    TextButton(onClick = { haptics.tick(); isSignUp = true }, Modifier.weight(1f)) {
+                        Text("SIGN UP", color = if (isSignUp) VenomGreen else TextMuted, fontSize = 12.sp, letterSpacing = 2.sp)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                GateKeyButton(
+                    text = if (isSignUp) "FORGE A NEW VESSEL" else "RE-ENTER THE SYSTEM",
+                    subtext = if (isSignUp) "EMAIL SIGN-UP" else "EMAIL LOGIN",
+                    loading = ui.signingIn || ui.busy,
+                    enabled = !ui.signingIn && !ui.busy && email.isNotBlank() && password.length >= 6,
+                    accent = ElectricBlue,
+                    onClick = { haptics.select(); vm.signInWithEmail(email, password, isSignUp) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }

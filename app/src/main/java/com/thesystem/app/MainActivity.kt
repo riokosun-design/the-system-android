@@ -161,6 +161,11 @@ object Routes {
     const val WALLET = "wallet"
     const val SUPPORT = "support"
     const val TOURNAMENTS = "tournaments"
+    /** v1.0 §4: live leaderboards (2 boards × 3 geo tiers). */
+    const val LEADERBOARDS = "leaderboards"
+    /** v1.0 §2: medal trials (physical dog-tag) + dungeon protocols (DLC). */
+    const val MEDAL_TRIALS = "medalTrials"
+    const val DUNGEON_PROTOCOLS = "dungeonProtocols"
     const val CHESS_GAME = "chessGame/{mode}?lesson={lesson}"
     const val CHESS_PUZZLES = "chessPuzzles/{daily}"
     const val CHESS_LESSONS = "chessLessons"
@@ -375,6 +380,9 @@ fun AppNavHost(profile: RootState.Ready, onSignOut: () -> Unit) {
         composable(Routes.WALLET) { com.thesystem.app.ui.wallet.WalletScreen(nav = nav) }
         composable(Routes.SUPPORT) { com.thesystem.app.ui.support.SupportScreen(nav = nav) }
         composable(Routes.TOURNAMENTS) { com.thesystem.app.ui.tournaments.TournamentsScreen(nav = nav) }
+        composable(Routes.LEADERBOARDS) { com.thesystem.app.ui.leaderboard.LeaderboardScreen(nav = nav) }
+        composable(Routes.MEDAL_TRIALS) { com.thesystem.app.ui.trials.MedalTrialsScreen(nav = nav) }
+        composable(Routes.DUNGEON_PROTOCOLS) { com.thesystem.app.ui.protocol.DungeonProtocolsScreen(nav = nav) }
         composable(
             route = Routes.CHESS_GAME,
             arguments = listOf(
