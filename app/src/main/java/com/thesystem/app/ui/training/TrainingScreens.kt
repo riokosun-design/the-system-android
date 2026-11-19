@@ -198,12 +198,7 @@ fun CourseInfoPanel(
                 NeonButton("CONTINUE", onContinue, Modifier.fillMaxWidth(), color = SkyBlue)
             }
             Spacer(Modifier.height(4.dp))
-            Text(
-                "Selecting a track never starts a session. Every session is opened by you.",
-                style = MaterialTheme.typography.bodySmall, color = FaintGray, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+                    }
     }
 }
 
@@ -359,11 +354,7 @@ fun PerformanceAreaSection(
     Column {
         SectionTitle("PERFORMANCE DEVELOPMENT AREA", SkyBlue)
         Spacer(Modifier.height(4.dp))
-        Text(
-            "Speed · agility · reflex · mobility · endurance · power — rest-day slots.",
-            style = MaterialTheme.typography.bodySmall, color = LabelGray,
-        )
-        Spacer(Modifier.height(Grid.S8))
+                Spacer(Modifier.height(Grid.S8))
         Text(
             "ACTIVE ${s.activeSpecials.size}/5", style = MonoLabel,
             color = if (s.activeSpecials.size >= 5) LabelGray else SkyBlue,
@@ -421,11 +412,7 @@ fun TrainingCatalogScreen(
                     Column {
                         SectionTitle("FORBIDDEN COURSE")
                         Spacer(Modifier.height(4.dp))
-                        Text(
-                            "BLACK ROOM — two-year personalized protocol, six-month renewal, hand-built by the Super Admin.",
-                            style = MaterialTheme.typography.bodySmall, color = LabelGray,
-                        )
-                        Spacer(Modifier.height(Grid.S8))
+                                                Spacer(Modifier.height(Grid.S8))
                         BlackRoomTeaser { haptics.select(); onOpenBlackRoom() }
                     }
                 }

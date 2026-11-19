@@ -112,6 +112,13 @@ class AdminViewModel @Inject constructor(
 
     fun setConfig(key: String, value: String) = run({ admin.setSystemConfig(key, value) }, "Config '$key' updated.")
 
+    /** §7 v1.0 — the Special Quest broadcast console. */
+    fun broadcastSpecialQuest(title: String, detail: String, xp: Int, scope: String, city: String, district: String, state: String, hours: Int) =
+        run(
+            { admin.broadcastSpecialQuest(title, detail, xp, scope, city.ifBlank { null }, district.ifBlank { null }, state.ifBlank { null }, hours) },
+            "Special Quest broadcast to $scope.",
+        )
+
 
     fun consumeNotice() { _state.value = _state.value.copy(notice = null, error = null) }
 

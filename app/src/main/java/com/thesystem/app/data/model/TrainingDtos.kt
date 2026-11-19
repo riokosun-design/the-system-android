@@ -106,7 +106,8 @@ data class QuestTemplateDto(
 @Serializable
 data class BlackRoomEligibilityDto(
     val eligible: Boolean = false,
-    // §4 (0.24.0): server still answers pricing for history; client ignores it.
+    /** §2 v1.0: the server's dynamic INR price (consistency + personal seed, banded ₹149–₹699). */
+    @SerialName("upi") val priceInr: Int? = null,
     val checks: JsonObject? = null,
     @SerialName("potential_index") val potentialIndex: Int = 0,
     /** STEP 9 (mig 024): server-authored reason lines — gates + price factors. */

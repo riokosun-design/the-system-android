@@ -29,6 +29,7 @@ object DisciplinePrefs {
     private const val KEY_YOUTUBE_BLOCK = "youtube_block"      // vC54 §2: YouTube Shorts Blocker (granular)
     private const val KEY_UNINSTALL_GUARD = "uninstall_guard"  // vC56 §3: anti-uninstall typing guard (hunter-owned)
     private const val KEY_GUARD_NAG_DATE = "guard_nag_date"    // vC57 §3: guard-unarmed ping, at most once/day
+    private const val KEY_BROTHERHOOD_NUDGE_DATE = "brotherhood_nudge_date" // §8 v1.0: uplifting rally reminder, once/day
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -112,6 +113,16 @@ object DisciplinePrefs {
     fun stampGuardNag(context: Context) {
         runCatching {
             prefs(context).edit().putString(KEY_GUARD_NAG_DATE, LocalDate.now().toString()).apply()
+        }
+    }
+
+    /** §8 v1.0 — Brotherhood uplift nudge: at most one per local day. */
+    fun brotherhoodNudgeStampedToday(context: Context): Boolean =
+        prefs(context).getString(KEY_BROTHERHOOD_NUDGE_DATE, null) == LocalDate.now().toString()
+
+    fun stampBrotherhoodNudge(context: Context) {
+        runCatching {
+            prefs(context).edit().putString(KEY_BROTHERHOOD_NUDGE_DATE, LocalDate.now().toString()).apply()
         }
     }
 }

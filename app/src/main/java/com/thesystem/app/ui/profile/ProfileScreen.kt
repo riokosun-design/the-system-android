@@ -265,11 +265,7 @@ private fun DisciplineCard(onOpen: () -> Unit) {
                     color = PaperWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono,
                 )
                 Spacer(Modifier.height(3.dp))
-                Text(
-                    "Quest-locked social media · always-on adult-content shield · anti-uninstall guard.",
-                    style = MaterialTheme.typography.bodySmall, color = LabelGray,
-                )
-            }
+                            }
             GhostButton("OPEN", onOpen)
         }
     }
@@ -343,11 +339,7 @@ private fun GranularBlockersCard() {
             color = PaperWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = SystemMono,
         )
         Spacer(Modifier.height(3.dp))
-        Text(
-            "Independent wards. Live quest windows hard-lock Instagram and YouTube while these stand.",
-            style = MaterialTheme.typography.bodySmall, color = LabelGray,
-        )
-        if (!accessibilityOn) {
+                if (!accessibilityOn) {
             Spacer(Modifier.height(6.dp))
             Text(
                 "[ SYSTEM GUARDIAN OFFLINE — tap a switch to open Permission Setup ]",
@@ -549,15 +541,9 @@ private fun FormsCard(s: ProfileState, me: UserDto) {
                 }
                 NeonDivider(NeonPurple)
             }
-            Text("Power = (form base + XP) × combat style × hard work. A lazy Form 5 loses to a relentless Form 1. Stay relentless.",
-                style = MaterialTheme.typography.labelSmall)
-        }
+                    }
     }
 }
-
-@Composable
-
-@Composable
 
 @Composable
 private fun ReferralCard(me: UserDto, s: ProfileState) {

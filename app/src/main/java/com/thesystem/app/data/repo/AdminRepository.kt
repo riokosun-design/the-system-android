@@ -166,6 +166,21 @@ class AdminRepository @Inject constructor(private val supabase: SupabaseClient) 
         Unit
     }
 
+    /** §7 v1.0 — broadcast a Special Quest: GLOBAL / INDIA / LOCAL(city+district). */
+    suspend fun broadcastSpecialQuest(
+        title: String, detail: String, xp: Int, scope: String,
+        city: String?, district: String?, state: String?, hours: Int,
+    ): Result<Unit> = runCatching {
+        supabase.postgrest.rpc("broadcast_special_quest", buildJsonObject {
+            put("p_title", title); put("p_detail", detail); put("p_xp", xp); put("p_scope", scope)
+            if (!city.isNullOrBlank()) put("p_city", city.trim())
+            if (!district.isNullOrBlank()) put("p_district", district.trim())
+            if (!state.isNullOrBlank()) put("p_state", state.trim())
+            put("p_hours", hours)
+        })
+        Unit
+    }
+
     // ═════════════════════════════════════════════════════════════════════════
     // v0.4.1 CONTENT CMS — courses, course quests, daily quest templates,
     // Black Room review + per-user program building, scheduled-duel ops.

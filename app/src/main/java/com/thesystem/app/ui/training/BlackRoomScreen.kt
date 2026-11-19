@@ -51,6 +51,8 @@ data class BlackRoomState(
     val course: CourseDto? = null,
     val eligibility: BlackRoomEligibilityDto? = null,
     val program: List<BlackRoomProgramDto> = emptyList(),
+    /** §2 v1.0 — the arc's payment ledger (UNLOCK / RENEWAL, PENDING or SETTLED). */
+    val orders: List<com.thesystem.app.data.model.BlackRoomOrderDto> = emptyList(),
     val notice: String? = null,
     val error: String? = null,
 )
@@ -59,6 +61,7 @@ data class BlackRoomState(
 class BlackRoomViewModel @Inject constructor(
     private val training: TrainingRepository,
     private val system: com.thesystem.app.data.repo.SystemRepository,
+    private val commerce: com.thesystem.app.data.repo.CommerceRepository,
 ) : ViewModel() {
 
     /** STEP 10: the hunter's chosen rail (NULL country = India default, honest). */
@@ -75,7 +78,35 @@ class BlackRoomViewModel @Inject constructor(
         country = system.profile()?.country
         val elig = training.blackRoomEligibility(country ?: "IN")
         val program = if (elig?.eligible == true) training.blackRoomProgram() else emptyList()
-        _state.value = _state.value.copy(loading = false, course = course, eligibility = elig, program = program)
+        // §2 v1.0 — the 2-payment arc ledger (UNLOCK → 6-month RENEWAL → forever)
+        val orders = commerce.myBlackRoomOrders()
+        _state.value = _state.value.copy(loading = false, course = course, eligibility = elig, program = program, orders = orders)
+    }
+
+    /** §2 v1.0 — mint the arc's next payment (UNLOCK, or RENEWAL at month 6).
+     *  Server reads the hunter's own arc state and returns PENDING_PAYMENT. */
+    fun beginArcPayment() = viewModelScope.launch {
+        _state.value = _state.value.copy(notice = null, error = null)
+        commerce.blackRoomOrderRequest()
+            .onSuccess { order ->
+                if (!order.ok) {
+                    _state.value = _state.value.copy(error = when (order.err) {
+                        "RENEWAL_NOT_DUE" -> "The renewal gate opens 6 months after your unlock settled."
+                        else -> order.err ?: "order_failed"
+                    })
+                    return@onSuccess
+                }
+                if (!com.thesystem.app.data.gateway.PaymentGateways.current.isAvailable()) {
+                    _state.value = _state.value.copy(
+                        notice = "${order.stage} ORDER ${order.orderRef} MINTED — ₹${order.amountInr}. " +
+                            com.thesystem.app.data.gateway.PaymentGateways.OFFLINE_NOTICE,
+                    )
+                    refresh()
+                } else {
+                    _state.value = _state.value.copy(notice = "ORDER ${order.orderRef} — checkout opening…")
+                }
+            }
+            .onFailure { _state.value = _state.value.copy(error = it.message?.take(120)) }
     }
 
     fun claimNotice() { _state.value = _state.value.copy(notice = null, error = null) }
@@ -158,11 +189,14 @@ fun BlackRoomScreen(onBack: () -> Unit, vm: BlackRoomViewModel = hiltViewModel()
                     }
                 }
 
-                // ── enrollment status — §4: manual rail removed, Razorpay pending ──
+                // ── enrollment — §2 v1.0: 3-year arc, exactly 2 payments ────
                 item {
                     GlowCard {
-                        SectionTitle("ENROLLMENT", PaperWhite)
+                        SectionTitle("ENROLLMENT · 3-YEAR ARC", PaperWhite)
                         Spacer(Modifier.height(Grid.S8))
+                        val unlockSettled = s.orders.any { it.stage == "UNLOCK" && it.status == "SETTLED" }
+                        val renewalSettled = s.orders.any { it.stage == "RENEWAL" && it.status == "SETTLED" }
+                        val pending = s.orders.firstOrNull { it.status == "PENDING_PAYMENT" }
                         if (s.eligibility?.eligible == true) {
                             Text(
                                 "GATE SATISFIED — your eligibility is banked forever.",
@@ -170,10 +204,46 @@ fun BlackRoomScreen(onBack: () -> Unit, vm: BlackRoomViewModel = hiltViewModel()
                             )
                             Spacer(Modifier.height(6.dp))
                         }
-                        Text(
-                            com.thesystem.app.data.gateway.PaymentGateways.OFFLINE_NOTICE,
-                            style = MaterialTheme.typography.bodySmall, color = LabelGray, lineHeight = 18.sp,
-                        )
+                        when {
+                            renewalSettled -> Text(
+                                "ARC COMPLETE — UNLOCK + RENEWAL settled. The Black Room is yours forever.",
+                                style = MaterialTheme.typography.bodySmall, color = VenomGreen,
+                            )
+                            unlockSettled -> {
+                                Text(
+                                    "UNLOCK SETTLED — the arc runs. Payment 2 of 2 (renewal) opens at month 6 and seals the remaining 2.5 years forever.",
+                                    style = MaterialTheme.typography.bodySmall, color = LabelGray, lineHeight = 18.sp,
+                                )
+                                Spacer(Modifier.height(Grid.S8))
+                                NeonButton("RENEW THE ARC (PAYMENT 2 OF 2)", { vm.beginArcPayment() }, Modifier.fillMaxWidth(), color = SkyBlue)
+                            }
+                            else -> {
+                                s.eligibility?.priceInr?.let { price ->
+                                    Text(
+                                        "YOUR PRICE — ₹$price (set by your own consistency)",
+                                        style = MonoLabel, color = HunterGold,
+                                    )
+                                    Spacer(Modifier.height(Grid.S8))
+                                }
+                                pending?.let {
+                                    Text(
+                                        "ORDER ${it.orderRef} PENDING — ₹${it.amountInr} awaits settlement.",
+                                        style = MaterialTheme.typography.bodySmall, color = WarningAmber,
+                                    )
+                                    Spacer(Modifier.height(Grid.S8))
+                                }
+                                NeonButton(
+                                    if (pending != null) "RESUME PAYMENT 1 OF 2" else "UNLOCK THE ARC (PAYMENT 1 OF 2)",
+                                    { vm.beginArcPayment() }, Modifier.fillMaxWidth(), color = SkyBlue,
+                                    enabled = s.eligibility?.eligible == true,
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    com.thesystem.app.data.gateway.PaymentGateways.OFFLINE_NOTICE,
+                                    style = MaterialTheme.typography.bodySmall, color = LabelGray, lineHeight = 18.sp,
+                                )
+                            }
+                        }
                         if (s.eligibility?.eligible != true) {
                             Spacer(Modifier.height(Grid.S8))
                             RestrictionBanner(

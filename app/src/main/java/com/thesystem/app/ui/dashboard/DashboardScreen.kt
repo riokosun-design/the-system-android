@@ -220,11 +220,7 @@ fun DashboardScreen(
                                     if (primary == null) {
                                         GlowCard(modifier = Modifier.fillMaxWidth()) {
                                             Text("NO PRIMARY COURSE", color = PaperWhite, style = MaterialTheme.typography.titleMedium)
-                                            Text(
-                                                "One muscle track · verified sessions · the catalog holds every option.",
-                                                style = MaterialTheme.typography.bodySmall, color = LabelGray,
-                                            )
-                                            Spacer(Modifier.height(Grid.S8))
+                                                                                        Spacer(Modifier.height(Grid.S8))
                                             NeonButton(
                                                 "CHOOSE PRIMARY COURSE",
                                                 { haptics.select(); nav.navigate(Routes.TRAINING) },
@@ -627,11 +623,7 @@ private fun QuestDetailSheet(
                 Spacer(Modifier.height(10.dp))
                 GhostButton("TRAINING CATALOG", onOpenTraining, Modifier.fillMaxWidth())
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    "Career sessions live in the catalog — they never block today's protocol.",
-                    style = MaterialTheme.typography.bodySmall, color = FaintGray,
-                )
-                // ── BONUS BLOCK (§2): AI propose lives HERE, never in the quest card ──
+                                // ── BONUS BLOCK (§2): AI propose lives HERE, never in the quest card ──
                 Spacer(Modifier.height(10.dp))
                 GhostButton(
                     if (s.aiQuestBusy) "AI THINKING…" else "＋ BONUS BLOCK",

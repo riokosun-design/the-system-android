@@ -1318,11 +1318,23 @@ private fun P11_Contract(haptics: SystemHaptics, onSealed: () -> Unit) {
             if (sealed) {
                 GlitchRevealText("SYSTEM CONTRACT ACCEPTED", color = VenomGreen, fontSize = 15, mono = true)
             } else {
-                Text(
-                    "Hold for 1.5 seconds. Early release voids the seal.",
-                    style = MaterialTheme.typography.bodySmall, color = TextMuted,
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.graphicsLayer { alpha = seg(clock, 0.5f) },
-                )
+                ) {
+                    Text(
+                        "Hold for 1.5 seconds. Early release voids the seal.",
+                        style = MaterialTheme.typography.bodySmall, color = TextMuted,
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    // §8 v1.0 — the Code of the Brotherhood is part of the contract
+                    Text(
+                        "CODE OF THE BROTHERHOOD\nNo hunter falls alone. We rise together or we decay together.\nExtend a hand before you extend judgment.",
+                        style = MaterialTheme.typography.bodySmall, color = ElectricBlue,
+                        textAlign = TextAlign.Center, lineHeight = 16.sp,
+                        modifier = Modifier.padding(horizontal = 28.dp),
+                    )
+                }
             }
         }
         FlashRipple(ripple, ElectricBlue)

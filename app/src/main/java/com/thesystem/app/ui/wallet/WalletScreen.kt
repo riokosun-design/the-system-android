@@ -14,12 +14,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import com.thesystem.app.core.ui.FaintGray
-import com.thesystem.app.core.ui.LabelGray
-import com.thesystem.app.core.ui.MonoLabel
-import com.thesystem.app.core.ui.PaperWhite
-import com.thesystem.app.core.ui.SkyBlue
-import com.thesystem.app.core.ui.SystemMono
+import com.thesystem.app.core.theme.FaintGray
+import com.thesystem.app.core.theme.LabelGray
+import com.thesystem.app.core.theme.MonoLabel
+import com.thesystem.app.core.theme.PaperWhite
+import com.thesystem.app.core.theme.SkyBlue
+import com.thesystem.app.core.theme.SystemMono
 import com.thesystem.app.data.gateway.PaymentGateways
 
 /**
@@ -59,7 +59,7 @@ fun WalletScreen(nav: NavHostController) {
             Text(PaymentGateways.OFFLINE_NOTICE, style = MaterialTheme.typography.bodyMedium, color = LabelGray)
             Spacer(Modifier.height(10.dp))
             Text(
-                "provider: ${gateway.providerId} · available: ${if (gateway.isAvailable) "YES" else "NO"}",
+                "provider: ${gateway.providerId} · available: ${if (gateway.isAvailable()) "YES" else "NO"}",
                 style = MonoLabel, color = FaintGray,
             )
         }

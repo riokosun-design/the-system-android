@@ -229,6 +229,25 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+        // §8 v1.0 — BROTHERHOOD UPLIFT: one quiet-hours-respecting nudge per day.
+        // The line rotates so it never becomes wallpaper.
+        runCatching {
+            if (!DisciplinePrefs.brotherhoodNudgeStampedToday(this)) {
+                DisciplinePrefs.stampBrotherhoodNudge(this)
+                val lines = listOf(
+                    "A hunter who falls alone stays down. Check the Brotherhood Hub — someone may need a hand today.",
+                    "Streaks die in silence. Brothers rise together. EXTEND A HAND to a hunter at risk.",
+                    "Your strength is shared armor. The Brotherhood watches its own.",
+                    "One rally at the right hour has saved more streaks than any penalty. Look after your city.",
+                )
+                QuestNotifier.reminder(
+                    this,
+                    title = "BROTHERHOOD",
+                    body = lines[(System.currentTimeMillis() / 86_400_000L % lines.size).toInt()],
+                    notifId = 7302,
+                )
+            }
+        }
         // §1.1 (2026-10-20 spec): the Android system nav bar can never render a
         // solid white slab again — fully transparent, contrast enforcement off,
         // icons stay light over our pitch-black bottom bar. App content is laid

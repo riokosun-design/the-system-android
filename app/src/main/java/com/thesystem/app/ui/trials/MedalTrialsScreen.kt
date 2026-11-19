@@ -76,7 +76,7 @@ class MedalTrialsViewModel @Inject constructor(
             .onSuccess { order ->
                 if (!order.ok) { _state.value = _state.value.copy(error = order.err ?: "order_failed"); return@onSuccess }
                 val gw = PaymentGateways.current
-                if (!gw.isAvailable) {
+                if (!gw.isAvailable()) {
                     _state.value = _state.value.copy(
                         notice = "ORDER ${order.orderRef} MINTED — ₹${order.amountInr}. " +
                             PaymentGateways.OFFLINE_NOTICE,

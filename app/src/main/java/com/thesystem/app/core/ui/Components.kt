@@ -382,6 +382,24 @@ fun EmptyState(message: String, modifier: Modifier = Modifier) {
     }
 }
 
+/** §8 v1.0 — CODE OF THE BROTHERHOOD banner (onboarding + squad hub). */
+@Composable
+fun BrotherhoodBanner(modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .border(0.8.dp, LineStrong, RoundedCornerShape(10.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Text("CODE OF THE BROTHERHOOD", style = MonoLabel, color = PaperWhite)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "No hunter falls alone. We rise together or we decay together. Extend a hand before you extend judgment.",
+            style = MaterialTheme.typography.bodySmall, color = LabelGray, lineHeight = 16.sp,
+        )
+    }
+}
+
 // ── PROGRESS LINE — white hair over dark gray track ─────────────────────────
 
 @Composable

@@ -88,6 +88,8 @@ data class SquadState(
     val leaders: List<SquadLeaderRowDto> = emptyList(),
     val query: String = "",
     val searchResults: List<UserDto> = emptyList(),
+    /** §8: hunters already rallied this session. */
+    val rallied: Set<String> = emptySet(),
     val busy: Boolean = false,
     val notice: String? = null,
 )
@@ -96,6 +98,18 @@ data class SquadState(
 class SquadViewModel @Inject constructor(private val social: SocialRepository) : ViewModel() {
     private val _state = MutableStateFlow(SquadState())
     val state = _state
+
+    /** §8 v1.0 — extend a hand from the squad feed (server: 1/pair/24h). */
+    fun extendHand(userId: String) = viewModelScope.launch {
+        social.extendAHand(userId)
+            .onSuccess {
+                _state.value = _state.value.copy(
+                    rallied = _state.value.rallied + userId,
+                    notice = "HAND EXTENDED — the Brotherhood signal rides.",
+                )
+            }
+            .onFailure { _state.value = _state.value.copy(notice = it.message?.take(120)) }
+    }
 
     init {
         viewModelScope.launch {
@@ -199,6 +213,7 @@ fun SquadScreen(nav: NavHostController, vm: SquadViewModel = hiltViewModel()) {
                         item { SkeletonCards(3) }
                     } else if (s.status?.inSquad == true) {
                         val st = s.status!!
+                        item { BrotherhoodBanner() }
                         item { SectionTitle("YOUR PACK", PaperWhite) }
                         item { MasterCard(st, s.members.size) { haptics.error(); vm.leave() } }
                         item { WarScoreCard(st) }
@@ -212,6 +227,7 @@ fun SquadScreen(nav: NavHostController, vm: SquadViewModel = hiltViewModel()) {
                         }
                         item { LeaderboardCard(s.leaders, st.clanId) }
                     } else {
+                        item { BrotherhoodBanner() }
                         item { SectionTitle("NO PACK YET", PaperWhite) }
                         item { CreateCard(s.busy) { name, tag -> vm.create(name, tag) } }
                         item { JoinCard(s.discover, s.busy) { id -> haptics.select(); vm.join(id) } }
@@ -219,11 +235,13 @@ fun SquadScreen(nav: NavHostController, vm: SquadViewModel = hiltViewModel()) {
                             FindHuntersCard(
                                 query = s.query,
                                 results = s.searchResults,
+                                rallied = s.rallied,
                                 onQuery = vm::setQuery,
                                 onDm = { u ->
                                     haptics.tick()
                                     nav.navigate(Routes.dm(u.id, u.username))
                                 },
+                                onExtend = { u -> haptics.select(); vm.extendHand(u.id) },
                             )
                         }
                         item { LeaderboardCard(s.leaders, null) }
@@ -337,11 +355,7 @@ private fun WarsCard() {
             style = MaterialTheme.typography.labelLarge, color = PaperWhite,
         )
         Spacer(Modifier.height(4.dp))
-        Text(
-            "Wars are scheduled monthly. When a window opens, packs clash and war points move the 50% component. Nothing is simulated before then.",
-            style = MaterialTheme.typography.bodySmall, color = FaintGray,
-        )
-    }
+            }
 }
 
 @Composable
@@ -443,8 +457,10 @@ private fun JoinCard(discover: List<ClanDto>, busy: Boolean, onJoin: (String) ->
 private fun FindHuntersCard(
     query: String,
     results: List<UserDto>,
+    rallied: Set<String>,
     onQuery: (String) -> Unit,
     onDm: (UserDto) -> Unit,
+    onExtend: (UserDto) -> Unit,
 ) {
     GlowCard(modifier = Modifier.fillMaxWidth()) {
         Text("FIND HUNTERS", style = MonoLabel, color = LabelGray)
@@ -465,7 +481,19 @@ private fun FindHuntersCard(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text("@${u.username}", style = MonoData, color = PaperWhite)
-                    Text("LEVEL ${u.level}", style = MonoLabel, color = FaintGray)
+                    val atRisk = u.missedDays >= 1 || u.penaltyState != "CLEAR"
+                    Text(
+                        "LEVEL ${u.level}" + (if (atRisk) " · AT RISK" else ""),
+                        style = MonoLabel, color = if (atRisk) PaperWhite else FaintGray,
+                    )
+                }
+                // §8 EXTEND A HAND — rally the at-risk (quiet-hours-respecting notice)
+                if (u.missedDays >= 1 || u.penaltyState != "CLEAR") {
+                    Text(
+                        if (u.id in rallied) "EXTENDED ✓" else "EXTEND A HAND",
+                        style = MonoLabel, color = SkyBlue,
+                        modifier = Modifier.clickable(enabled = u.id !in rallied) { onExtend(u) }.padding(end = Grid.S8),
+                    )
                 }
                 Icon(
                     Icons.AutoMirrored.Filled.Send, "DM",

@@ -52,7 +52,7 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel(), ops: A
     // rail) are gone from the console; history stays server-side.
     // vC49: POOLS section executed with the prediction module (mig 035).
     val sections = listOf("OVERVIEW", "LEGAL", "STORE", "TOURNAMENTS", "ASSETS", "TRAINING",
-        "OPS", "SUPPORT", "ROLES")
+        "OPS", "SUPPORT", "ROLES", "QUESTS")
     var tab by remember { mutableIntStateOf(0) }
 
     SystemBackground(wallpaperAlpha = 0.06f) {
@@ -103,6 +103,7 @@ fun AdminScreen(onBack: () -> Unit, vm: AdminViewModel = hiltViewModel(), ops: A
                 6 -> OpsTab()
                 7 -> AdminSupportTab()
                 8 -> RolesTab()
+                9 -> BroadcastQuestTab(s, vm)
             }
         }
         Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.BottomCenter) { SnackbarHost(snack) }
@@ -340,6 +341,59 @@ private fun AssetsTab(s: AdminState, vm: AdminViewModel) {
                     Switch(checked = a.enabled, onCheckedChange = { haptics.tick(); vm.toggleAsset(a.id, it) },
                         colors = SwitchDefaults.colors(checkedTrackColor = ElectricBlue))
                 }
+            }
+        }
+    }
+}
+
+// ── §7 v1.0 — BROADCAST SPECIAL QUEST (Global / India / city·district) ──────
+@Composable
+private fun BroadcastQuestTab(s: AdminState, vm: AdminViewModel) {
+    val haptics = rememberSystemHaptics()
+    var title by remember { mutableStateOf("") }
+    var detail by remember { mutableStateOf("") }
+    var xp by remember { mutableStateOf("200") }
+    var scope by remember { mutableStateOf("GLOBAL") }
+    var city by remember { mutableStateOf("") }
+    var district by remember { mutableStateOf("") }
+    var stateField by remember { mutableStateOf("") }
+    var hours by remember { mutableStateOf("48") }
+
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            GlowCard(glow = HunterGold) {
+                Text("BROADCAST SPECIAL QUEST", style = MaterialTheme.typography.titleMedium, color = HunterGold)
+                Text("Same area = same quest. LOCAL lands only on hunters whose declared city·district matches.",
+                    style = MaterialTheme.typography.bodyMedium, color = LabelGray)
+                Spacer(Modifier.height(8.dp))
+                @Composable fun field(v: String, on: (String) -> Unit, label: String, digits: Boolean = false) =
+                    OutlinedTextField(v, { on(if (digits) it.filter(Char::isDigit) else it) }, label = { Text(label) }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = HunterGold, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary))
+                field(title, { title = it.take(60) }, "Quest title")
+                field(detail, { detail = it.take(160) }, "Detail (optional)")
+                field(xp, { xp = it.take(4) }, "XP reward (25–2000)", digits = true)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("GLOBAL", "INDIA", "LOCAL").forEach { sc ->
+                        NeonButton(sc, { scope = sc }, color = if (scope == sc) HunterGold else TextMuted)
+                    }
+                }
+                if (scope == "LOCAL") {
+                    Spacer(Modifier.height(6.dp))
+                    field(city, { city = it.take(60) }, "City (required for LOCAL)")
+                    field(district, { district = it.take(60) }, "District")
+                    field(stateField, { stateField = it.take(60) }, "State")
+                }
+                field(hours, { hours = it.take(3) }, "Lifetime hours (1–168)", digits = true)
+                Spacer(Modifier.height(8.dp))
+                NeonButton("BROADCAST", {
+                    haptics.success()
+                    vm.broadcastSpecialQuest(title.trim(), detail.trim(), xp.toIntOrNull() ?: 200, scope,
+                        city, district, stateField, (hours.toIntOrNull() ?: 48).coerceIn(1, 168))
+                    title = ""; detail = ""
+                }, Modifier.fillMaxWidth(), color = HunterGold,
+                    enabled = title.length >= 4 && (scope != "LOCAL" || city.isNotBlank()))
             }
         }
     }
