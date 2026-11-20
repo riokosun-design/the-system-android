@@ -20,8 +20,8 @@ android {
         applicationId = "com.thesystem.app"
         minSdk = 26 // low-end / older Android first
         targetSdk = 35
-        versionCode = 58
-        versionName = "0.23.0-LIVE"
+        versionCode = 59
+        versionName = "1.0.0-RELEASE"
 
         // 2GB-first install weight: drop emulator-only native ABIs.
         ndk { abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a")) }

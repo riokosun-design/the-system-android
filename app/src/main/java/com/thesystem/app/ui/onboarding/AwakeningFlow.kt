@@ -1426,7 +1426,7 @@ private fun P12_FinalGate(ui: OnboardingUiState, vm: OnboardingViewModel, haptic
                 }
                 Spacer(Modifier.height(8.dp))
                 GateKeyButton(
-                    text = if (isSignUp) "FORGE A NEW VESSEL" else "RE-ENTER THE SYSTEM",
+                    text = if (isSignUp) "FORGE A NEW VESSEL" else "RETURN TO THE GATES",
                     subtext = if (isSignUp) "EMAIL SIGN-UP" else "EMAIL LOGIN",
                     loading = ui.signingIn || ui.busy,
                     enabled = !ui.signingIn && !ui.busy && email.isNotBlank() && password.length >= 6,

@@ -33,10 +33,13 @@ import com.thesystem.app.data.gateway.PaymentGateways
 fun WalletScreen(nav: NavHostController) {
     val gateway = PaymentGateways.current
 
+    // §1 v1.0 — THE GATE status panel: pushed route, pads its own insets.
     Column(
         Modifier
             .fillMaxSize()
             .background(Color(0xFF0B0E14))
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
